@@ -18,6 +18,9 @@
 - Sites第21版已部署为分阶段验证状态，原公开入口保持可用。
 - 实际注册、登录、auth/me、退出撤销、两账号隔离、模块页面访问全部通过。实际登录约2275ms（网络含在内）。
 - 首页实际HTML只有两个链接；平台自动注入一个脚本，旧工作台未加载。
+- 第22版正式启用认证：匿名个人API返回401，根路径与/static/home.html都进入标准登录页。
+- 历史指令复用只填入草稿，不自动发送；辅助区读取实际已保存任务状态与结果。相关DOM回归通过。
+- GitHub核心源码已同步，36项变更Git对象哈希与远端一致；当前公开入口验证通过。
 - 浏览器自动化通道超时，未获得屏宽或截图证据；仍不能将响应式、焦点顺序和真实手机标为通过。
 
 ## 发布门槛
@@ -34,4 +37,4 @@ node scripts/model-unit.mjs
 
 DOM测试依赖隔离安装的jsdom：npm install --prefix outputs/ui-qa jsdom@26.1.0 --ignore-scripts --no-audit --no-fund，然后node scripts/module-dom-smoke.mjs。outputs不入库。
 
-源码基线备份位于上级 backups/login-rebuild-20261012；默认outputs/standalone无数据库，本轮未声称完成云端数据备份。
+源码基线备份位于上级 backups/login-rebuild-20261012；默认outputs/standalone无数据库；已用SQLite备份API保存standalone-acceptance、standalone-e2e-final和auth-http-regression及其文件。本轮未声称完成云端数据备份。

@@ -14,6 +14,7 @@
   conversation.append(dialogue,lesson);pane.prepend(conversation);window.eaConversation={input,submit,messages,lesson,conversation,dialogue,draftStatus:chatDraftStatus};
   function drawMessages(history){messages.replaceChildren();for(const entry of (history||[]).slice(-100)){
     const card=el('article','pc-message '+entry.role);card.append(el('strong','',entry.role==='user'?'我的问题':'Agent 的补问与建议'),el('p','',entry.content));
+    if(entry.role==='user')card.append(button('复用到输入草稿','text-btn',()=>{if(window.eaReusePrompt)window.eaReusePrompt(entry.content);else{input.value=entry.content;input.dispatchEvent(new Event('input'));input.focus();}}));
     if(entry.candidate)card.append(button('核对后填入候选方案','btn-secondary',()=>{if(!researchProfileCache){researchNotice('先选择数据并检查字段，再填入方案。',true);return;}researchSetFields(researchProfileCache,entry.candidate);eaResearchStep('plan');researchInvalidate();}));
     messages.append(card);
   }const latest=[...(history||[])].reverse().find(x=>x.role==='assistant');drawTeaching(latest?.retrieval||[]);}
