@@ -52,6 +52,7 @@ export async function authEndpoint(request,env,path){
   let body;try{body=JSON.parse(raw);}catch{return json({detail:'请求格式无效'},400);}
   const username=String(body.username||'').toLowerCase(),password=body.password;
   if(!/^[a-z0-9_]{3,32}$/.test(username)||typeof password!=='string'||[...password].length<12||enc.encode(password).length>72)return json({detail:'用户名为3–32位字母、数字或下划线；密码至少12个字符且不超过72个UTF-8字节。'},422);
+  if(path.endsWith('/register')&&(typeof body.password_confirmation!=='string'||body.password_confirmation!==password))return json({detail:'两次输入的密码不一致，请重新输入。'},422);
   const now=Date.now(),source=await digest(request.headers.get('CF-Connecting-IP')||request.headers.get('X-EA-Client-IP')||'unknown');
   await env.DB.prepare('DELETE FROM auth_attempts WHERE created_at<?').bind(now-3600000).run();await env.DB.prepare('DELETE FROM auth_sessions WHERE expires_at<=?').bind(now).run();
   const register=path.endsWith('/register'),kind=register?'register':'login';

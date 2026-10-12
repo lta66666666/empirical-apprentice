@@ -5,7 +5,7 @@ import {openStorage} from '../standalone/storage.mjs';
 import worker from '../dist/server/index.js';
 const store=await openStorage('outputs/module-dom-'+Date.now()),env={DB:store.DB,FILES:store.FILES};let auth='',errors=[];const origin='https://test.example';
 const call=async(url,opts={})=>worker.fetch(new Request(new URL(url,origin),{...opts,headers:{Origin:origin,Cookie:auth,...opts.headers}}),env);
-const registered=await call('/api/auth/register',{method:'POST',body:JSON.stringify({username:'dom_student',password:'DOM-test-password12!'})});auth=registered.headers.get('set-cookie').split(';')[0];
+const registered=await call('/api/auth/register',{method:'POST',body:JSON.stringify({username:'dom_student',password:'DOM-test-password12!',password_confirmation:'DOM-test-password12!'})});auth=registered.headers.get('set-cookie').split(';')[0];
 class Loader extends ResourceLoader{fetch(url){return call(url).then(async r=>Buffer.from(await r.arrayBuffer()));}}
 try{
   for(const route of ['/home','/learn','/analysis']){

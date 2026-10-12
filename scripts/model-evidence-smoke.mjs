@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 const root=process.env.EA_TEST_URL||'http://127.0.0.1:8788';let cookie='';
 async function call(path,method='GET',body,owned=true){const r=await fetch(root+path,{method,headers:{Origin:root,...(owned&&cookie?{Cookie:cookie}:{}),...(body!==undefined?{'Content-Type':'application/json'}:{})},body:body===undefined?undefined:JSON.stringify(body)});if(owned&&r.headers.get('set-cookie'))cookie=r.headers.get('set-cookie').split(';')[0];const value=r.headers.get('content-type')?.includes('json')?await r.json():await r.text();return {status:r.status,value};}
-await call('/api/auth/register','POST',{username:'smoke_'+Date.now(),password:'Smoke-test-password12!'});
+await call('/api/auth/register','POST',{username:'smoke_'+Date.now(),password:'Smoke-test-password12!',password_confirmation:'Smoke-test-password12!'});
 const sid=(await call('/api/sessions','POST')).value.session_id;
 const candidate=await call('/api/research/candidate','POST',{session_id:sid,question:'数字化有没有用？'});
 assert.equal(candidate.status,503);assert.ok(candidate.value.interaction_id);

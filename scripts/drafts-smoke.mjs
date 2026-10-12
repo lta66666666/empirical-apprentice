@@ -6,7 +6,7 @@ async function call(path,method='GET',body,owned=true){
   if(owned&&response.headers.get('set-cookie'))cookie=response.headers.get('set-cookie').split(';')[0];
   const value=(response.headers.get('content-type')||'').includes('json')?await response.json():await response.text();return {status:response.status,value};
 }
-await call('/api/auth/register','POST',{username:'smoke_'+Date.now(),password:'Smoke-test-password12!'});
+await call('/api/auth/register','POST',{username:'smoke_'+Date.now(),password:'Smoke-test-password12!',password_confirmation:'Smoke-test-password12!'});
 const session=(await call('/api/sessions','POST')).value,id=session.session_id;
 const value={dictionary:{income:'草稿单位：千元'},question:'尚未提交',candidate:{method:'ols'}};
 const saved=await call(`/api/sessions/${id}/drafts/workbench`,'PUT',{version:0,value});assert.equal(saved.status,200);assert.equal(saved.value.version,1);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {randomBytes,createHash} from 'node:crypto';
 const root='http://127.0.0.1:8788';let cookie='';
 async function call(path,body,options={}){const response=await fetch(root+path,{method:body?'POST':'GET',headers:{Origin:root,...(cookie&&!options.other?{Cookie:cookie}:{}),...(options.token?{Authorization:'Bearer '+options.token}:{}),'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});if(!options.other&&response.headers.get('set-cookie'))cookie=response.headers.get('set-cookie').split(';')[0];return {status:response.status,value:await response.json()};}
-await call('/api/auth/register',{username:'smoke_'+Date.now(),password:'Smoke-test-password12!'});
+await call('/api/auth/register',{username:'smoke_'+Date.now(),password:'Smoke-test-password12!',password_confirmation:'Smoke-test-password12!'});
 const state=(await call('/api/sessions',{})).value,id=state.session_id;
 const token=randomBytes(32).toString('hex'),code=String(Math.floor(Math.random()*900000)+100000);
 const pair=await call('/api/local-stata/agent/pair',{token,code});assert.equal(pair.status,200);
