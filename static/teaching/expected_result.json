@@ -1,0 +1,12 @@
+{
+  "label": "人工设置的教学核对值，不是真实研究结果",
+  "input_rows": 17,
+  "exact_duplicates_removed": 1,
+  "missing_values_restored": 1,
+  "output_rows": 16,
+  "before": 2014,
+  "after": 2015,
+  "treated_change": -20,
+  "control_change": -5,
+  "did": -15
+}

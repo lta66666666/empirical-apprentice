@@ -1,0 +1,51 @@
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      EXECUTOR_URL: http://executor:8000
+      EXECUTOR_INTERNAL_HOST: executor
+      EA_CLEANUP_ON_START: 'true'
+    volumes:
+      - web-data:/data
+    networks: [private, outbound]
+    mem_limit: 512m
+    security_opt: ['no-new-privileges:true']
+  executor:
+    build:
+      context: ../executor
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      EA_NODE_DATA: /data
+    volumes:
+      - executor-data:/data
+    networks: [private]
+    mem_limit: 2500m
+    cpus: 2
+    pids_limit: 96
+    security_opt: ['no-new-privileges:true']
+  https:
+    image: caddy:2
+    restart: unless-stopped
+    env_file: .env
+    ports: ['80:80', '443:443']
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [private, outbound]
+    mem_limit: 128m
+networks:
+  private:
+    internal: true
+  outbound: {}
+volumes:
+  web-data: {}
+  executor-data: {}
+  caddy-data: {}
+  caddy-config: {}

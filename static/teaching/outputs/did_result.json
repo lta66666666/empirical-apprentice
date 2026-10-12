@@ -1,0 +1,8 @@
+{
+  "before": 2014,
+  "after": 2015,
+  "treated_change": -20.0,
+  "control_change": -5.0,
+  "did": -15.0,
+  "unit": "万吨标准煤（模拟）"
+}

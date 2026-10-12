@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1791113626809,
+      "tag": "0000_small_nicolaos",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1791130324938,
+      "tag": "0001_bent_rictor",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791157837419,
+      "tag": "0002_chubby_expediter",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791220022721,
+      "tag": "0003_short_sentinels",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791420016806,
+      "tag": "0004_glossy_misty_knight",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791500016806,
+      "tag": "0005_practical_local_stata",
+      "breakpoints": true
+    }
+  ]
+}

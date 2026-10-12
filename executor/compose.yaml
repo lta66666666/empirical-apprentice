@@ -1,0 +1,19 @@
+services:
+  executor:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      EA_NODE_SECRET: ${EA_NODE_SECRET:?Set a private signing secret of at least 32 characters}
+      EA_NODE_DATA: /data
+    volumes:
+      - executor-data:/data
+    mem_limit: 3g
+    cpus: 2
+    pids_limit: 96
+    init: true
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  executor-data:

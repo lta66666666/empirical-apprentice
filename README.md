@@ -68,4 +68,3 @@ node scripts/local-drafts-smoke.mjs
 ```
 
 启动独立测试服务在 8788 端口后，可运行 scripts/drafts-smoke.mjs 与 scripts/model-evidence-smoke.mjs。测试生成的 outputs/ 数据不提交。真实 R、Stata、手机和公网行为需要实际环境验收，不能由这些测试替代。
-
