@@ -1,3 +1,4 @@
+import {ensureAuthSchema} from './auth.js';
 import {syncCloudJob} from './research.js';
 const RETENTION = 7 * 86400000;
 
@@ -6,6 +7,9 @@ export async function cleanupExpired(env) {
   const remote=await env.DB.prepare("SELECT body FROM jobs WHERE body LIKE '%cloud_native%' AND status IN ('running','queued','preparing','estimating','saving') LIMIT 100").all();
   for(const row of remote.results)await syncCloudJob(env,JSON.parse(row.body));
   const now = Date.now(), cutoff = now - RETENTION;
+  await ensureAuthSchema(env);
+  await env.DB.prepare('DELETE FROM auth_sessions WHERE expires_at<=?').bind(now).run();
+  await env.DB.prepare('DELETE FROM auth_attempts WHERE created_at<?').bind(now-3600000).run();
   await env.DB.prepare('DELETE FROM local_pairings WHERE owner IS NULL AND expires_at<=?').bind(now).run();
   await env.DB.prepare('DELETE FROM local_pair_attempts WHERE created_at<=?').bind(now-300000).run();
   const staleRunning = await env.DB.prepare("SELECT id,body FROM jobs WHERE status='running' AND body NOT LIKE '%cloud_native%' AND lease_until<? LIMIT 100").bind(now).all();

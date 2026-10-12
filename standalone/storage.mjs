@@ -15,7 +15,7 @@ export async function openStorage(directory) {
     try{sqlite.exec(await readFile(new URL(name,migrations),'utf8'));sqlite.prepare('INSERT INTO ea_migrations VALUES(?)').run(name);sqlite.exec('COMMIT');}
     catch(error){sqlite.exec('ROLLBACK');throw error;}
   }
-  const DB={prepare(sql){const statement=sqlite.prepare(sql);let args=[];const query={bind(...values){args=values;return query;},async first(column){const row=statement.get(...args);return column?row?.[column]??null:row??null;},async all(){return {results:statement.all(...args)};},async run(){const result=statement.run(...args);return {success:true,meta:{changes:Number(result.changes)}};}};return query;}};
+  const DB={prepare(sql){const statement=sqlite.prepare(sql);let args=[];const query={bind(...values){args=values;return query;},async first(column){const row=statement.get(...args);return column?row?.[column]??null:row??null;},async all(){return {results:statement.all(...args)};},_run(){const result=statement.run(...args);return {success:true,meta:{changes:Number(result.changes)}};},async run(){return query._run();}};return query;},async batch(statements){sqlite.exec('BEGIN IMMEDIATE');try{const results=statements.map(q=>q._run());sqlite.exec('COMMIT');return results;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
   const files=join(root,'files');await mkdir(files,{recursive:true});
   const pathFor=key=>{if(typeof key!=='string'||!key||key.length>512)throw Error('Invalid storage key');return join(files,createHash('sha256').update(key).digest('hex'));};
   const FILES={

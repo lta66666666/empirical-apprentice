@@ -5,14 +5,14 @@
   dialogue.append(el('span','eyebrow','边分析边学习'),el('h2','','先说说你想研究什么'));
   const messages=el('div','pc-messages');messages.setAttribute('aria-live','polite');
   const input=el('textarea');input.rows=3;input.placeholder='例如：我有城市年度数据，想比较政策前后排放的变化。';input.setAttribute('aria-label','研究问题与补充信息');
-  const chatDraftStatus=el('p','muted');input.maxLength=2000;input.addEventListener('input',()=>eaQueueDraft('practical-chat',{message:input.value},chatDraftStatus));
+  const chatDraftStatus=el('p','muted');input.maxLength=2000;input.addEventListener('input',()=>{if(window.eaComposerKind!=='data')eaQueueDraft('practical-chat',{message:input.value},chatDraftStatus);});
   const submit=button('发送问题，整理候选方案','btn-primary',async()=>{
     if(!sessionId||!input.value.trim())return;submit.disabled=true;
-    try{const r=await api('/api/research/chat',{method:'POST',body:{session_id:sessionId,research_revision:latestState.research_revision,message:input.value,profile:researchProfileCache||{row_count:0,columns:[]}}});input.value='';eaQueueDraft('practical-chat',{message:''},chatDraftStatus);latestState.practical_messages=r.messages;drawMessages(r.messages);}catch(e){researchNotice(e.message,true);}finally{submit.disabled=false;}
+    try{const r=await api('/api/research/chat',{method:'POST',body:{session_id:sessionId,research_revision:latestState.research_revision,message:input.value,intent:window.eaChatIntent||"auto",profile:researchProfileCache||{row_count:0,columns:[]}}});input.value='';eaQueueDraft('practical-chat',{message:''},chatDraftStatus);latestState.practical_messages=r.messages;drawMessages(r.messages);window.eaDisplayMode?.(r.display_mode);window.eaConversationHistory?.(r.messages);}catch(e){researchNotice(e.message,true);}finally{submit.disabled=false;}
   });dialogue.append(messages,input,chatDraftStatus,submit);
   lesson.append(el('span','eyebrow','同步教学 · 资料可追溯'),el('h3','','当前方法与核对条件'));const materials=el('div');lesson.append(materials);
-  conversation.append(dialogue,lesson);pane.prepend(conversation);
-  function drawMessages(history){messages.replaceChildren();for(const entry of (history||[]).slice(-12)){
+  conversation.append(dialogue,lesson);pane.prepend(conversation);window.eaConversation={input,submit,messages,lesson,conversation,dialogue,draftStatus:chatDraftStatus};
+  function drawMessages(history){messages.replaceChildren();for(const entry of (history||[]).slice(-100)){
     const card=el('article','pc-message '+entry.role);card.append(el('strong','',entry.role==='user'?'我的问题':'Agent 的补问与建议'),el('p','',entry.content));
     if(entry.candidate)card.append(button('核对后填入候选方案','btn-secondary',()=>{if(!researchProfileCache){researchNotice('先选择数据并检查字段，再填入方案。',true);return;}researchSetFields(researchProfileCache,entry.candidate);eaResearchStep('plan');researchInvalidate();}));
     messages.append(card);
@@ -21,7 +21,7 @@
   $('researchMethod').addEventListener('change',()=>drawTeaching([]));
   const oldSetFields=researchSetFields;researchSetFields=function(...args){const result=oldSetFields(...args);drawTeaching([]);return result;};
   const originalRestore=eaRestoreTask;eaRestoreTask=function(...args){const value=originalRestore(...args);if(latestState){eaHydrateDrafts(latestState);if(document.activeElement!==input)input.value=eaDraftEntry('practical-chat').value.message||'';}drawMessages(latestState?.practical_messages||[]);return value;};
-  const entries=document.querySelector('.entry-cards');if(entries){
+  const entries=document.querySelector('.entry-cards');if(entries&&!window.EA_MODULE){
     const zero=entries.querySelector('[data-path="zero"]'),data=entries.querySelector('[data-path="data"]'),prepare=entries.querySelector('[data-path="prepare"]');
     zero.querySelector('.entry-title').textContent='零基础：从一个案例开始';data.querySelector('.entry-title').textContent='边分析边学习';data.querySelector('.entry-desc').textContent='用已有数据提出问题，核对方案后真实计算。没有数据也可以先整理准备。';prepare.classList.add('pc-secondary-entry');entries.parentNode.insertBefore(prepare,entries.nextSibling);
     const demo=button('用现有同批 DID 模拟数据开始','btn-secondary',async()=>{if(!sessionId)await newSession();if(latestState.stage==='entry')await mutate('entry',{path:'data'});eaSetTask('research');await researchSample('did');eaResearchStep('plan');});entries.parentNode.insertBefore(demo,entries.nextSibling);
@@ -43,7 +43,7 @@
   const sameLabel=el('label','research-check'),same=el('input');same.type='checkbox';sameLabel.append(same,document.createTextNode('已核对同批实施，不存在分批或时点冲突'));
   const dropLabel=el('label','research-check'),drop=el('input');drop.type='checkbox';dropLabel.append(drop,document.createTextNode('允许删除选定变量的缺失行；否则阻止执行'));
   localFields.prepend(method);localFields.append(el('p','','解释变量／DID控制变量'),predictors,year,sameLabel,dropLabel);local.append(localFields);
-  const goal=el('textarea');goal.rows=2;goal.placeholder='操作目标与需要解释的问题';const code=el('textarea');code.rows=12;code.placeholder='待本机预览批准的 Stata 代码（输入为 normalized.csv，列映射见上方）';code.hidden=true;local.append(goal,code);
+  const goal=el('textarea');goal.rows=2;goal.placeholder='操作目标与需要解释的问题';const code=el('textarea');code.rows=12;code.placeholder='待本机预览批准的 Stata 代码（输入为 normalized.csv，列映射见上方）';code.hidden=true;local.append(goal,code);window.eaLocalCode=code;window.eaLocalCodeMode=()=>{mode.value="code";mode.onchange();};
   const localDictionary=el('details'),unitFields=el('div');localDictionary.append(el('summary','','本机数据变量字典：含义、单位、口径与来源'),el('p','muted','填写不会自动核实来源。未知内容请标为待核实；提交将改变资料版本，需要重新确认。'),unitFields,button('保存变量字典，重新核对方案','btn-secondary',async()=>{const dictionary=Object.fromEntries([...unitFields.querySelectorAll('input')].map(n=>[n.dataset.column,n.value]));if(await mutate('variable-dictionary',{dictionary},{method:'PUT'})){localConfirmed=false;confirm.checked=false;localState.textContent='字典已保存，资料版本变化，请重新核对。';}}));local.append(localDictionary);
   const ai=button('AI 生成待批准代码','btn-secondary',async()=>{ai.disabled=true;try{const result=await call('tasks/code',{question:goal.value});code.value=result.code;localState.textContent=result.explanation;localConfirmed=false;confirm.checked=false;}catch(e){localState.textContent=e.message;}finally{ai.disabled=false;}});ai.hidden=true;local.append(ai);
   const confirmLabel=el('label','research-check'),confirm=el('input');confirm.type='checkbox';confirmLabel.append(confirm,document.createTextNode('已核对以上输入摘要、方案和代码；仍需在本机批准执行'));local.append(confirmLabel);

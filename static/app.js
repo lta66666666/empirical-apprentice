@@ -7,8 +7,9 @@ let activeTab = "blueprint", expired = false, needsSync = false, toastTimer, cha
 let suppressNextScroll = false, autoScrolling = false, enterTop = false;
 const chartCache = new Map();
 
-function storageGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
-function storageSet(key, value) { try { localStorage.setItem(key, value); } catch { /* Private browsing can disable storage. */ } }
+function storageGet(key) { try { return localStorage.getItem(window.EA_ACCOUNT?`ea_account:${window.EA_ACCOUNT.id}:${key}`:key); } catch { return null; } }
+function storageSet(key, value) { try { localStorage.setItem(window.EA_ACCOUNT?`ea_account:${window.EA_ACCOUNT.id}:${key}`:key, value); } catch { /* Private browsing can disable storage. */ } }
+function storageRemove(key) {try{localStorage.removeItem(window.EA_ACCOUNT?`ea_account:${window.EA_ACCOUNT.id}:${key}`:key);}catch{}}
 function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
 function icon(name) { const n = el("i"); n.dataset.lucide = name; return n; }
 function icons() { window.lucide?.createIcons(); }
@@ -41,6 +42,7 @@ async function api(path, {method="GET", body} = {}) {
   try {
     response = await fetch(path, {method, headers:body ? {"Content-Type":"application/json"} : {}, body:body ? JSON.stringify(body) : undefined, signal:AbortSignal.timeout(180000)});
   } catch { const e = new Error("连接中断，输入已保留。请重新连接，确认最新进度后再提交。"); e.uncertain = true; throw e; }
+  if (response.status===401) { location.assign("/login?return_to="+encodeURIComponent(location.pathname)); throw Error("登录已过期，草稿保留在此账号的浏览器缓存中。"); }
   if (!response.ok) {
     const detail = await response.json().catch(()=>({}));
     const e = new Error(response.status === 404 ? "会话已失效。可先导出当前记录，再开始新练习。" : response.status === 409 ? "当前进度已变化或上一条仍在处理，请重新连接同步状态。" : "请求未完成，输入已保留。请重新连接后再试。");

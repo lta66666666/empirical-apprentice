@@ -251,7 +251,7 @@ export async function handleResearch(request, env, owner, path) {
         const { plan, missingLines } = validatePlan(body.plan, data, session.project, session);
         const confirmation = session.pending_confirmation;
         if (!confirmation || body.confirmation_token !== confirmation.token || confirmation.research_revision !== session.research_revision || confirmation.input_sha256 !== await sha256(body.text) || confirmation.plan_sha256 !== await sha256(JSON.stringify(plan))) return fault('资料、输入或方案已变化，请重新整理并确认方案。',409);
-        const count = await env.DB.prepare('SELECT ((SELECT COUNT(*) FROM jobs WHERE owner=? AND created_at>?)+(SELECT COUNT(*) FROM local_stata_tasks WHERE owner=? AND created_at>?)) AS n').bind(owner, Date.now() - 86400000,owner,Date.now()-86400000).first();
+        const count = await env.DB.prepare(env.ACCOUNT_ID?'SELECT ((SELECT COUNT(*) FROM jobs WHERE owner IN (SELECT owner FROM account_owners WHERE user_id=?) AND created_at>?)+(SELECT COUNT(*) FROM local_stata_tasks WHERE owner IN (SELECT owner FROM account_owners WHERE user_id=?) AND created_at>?)) AS n':'SELECT ((SELECT COUNT(*) FROM jobs WHERE owner=? AND created_at>?)+(SELECT COUNT(*) FROM local_stata_tasks WHERE owner=? AND created_at>?)) AS n').bind(env.ACCOUNT_ID||owner, Date.now() - 86400000,env.ACCOUNT_ID||owner,Date.now()-86400000).first();
         if (count.n >= 30) return fault('今日分析次数达到上限。', 429);
         if(plan.engine_id!=='browser_webr' && !(await engineCapabilities(env,owner))[plan.engine_id].ready) throw new Error((await engineCapabilities(env,owner))[plan.engine_id].reason);
         const id = crypto.randomUUID(), key = `jobs/${owner}/${id}/input.csv`;
@@ -347,7 +347,7 @@ export async function handleResearch(request, env, owner, path) {
     }
     if (tail === 'rerun' && request.method === 'POST') {
       if (job.status !== 'succeeded') return fault('仅完成的任务可独立核对。',409);
-      const count=await env.DB.prepare('SELECT ((SELECT COUNT(*) FROM jobs WHERE owner=? AND created_at>?)+(SELECT COUNT(*) FROM local_stata_tasks WHERE owner=? AND created_at>?)) AS n').bind(owner,Date.now()-86400000,owner,Date.now()-86400000).first();
+      const count=await env.DB.prepare('SELECT ((SELECT COUNT(*) FROM jobs WHERE owner=? AND created_at>?)+(SELECT COUNT(*) FROM local_stata_tasks WHERE owner=? AND created_at>?)) AS n').bind(env.ACCOUNT_ID||owner,Date.now()-86400000,env.ACCOUNT_ID||owner,Date.now()-86400000).first();
       if(count.n>=30)return fault('今日分析次数达到上限。',429);
       const object=await env.FILES.get(job.input_key);if(!object)return fault('原始输入丢失。',404);
       const originalText=await object.text();

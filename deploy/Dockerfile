@@ -3,6 +3,8 @@ WORKDIR /app
 COPY worker ./worker
 COPY static ./static
 COPY scripts/build-prototype.mjs ./scripts/build-prototype.mjs
+COPY scripts/build-auth.mjs ./scripts/build-auth.mjs
+COPY vendor/bcryptjs-3.0.3 ./vendor/bcryptjs-3.0.3
 COPY .openai/hosting.json ./.openai/hosting.json
 COPY package.json ./package.json
 COPY drizzle ./drizzle

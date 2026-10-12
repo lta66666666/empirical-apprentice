@@ -18,6 +18,7 @@ const server=http.createServer(async(req,res)=>{
     if(!req.url?.startsWith('/')){res.writeHead(400);res.end();return;}
     const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>4_500_000){res.writeHead(413);res.end('Request too large');return;}chunks.push(chunk);}
     const headers=new Headers();for(const [key,value]of Object.entries(req.headers)){if(value!==undefined)headers.set(key,Array.isArray(value)?value.join(','):value);}
+    headers.delete('CF-Connecting-IP');headers.set('X-EA-Client-IP',req.socket.remoteAddress||'unknown');
     const request=new Request(new URL(req.url,origin),{method:req.method,headers,...(!['GET','HEAD'].includes(req.method)?{body:Buffer.concat(chunks)}:{})});
     const response=await worker.fetch(request,env);
     for(const [key,value]of response.headers)if(key!=='set-cookie')res.setHeader(key,value);

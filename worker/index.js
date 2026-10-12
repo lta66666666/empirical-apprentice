@@ -7,6 +7,7 @@ import { handleTutorial } from './tutorial.js';
 import { practiceCases } from './content.js';
 import { handlePractical } from './practical.js';
 import { handleLocalStata } from './local-stata.js';
+import {authEndpoint,identity,requestOwner,cookie} from './auth.js';
 
 const headers = {
   'Cross-Origin-Opener-Policy': 'same-origin',
@@ -73,13 +74,32 @@ document.querySelectorAll('.run').forEach(btn=>btn.onclick=async()=>{
 export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
+    const preview=env.AUTH_ROLLOUT==='preview';
+    if(preview&&['/','/app','/static/index.html'].includes(path))return staticResponse(path);
+    if(preview&&path==='/trial')return new Response(page,{headers:{...headers,'Content-Type':'text/html; charset=utf-8'}});
+    if(path.startsWith('/api/auth/'))return authEndpoint(request,env,path);
+    if(['/','/app','/home','/login','/register','/learn','/analysis','/static/index.html','/static/home.html','/trial'].includes(path)){
+      const user=env.DB?await identity(request,env):null;
+      if(['/login','/register'].includes(path))return user?Response.redirect(new URL('/home',request.url),303):staticResponse('/static/auth.html');
+      if(!user)return Response.redirect(new URL('/login?return_to='+encodeURIComponent(['/learn','/analysis'].includes(path)?path:'/home'),request.url),303);
+      if(['/','/app','/static/index.html','/trial'].includes(path))return Response.redirect(new URL('/home',request.url),303);
+      if(path==='/home'||path==='/static/home.html')return staticResponse('/static/home.html');
+      const base=staticResponse('/static/index.html'),html=await base.text();
+      const boot=`<script>window.EA_ACCOUNT=${JSON.stringify({id:user.id,username:user.username})};window.EA_MODULE=${JSON.stringify(path.slice(1))};</script><link rel="stylesheet" href="/static/module-layout.css">`;
+      return new Response(html.replace('</head>',boot+'</head>').replace('</body>','<script defer src="/static/data-fragment.js"></script><script defer src="/static/module-layout.js"></script></body>'),{headers:{...headers,'Content-Type':'text/html; charset=utf-8'}});
+    }
     if(path.startsWith('/api/local-stata/agent/'))return await handleLocalStata(request,env,null,path);
     if (path.startsWith('/api/sessions') || path.startsWith('/api/research') || path.startsWith('/api/tutorial') || path.startsWith('/api/local-stata/') || path==='/api/knowledge') {
-      if (!['GET', 'HEAD'].includes(request.method) && request.headers.get('Origin') !== new URL(request.url).origin) {
+      const isAgent=path.startsWith('/api/local-stata/agent/');
+      if (!isAgent && !['GET', 'HEAD'].includes(request.method) && request.headers.get('Origin') !== new URL(request.url).origin) {
         return new Response('Forbidden', { status: 403, headers });
       }
-      const ownerCookie = /(?:^|;\s*)ea_owner=([0-9a-f-]{36})(?:;|$)/.exec(request.headers.get('Cookie') || '');
-      const owner = ownerCookie?.[1] || crypto.randomUUID();
+      const user=isAgent?null:await identity(request,env);
+      if(!isAgent&&!user&&!preview)return Response.json({detail:'请先登录'},{status:401,headers});
+      const legacyCookie=cookie(request,'ea_owner'),legacyOwner=/^[0-9a-f-]{36}$/.test(legacyCookie)?legacyCookie:crypto.randomUUID();
+      const owner=isAgent?'':user?await requestOwner(request,env,user,path):legacyOwner;
+      if(!isAgent&&!owner)return Response.json({detail:'记录不存在'},{status:404,headers});
+      if(user)env={...env,ACCOUNT_ID:user.id,ACCOUNT_OWNERS:user.owners};
       const response = (await handleLocalStata(request,env,owner,path)) ||
         (await handlePractical(request,env,owner,path)) ||
         (await handleTutorial(request, env, owner, path)) ||
@@ -88,7 +108,7 @@ export default {
       if (response) {
         const outputHeaders = new Headers(response.headers);
         for (const [key, value] of Object.entries(headers)) outputHeaders.set(key, value);
-        outputHeaders.append('Set-Cookie', `ea_owner=${owner}; HttpOnly; ${new URL(request.url).protocol === 'https:' ? 'Secure; ' : ''}SameSite=Lax; Path=/; Max-Age=604800`);
+        if(preview&&!user&&!isAgent&&!/^[0-9a-f-]{36}$/.test(legacyCookie))outputHeaders.append('Set-Cookie',`ea_owner=${legacyOwner}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800`);
         return new Response(response.body, { status: response.status, headers: outputHeaders });
       }
     }

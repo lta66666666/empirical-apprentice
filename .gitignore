@@ -47,13 +47,3 @@ next-env.d.ts
 /*.tar.gz
 **/__pycache__/
 /deploy/backups/
-
-**/connection.json
-*.sqlite
-*.sqlite3
-*.db
-*.log
-*.jsonl
-/executor/data/
-/local_stata/tasks/
-

@@ -359,8 +359,8 @@ export async function handleSessions(request, env, owner, path) {
       return answer(await sessionPayload(env, state));
     }
     if (request.method === 'GET') {
-      const rows = await env.DB.prepare('SELECT body FROM sessions WHERE owner=? AND last_activity>? ORDER BY created_at DESC LIMIT 100')
-        .bind(owner, Date.now() - RETENTION).all();
+      const rows = await env.DB.prepare(env.ACCOUNT_ID?'SELECT body FROM sessions WHERE owner IN (SELECT owner FROM account_owners WHERE user_id=?) AND last_activity>? ORDER BY created_at DESC LIMIT 100':'SELECT body FROM sessions WHERE owner=? AND last_activity>? ORDER BY created_at DESC LIMIT 100')
+        .bind(env.ACCOUNT_ID||owner, Date.now() - RETENTION).all();
       return answer({ sessions: rows.results.map(({ body }) => {
         const state = JSON.parse(body);
         return { session_id: state.session_id, created_at: state.created_at, entry_path: state.entry_path,

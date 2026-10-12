@@ -177,7 +177,7 @@ window.Teaching = (() => {
       e.preventDefault();const fields=Object.fromEntries(Object.entries(inputs).map(([k,n])=>[k,n.value]));
       // mutate re-renders the page. Clear only on confirmed success, retaining drafts on failure.
       if(await mutate(`artifacts/${id}`,{fields},{method:"PUT"})){
-        try{localStorage.removeItem(draftKey(id));}catch{/* unavailable */}
+        try{storageRemove(draftKey(id));}catch{/* unavailable */}
         status.textContent="已保存成果草稿。";
         document.querySelectorAll(".draft-status").forEach(n=>n.textContent="已保存成果草稿，可继续修改。");
         toast("成果草稿已保存，导出记录会包含它");
@@ -200,7 +200,7 @@ window.Teaching = (() => {
         const data=await api(`/api/sessions/${sessionId}/artifacts/${id}/review`,{method:"POST"});
         latestState.artifact_reviews = {...latestState.artifact_reviews, [String(id)]:data};
         renderArtifactReview(data, reviewBox);
-        try{localStorage.removeItem(draftKey(id));}catch{/* unavailable */}
+        try{storageRemove(draftKey(id));}catch{/* unavailable */}
         status.textContent="已保存成果草稿，AI 审核意见见下方。";
       }catch(e){
         reviewBox.replaceChildren(el("p","review-error","审核未完成："+e.message));

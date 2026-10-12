@@ -1,5 +1,6 @@
 import { mkdir, copyFile, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
+import './build-auth.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 await mkdir(resolve(root, 'dist/server'), { recursive: true });

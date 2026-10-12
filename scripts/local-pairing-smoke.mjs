@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {randomBytes,createHash} from 'node:crypto';
 const root='http://127.0.0.1:8788';let cookie='';
 async function call(path,body,options={}){const response=await fetch(root+path,{method:body?'POST':'GET',headers:{Origin:root,...(cookie&&!options.other?{Cookie:cookie}:{}),...(options.token?{Authorization:'Bearer '+options.token}:{}),'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});if(!options.other&&response.headers.get('set-cookie'))cookie=response.headers.get('set-cookie').split(';')[0];return {status:response.status,value:await response.json()};}
+await call('/api/auth/register',{username:'smoke_'+Date.now(),password:'Smoke-test-password12!'});
 const state=(await call('/api/sessions',{})).value,id=state.session_id;
 const token=randomBytes(32).toString('hex'),code=String(Math.floor(Math.random()*900000)+100000);
 const pair=await call('/api/local-stata/agent/pair',{token,code});assert.equal(pair.status,200);
@@ -20,7 +21,7 @@ assert.equal((await call('/api/local-stata/tasks',payload)).status,409);
 const claimed=await call(base+'/claim',{}, {token});assert.equal(claimed.value.task.status,'awaiting_approval');
 assert.equal((await call(base+'/claim',{}, {token})).value.task.id,task.id);
 assert.equal((await call(base+'/publish',{task_id:task.id,result:{}},{token})).status,409);
-const other=await call('/api/local-stata/pairings?session_id='+id,null,{other:true});assert.equal(other.status,404);
+const other=await call('/api/local-stata/pairings?session_id='+id,null,{other:true});assert.equal(other.status,401);
 const codeHash=createHash('sha256').update('approved test code').digest('hex');
 assert.equal((await call(base+'/event',{task_id:task.id,status:'running',code_sha256:codeHash,input_sha256:hash},{token})).status,200);
 assert.equal((await call('/api/local-stata/tasks/cancel',{session_id:id,task_id:task.id})).value.task.status,'cancel_requested');

@@ -6,10 +6,11 @@ async function call(path,method='GET',body,owned=true){
   if(owned&&response.headers.get('set-cookie'))cookie=response.headers.get('set-cookie').split(';')[0];
   const value=(response.headers.get('content-type')||'').includes('json')?await response.json():await response.text();return {status:response.status,value};
 }
+await call('/api/auth/register','POST',{username:'smoke_'+Date.now(),password:'Smoke-test-password12!'});
 const session=(await call('/api/sessions','POST')).value,id=session.session_id;
 const value={dictionary:{income:'草稿单位：千元'},question:'尚未提交',candidate:{method:'ols'}};
 const saved=await call(`/api/sessions/${id}/drafts/workbench`,'PUT',{version:0,value});assert.equal(saved.status,200);assert.equal(saved.value.version,1);
-assert.equal((await call(`/api/sessions/${id}/drafts`,'GET',undefined,false)).status,404);
+assert.equal((await call(`/api/sessions/${id}/drafts`,'GET',undefined,false)).status,401);
 assert.equal((await call(`/api/sessions/${id}/drafts/workbench`,'PUT',{version:0,value})).status,409);
 assert.deepEqual((await call(`/api/sessions/${id}/drafts`)).value.drafts.workbench.value,value);
 const reloaded=(await call(`/api/sessions/${id}`)).value;assert.deepEqual(reloaded.research_drafts.workbench.value,value);assert.deepEqual(reloaded.variable_dictionary,{});assert.equal(reloaded.research_revision,session.research_revision);
