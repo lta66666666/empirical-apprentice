@@ -42,8 +42,8 @@ function renderPreparation(data){
   const labels=prep.question_type==='policy_evaluation'?{...PREP_COMMON,...PREP_POLICY}:PREP_COMMON;
   for(const [key,label] of Object.entries(labels)){
     const draftKey=`${data.session_id}:${key}`,saved=prep.cards?.[key]||{};
-    let draft=prepDrafts.get(draftKey);
-    if(draft&&['value','source_title','source_url','accessed_on','note'].every(k=>(draft[k]||'')===(saved[k]||''))){prepDrafts.delete(draftKey);draft=null;}
+    let draft=prepDrafts.get(draftKey);if(!draft)try{draft=JSON.parse(storageGet('ea_prep_draft:'+draftKey)||'null');if(draft)prepDrafts.set(draftKey,draft);}catch{}
+    if(draft&&['value','source_title','source_url','accessed_on','note'].every(k=>(draft[k]||'')===(saved[k]||''))){prepDrafts.delete(draftKey);storageRemove('ea_prep_draft:'+draftKey);draft=null;}
     const card=draft||saved,detail=el('details','prep-card'),summary=el('summary');detail.open=Boolean(draft)||key===Object.keys(labels).find(k=>!prep.cards?.[k]?.value);
     summary.append(el('strong','',label),el('span',`prep-status ${card.status||'to_find'}`,PREP_STATUS[card.status]||PREP_STATUS.to_find));detail.append(summary);
     const value=prepField('内容或当前缺口',card.value,'textarea');
@@ -56,7 +56,7 @@ function renderPreparation(data){
     const payload=verify=>({value:value.input.value,source_title:title.input.value,
       source_url:url.input.value,accessed_on:date.input.value,note:note.input.value,verify});
     const draftNotice=el('p','workspace-note',draft?'当前内容含本机未保存草稿，请点击保存。':'');detail.append(draftNotice);
-    for(const f of [value,title,url,date,note])f.input.oninput=()=>{prepDrafts.set(draftKey,payload(false));draftNotice.textContent='本机未保存草稿，请点击保存。';};
+    for(const f of [value,title,url,date,note])f.input.oninput=()=>{prepDrafts.set(draftKey,payload(false));storageSet('ea_prep_draft:'+draftKey,JSON.stringify(payload(false)));draftNotice.textContent='本机未保存草稿，请点击保存。';};
     actions.append(button('保存为已填写','btn-secondary',()=>mutate(`preparation/cards/${key}`,payload(false),{method:'PUT'})),
       button('我已查看来源，标记已核对','btn-primary',()=>mutate(`preparation/cards/${key}`,payload(true),{method:'PUT'})));
     detail.append(actions);root.append(detail);

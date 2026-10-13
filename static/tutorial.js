@@ -1,5 +1,5 @@
 let tutorialCase=null, tutorialStep=0;
-function goTutorialStep(index){tutorialStep=index;renderTutorial(latestState||{});const body=$('pane-tutorial').parentElement;body.scrollTo({top:0,behavior:learningMotionReduced()?'auto':'smooth'});}
+async function goTutorialStep(index){if(window.eaSaveCourseCursor&&!await window.eaSaveCourseCursor({tutorial_step:index,pane:'tutorial'}))return;tutorialStep=index;renderTutorial(latestState||{});const body=$('pane-tutorial').parentElement;body.scrollTo({top:0,behavior:learningMotionReduced()?'auto':'smooth'});}
 function initTutorial(){
  if(storageGet('ea_reduce_motion')==='true')document.documentElement.classList.add('motion-reduced');
  const tab=button('新手案例','',()=>selectTab('tutorial'));tab.id='tab-tutorial';tab.dataset.tab='tutorial';tab.setAttribute('role','tab');tab.setAttribute('aria-selected','false');tab.setAttribute('aria-controls','pane-tutorial');tab.tabIndex=-1;
@@ -11,7 +11,8 @@ function initTutorial(){
  api('/api/tutorial').then(c=>{tutorialCase=c;renderTutorial(latestState||{});}).catch(e=>pane.append(el('p','',e.message)));
 }
 function renderTutorial(data){
- if(!tutorialCase)return;if(typeof stopLearningAnimation==='function')stopLearningAnimation();const root=$('pane-tutorial');root.replaceChildren();
+ if(!tutorialCase)return;
+ if(Number.isInteger(data.learning_context?.tutorial_step))tutorialStep=data.learning_context.tutorial_step;if(typeof stopLearningAnimation==='function')stopLearningAnimation();const root=$('pane-tutorial');root.replaceChildren();
  const progress=data.tutorial||{},records=progress.records||{},steps=tutorialCase.steps;
  const next=steps.findIndex((s,i)=>!records[String(i)]?.passed),unlocked=next<0?steps.length-1:next;
  tutorialStep=Math.min(tutorialStep,unlocked);const s=steps[tutorialStep],record=records[String(tutorialStep)];

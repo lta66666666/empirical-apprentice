@@ -37,24 +37,42 @@ function markdown(target, text) {
   for (const child of template.content.childNodes) target.append(clean(child));
 }
 
-async function api(path, {method="GET", body} = {}) {
-  let response;
-  try {
-    response = await fetch(path, {method, headers:body ? {"Content-Type":"application/json"} : {}, body:body ? JSON.stringify(body) : undefined, signal:AbortSignal.timeout(180000)});
-  } catch { const e = new Error("连接中断，输入已保留。请重新连接，确认最新进度后再提交。"); e.uncertain = true; throw e; }
-  if (response.status===401) { location.assign("/login?return_to="+encodeURIComponent(location.pathname)); throw Error("登录已过期，草稿保留在此账号的浏览器缓存中。"); }
-  if (!response.ok) {
-    const detail = await response.json().catch(()=>({}));
-    const e = new Error(response.status === 404 ? "会话已失效。可先导出当前记录，再开始新练习。" : response.status === 409 ? "当前进度已变化或上一条仍在处理，请重新连接同步状态。" : "请求未完成，输入已保留。请重新连接后再试。");
-    if (typeof detail.detail === 'string') e.message = detail.detail;
-    e.status = response.status; e.uncertain = response.status >= 500 || response.status === 409;
+const eaRequestMetrics=[];window.eaRequestMetrics=eaRequestMetrics;
+let eaNavigationEpoch=0;
+async function api(path, {method='GET', body, timeoutMs} = {}) {
+  const writing=!['GET','HEAD'].includes(method), sid=(/^\/api\/sessions\/([a-z0-9]{12})/.exec(path)||[])[1]||body?.session_id;
+  const captured=latestState?.session_id===sid?latestState:null;
+  if(body&&captured&&!Object.hasOwn(body,'state_version'))body={...body,state_version:captured.state_version};
+  const deadline=timeoutMs||(/\/auth\/|\/(?:chat|candidate|tutor|reflection)(?:$|\/)/.test(path)?30000:writing?20000:15000);
+  let response;const started=performance.now();
+  try {response=await fetch(path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(deadline)});}
+  catch {
+    const e=new Error(writing?'提交未确认，输入已保留；请核对最新记录后再决定是否重试。':'读取超时或连接中断，当前页面与输入已保留。');e.uncertain=writing;e.status=0;
+    if(writing&&sid){try{const r=await fetch('/api/sessions/'+sid,{signal:AbortSignal.timeout(15000)});if(r.ok)e.saved_snapshot=await r.json();}catch{}}
     throw e;
+  }finally{eaRequestMetrics.push({route:path.split('?')[0].replace(/[a-z0-9]{12,}/g,':id'),method,duration_ms:Math.round(performance.now()-started),status:response?.status||0});if(eaRequestMetrics.length>200)eaRequestMetrics.shift();}
+  if(response.status===401){window.eaPreserveInputs?.();location.assign('/login?return_to='+encodeURIComponent(location.pathname));const e=Error('登录已过期，草稿保留在此账号的浏览器缓存中。');e.status=401;throw e;}
+  const value=await response.json().catch(()=>({}));
+  if(!response.ok){
+    const labels={404:'记录不存在或不可读取，请选择合法的练习。',409:'记录已更新，当前输入已保留，请同步并核对双方版本。',410:'练习已到期；请先导出可保留的输入，再开始新练习。'};
+    const e=new Error(value.detail||labels[response.status]||'请求未完成，输入已保留。');e.status=response.status;e.uncertain=response.status>=500||response.status===409;e.server_version=value.state_version;throw e;
   }
-  return response.json();
+  if(Number.isInteger(value.state_version)&&latestState&&sid&&latestState.session_id===sid)latestState.state_version=Math.max(latestState.state_version||0,value.state_version);
+  return value;
 }
+window.eaRefreshRecords=async function(){
+  if(!sessionId)return false;const id=sessionId,account=window.EA_ACCOUNT?.id;
+  try{await window.eaFlushAllDrafts?.();const data=await api('/api/sessions/'+id+'?include=reports');if(id!==sessionId||account!==window.EA_ACCOUNT?.id)return false;
+    latestState={...latestState,...data};renderRecords(data);window.eaRenderModelEvidence?.(data.model_interactions);window.eaReportOverview?.(data);return true;
+  }catch(e){showError(e);return false;}
+};
+window.eaPreserveInputs=function(){
+  if(!sessionId)return;storageSet('ea_unsent:'+sessionId,JSON.stringify({course:$('userInput')?.value||'',at:Date.now()}));
+  window.eaCaptureDraft?.();
+};
 
 function showError(error) {
-  expired = error.status === 404;
+  expired = error.status === 410;
   needsSync = Boolean(error.uncertain);
   $("errorText").textContent = error.message;
   $("recoverBtn").textContent = expired ? "开始新练习" : "重新连接";
@@ -70,39 +88,46 @@ function updateControls() {
   $("userInput").disabled = false;
   $("exportBtn").disabled = !latestState;
   $("exportRecordBtn").disabled = !latestState;
-  $("waiting").hidden = !busy;
+  document.querySelectorAll('.module-toolbar button,.course-card button').forEach(n=>n.disabled=busy);if($('eaOperationStatus'))$('eaOperationStatus').textContent=busy?'正在处理当前操作…':'';
+  $('waiting').hidden = !busy;
   $("learningScroll").setAttribute("aria-busy", String(busy));
 }
 
-async function mutate(endpoint, body, {method="POST", clearInput=false} = {}) {
-  if (busy || expired || needsSync || !sessionId) return false;
-  busy = true; updateControls(); $("errorBar").hidden = true;
+async function mutate(endpoint, body, {method="POST", clearInput=false, render=true} = {}) {
+  if (busy || expired || needsSync || !sessionId) {toast(busy?'上一项操作仍在处理中，请稍候。':expired?'练习已到期，请开始新练习。':'请先重新连接并核对最新状态。');return false;}
+  const submittedSession=sessionId,account=window.EA_ACCOUNT?.id,submittedInput=$('userInput').value;
+  busy = true; updateControls(); $('errorBar').hidden = true;
   try {
     const data = await api(`/api/sessions/${sessionId}/${endpoint}`, {method, body});
+    if(sessionId!==submittedSession||account!==window.EA_ACCOUNT?.id)return false;
     showHistory = false;
     followBottom = true;
     answerJustSent = endpoint === "chat" || endpoint === "lesson_action";
     enterTop = endpoint === "entry";
-    if (clearInput) { $("userInput").value = ""; updateCount(); }
-    renderState(data);
+    if (clearInput&&$('userInput').value===submittedInput) { $('userInput').value = ''; storageRemove('ea_unsent:'+sessionId);updateCount(); }
+    if(render)renderState(data);else latestState={...latestState,learning_context:data.learning_context,course:data.course,state_version:data.state_version};
     return true;
   } catch (error) { showError(error); return false; }
   finally { busy = false; updateControls(); }
 }
 
 async function connect() {
-  if (busy) return;
-  busy = true; updateControls();
+  if (busy) {toast('正在同步练习，请稍候。');return;}
+  const epoch=++eaNavigationEpoch,id=sessionId;busy = true; updateControls();
   try {
-    if (sessionId) renderState(await api(`/api/sessions/${sessionId}`));
-    else renderState(await api("/api/sessions", {method:"POST"}));
+    const data=id?await api('/api/sessions/'+id):await api('/api/sessions',{method:'POST'});
+    if(epoch!==eaNavigationEpoch||id&&id!==sessionId)return;renderState(data);
+    try{const draft=JSON.parse(storageGet('ea_unsent:'+sessionId)||'null');if(draft?.course&&!$('userInput').value){$('userInput').value=draft.course;updateCount();}}catch{}
     expired = false; needsSync = false; $("errorBar").hidden = true;
   } catch (error) { showError(error); }
   finally { busy = false; updateControls(); }
 }
 
 async function newSession() {
-  if (busy) return;
+  if(busy){toast('上一项操作仍在处理中，请稍候。');return;}
+  if(window.eaBeforeLeave&&!await window.eaBeforeLeave())return;
+  window.eaPreserveInputs?.();if(window.eaFlushAllDrafts&&!await window.eaFlushAllDrafts()){toast('草稿尚未保存，请处理保存错误后再切换练习。');return;}
+  ++eaNavigationEpoch;
   busy = true; updateControls();
   try {
     const data = await api("/api/sessions", {method:"POST"});
@@ -115,7 +140,9 @@ async function newSession() {
   finally { busy = false; updateControls(); }
 }
 
+const eaRenderMetrics=[];window.eaRenderMetrics=eaRenderMetrics;
 function renderState(data) {
+  const renderStarted=performance.now();
   const previous = latestState;
   latestState = data; sessionId = data.session_id; storageSet("ea_session_id", sessionId);
   $("modeLabel").textContent = data.demo_mode ? "课程与自查可用" : "模型已配置 · 待实测";
@@ -126,7 +153,7 @@ function renderState(data) {
   else { chartKey = null; $("caseCard").hidden = true; }
   if (data.stage === "summary" && previous?.stage !== "summary") selectTab("records");
   icons(); updateControls();
-  if(typeof eaRestoreTask==='function')eaRestoreTask(data,previous);
+  if(typeof eaRestoreTask==='function')eaRestoreTask(data,previous);eaRenderMetrics.push({duration_ms:Math.round((performance.now()-renderStarted)*100)/100,node_count:document.querySelectorAll('*').length});if(eaRenderMetrics.length>100)eaRenderMetrics.shift();
 }
 
 function renderOutline(data) {
@@ -247,7 +274,7 @@ function renderActions(data) {
   const box = $("quickActions"); box.replaceChildren();
   if (showHistory) { box.append(button("返回当前任务","btn-secondary",toggleHistory)); return; }
   const add = (label,value,primary=false) => box.append(button(label,primary ? "btn-primary" : "btn-secondary",() => mutate("chat",{message:value})));
-  const action=(label,value,task)=>box.append(button(label,'btn-secondary',async()=>{await mutate('actions',{action:value});if(task&&typeof eaSetTask==='function')eaSetTask(task);}));
+  const action=(label,value,task)=>box.append(button(label,'btn-secondary',async()=>{const ok=await mutate('actions',{action:value});if(ok&&task&&typeof eaSetTask==='function')eaSetTask(task);}));
   if (data.stage === "project_choice") { action('继续手算教学','hand','hand');action('进入 R 实操','research','research');action('整理自己的研究准备','prepare','prepare');action('保存学习成果','save','records'); }
   if (data.stage === "info_gathering") {
     const f = data.blueprint[data.last_question];
@@ -352,7 +379,7 @@ function bindScrollFollow() {
   });
 }
 function updateCount() { const input=$("userInput"); $("charCount").textContent=`${input.value.length} / 2000`; input.style.height="auto"; input.style.height=Math.min(input.scrollHeight,130)+"px"; updateControls(); }
-async function sendMessage() { const value=$("userInput").value.trim(); if (value) { const ok=await mutate(latestState?.stage === "lesson" ? "lesson_action" : "chat",{message:value},{clearInput:true}); if (ok && !$("composerWrap").hidden && innerWidth > 720) $("userInput").focus(); } }
+async function sendMessage() { const value=$("userInput").value.trim(); if (value) { const ok=await mutate((latestState?.stage==='lesson'||window.EA_MODULE==='learn'&&latestState.learning_context?.status==='active'&&latestState.learning_context?.view_mode==='continue')?'lesson_action':'chat',{message:value},{clearInput:true}); if (ok && !$("composerWrap").hidden && innerWidth > 720) $("userInput").focus(); } }
 
 function dialog(title, body, actions=[]) {
   $("dialogTitle").textContent=title; $("dialogBody").replaceChildren(body); $("dialogActions").replaceChildren(...actions);
@@ -439,15 +466,15 @@ function renderPast(body, sessions) {
 }
 
 async function resumeSession(id) {
-  $("appDialog").close();
-  if (id === sessionId) { toast("已在当前练习中"); return; }
-  sessionId = id;
-  storageSet("ea_session_id", id);
-  showHistory = false; chartKey = null; followBottom = true;
-  $("userInput").value = ""; updateCount();
-  setView(false);
-  await connect();
-  toast("已恢复该练习");
+  if(busy){toast('正在处理当前操作，请稍候。');return;}
+  if(id===sessionId){$('appDialog').close();window.eaNavigateCurrent?.();toast('已在当前练习中');return;}
+  if(window.eaBeforeLeave&&!await window.eaBeforeLeave())return;
+  window.eaPreserveInputs?.();try{if(window.eaFlushAllDrafts&&!await window.eaFlushAllDrafts()){toast('草稿尚未保存，请先处理保存错误。');return;}}catch(e){showError(e);return;}
+  busy=true;updateControls();const epoch=++eaNavigationEpoch;
+  try{const data=await api('/api/sessions/'+id);if(epoch!==eaNavigationEpoch)return;
+    $('appDialog').close();showHistory=false;chartKey=null;followBottom=true;$('userInput').value='';updateCount();
+    expired=false;needsSync=false;renderState(data);toast('已恢复该练习');
+  }catch(e){showError(e);}finally{busy=false;updateControls();}
 }
 
 async function removePast(id, body) {

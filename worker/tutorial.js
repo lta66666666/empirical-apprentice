@@ -1,5 +1,6 @@
 import { tutorialSteps, tutorialCsv, tutorialBroken } from './content.js';
-import { loadOwnedSession, saveSession, sessionPayload } from './sessions.js';
+import { loadOwnedSession, saveSession, sessionPayload, requireSessionVersion } from './sessions.js';
+import {ensureLearningContext} from './course.js';
 import { zipFiles } from './zip.js';
 
 const publicCase = {
@@ -40,7 +41,9 @@ export async function handleTutorial(request, env, owner, path) {
   const state = await loadOwnedSession(env, owner, match[1]);
   if (state === 'expired') return Response.json({ detail: '会话已到期。' }, { status: 410 });
   if (!state) return Response.json({ detail: '会话不存在或不属于当前浏览器。' }, { status: 404 });
+  try{
   const body = await request.json().catch(() => null);
+  requireSessionVersion(state,body);
   const step = body?.step, choice = body?.choice;
   if (!Number.isInteger(step) || !Number.isInteger(choice) || step < 0 || step >= tutorialSteps.length || choice < 0 || choice >= tutorialSteps[step].options.length) return Response.json({ detail: '无效的练习选项。' }, { status: 422 });
   const progress = state.tutorial, records = progress.records ||= {};
@@ -51,6 +54,8 @@ export async function handleTutorial(request, env, owner, path) {
     last_correct: choice === selected.correct, feedback: selected.feedback };
   if (step === 3 && choice === selected.correct) progress.analysis = teachingAnalysis();
   progress.complete = tutorialSteps.every((_, index) => records[index]?.passed);
+  ensureLearningContext(state).tutorial_step=step;
   await saveSession(env, state);
   return Response.json(await sessionPayload(env, state));
+  }catch(e){return Response.json({detail:e.message,state_version:e.state_version},{status:e.status||422});}
 }

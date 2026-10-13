@@ -7,6 +7,7 @@ import { draftEndpoint, readDrafts } from './drafts.js';
 import {modelInteractions,modelEvidenceMarkdown} from './model-evidence.js';
 import {practicalMessages} from './practical.js';
 import {localTasks} from './local-stata.js';
+import {ensureLearningContext,coursePayload,openCourse,learningProjection,commitLearningProjection,courseView} from './course.js';
 
 const DAY = 86400000;
 const RETENTION = 7 * DAY;
@@ -24,7 +25,7 @@ const blankField = () => ({ value: '', source_type: 'none', source_url: '', veri
 export function newSession(owner) {
   const now = Date.now();
   const state = {
-    session_id: crypto.randomUUID().replaceAll('-', '').slice(0, 12), owner_id: owner,
+    state_version: 0, session_id: crypto.randomUUID().replaceAll('-', '').slice(0, 12), owner_id: owner,
     stage: 'entry', entry_path: '', lesson_idx: 0, lesson_records: [], learning_artifacts: {},
     preparation: { question_type: 'association', cards: {} }, method_learning: {}, analysis: {},
     tutorial: {}, artifact_reviews: {}, project: Object.fromEntries(fields.map((name) => [name, blankField()])),
@@ -35,29 +36,53 @@ export function newSession(owner) {
   return state;
 }
 
+export function requireSessionVersion(state, body) {
+  if (!Number.isInteger(body?.state_version) || body.state_version !== state.state_version) {
+    const cause = new Error(Number.isInteger(body?.state_version) ? '练习已在另一操作或标签页更新。当前输入已保留，请同步后核对两个版本。' : '页面版本已更新，请刷新并恢复草稿后再提交。');
+    cause.status = 409; cause.state_version = state.state_version; throw cause;
+  }
+}
+export async function touchSession(env,state) {
+  const now=Date.now();
+  const result=await env.DB.prepare('UPDATE sessions SET last_activity=MAX(last_activity,?) WHERE id=? AND owner=? AND last_activity>?').bind(now,state.session_id,state.owner_id,now-RETENTION).run();
+  if(result.meta?.changes)state.last_activity=now/1000;
+}
 export async function loadOwnedSession(env, owner, id, touch = false) {
-  const row = await env.DB.prepare('SELECT body,last_activity FROM sessions WHERE id=? AND owner=?').bind(id, owner).first();
+  const row = await env.DB.prepare('SELECT body,last_activity,state_version FROM sessions WHERE id=? AND owner=?').bind(id, owner).first();
   if (!row) return null;
   if (row.last_activity + RETENTION <= Date.now()) return 'expired';
   const state = upgradeState(JSON.parse(row.body));
-  if (touch) await saveSession(env, state);
+  state.state_version=row.state_version; state.last_activity=row.last_activity/1000;
+  Object.defineProperty(state,'_persisted',{value:true,writable:true,enumerable:false,configurable:true});
+  if (touch) await touchSession(env, state);
   return state;
 }
-
 export async function saveSession(env, state) {
-  const now = Date.now();
-  state.last_activity = now / 1000;
-  await env.DB.prepare('INSERT INTO sessions(id,owner,body,created_at,last_activity) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body,last_activity=excluded.last_activity')
-    .bind(state.session_id, state.owner_id, JSON.stringify(state), Math.round(state.created_at * 1000), now).run();
-  await syncSessionNodes(env,state);
+  const now = Date.now(),expected=state.state_version||0,next=expected+1;
+  const body=JSON.stringify({...state,state_version:next,last_activity:now/1000});
+  let result;
+  if(!state._persisted){
+    result=await env.DB.prepare('INSERT OR IGNORE INTO sessions(id,owner,body,created_at,last_activity,state_version) VALUES(?,?,?,?,?,?)').bind(state.session_id,state.owner_id,body,Math.round(state.created_at*1000),now,next).run();
+  }else{
+    result=await env.DB.prepare('UPDATE sessions SET body=?,last_activity=MAX(last_activity,?),state_version=? WHERE id=? AND owner=? AND state_version=? AND last_activity>?').bind(body,now,next,state.session_id,state.owner_id,expected,now-RETENTION).run();
+  }
+  if(!result.meta?.changes){
+    const latest=await env.DB.prepare('SELECT state_version,last_activity FROM sessions WHERE id=? AND owner=?').bind(state.session_id,state.owner_id).first();
+    const cause=new Error(latest&&latest.last_activity+RETENTION<=now?'练习已到期，输入保留在本机，请开始新练习。':'保存冲突：另一操作已更新练习。当前输入已保留，请先同步核对。');
+    cause.status=latest?latest.last_activity+RETENTION<=now?410:409:404;cause.state_version=latest?.state_version;throw cause;
+  }
+  state.state_version=next;state.last_activity=now/1000;
+  Object.defineProperty(state,'_persisted',{value:true,writable:true,enumerable:false,configurable:true});
 }
 
 function position(state) {
+  if(!state._course_projection){const context=ensureLearningContext(state);return [context.lesson_id,context.step_idx];}
   const match = /^l(\d+)s(\d+)$/.exec(state.last_question);
   return match ? [Number(match[1]), Number(match[2])] : [state.lesson_idx || 1, 0];
 }
 
 function lessonUi(state) {
+  if(!state._course_projection)return courseView(state);
   if (state.stage !== 'lesson') return null;
   const [id, stepIndex] = position(state);
   const item = lesson(id);
@@ -76,18 +101,18 @@ function lessonUi(state) {
   };
 }
 
-export async function sessionPayload(env, state) {
-  upgradeState(state);
+export async function sessionPayload(env, state, {syncJobs=false}={}) {
+  upgradeState(state);ensureLearningContext(state);
   const rows = await env.DB.prepare('SELECT body FROM jobs WHERE session_id=? AND owner=? ORDER BY created_at DESC LIMIT 30')
     .bind(state.session_id, state.owner_id).all();
   const {syncCloudJob}=await import('./research.js');
   const jobs = await Promise.all(rows.results.map(async (row) => {
     const job = JSON.parse(row.body);
-    await syncCloudJob(env,job,state);
-    return { id: job.id, status: job.status, created: job.created, plan: job.plan, description: job.description,execution_location:job.execution_location||'browser_webr',engine_id:job.engine_id||'browser_webr' };
+    if(syncJobs)await syncCloudJob(env,job,state);
+    return { id: job.id, record_version:job.record_version||1, status: job.status, created: job.created, plan: job.plan, description: job.description,execution_location:job.execution_location||'browser_webr',engine_id:job.engine_id||'browser_webr' };
   }));
   return {
-    session_id: state.session_id, stage: state.stage, entry_path: state.entry_path,
+    session_id: state.session_id, state_version:state.state_version, learning_context:state.learning_context,course:coursePayload(state), stage: state.stage, entry_path: state.entry_path,
     blueprint: state.project, conversation: state.conversation, case_answers: state.case_answers,
     lesson_records: state.lesson_records, learning_artifacts: state.learning_artifacts,
     preparation: state.preparation, method_learning: state.method_learning,
@@ -113,7 +138,7 @@ export async function sessionPayload(env, state) {
 }
 
 async function learningMarkdown(env, state) {
-  await sessionPayload(env,state); // Synchronize durable cloud results before all export formats.
+  await sessionPayload(env,state,{syncJobs:true}); // Synchronize durable cloud results before all export formats.
   const lines = ['# 实证学徒 · 学生学习报告', '', '> 课程练习与个人研究分开记录；来源核实状态由学生标记，系统没有自动验证。', '',
     `- 起点：${state.entry_path || '未选择'}`, `- 当前阶段：${state.stage}`, `- 最近活动：${new Date(state.last_activity * 1000).toISOString()}`, '',
     '## 八阶段课程作答'];
@@ -129,6 +154,8 @@ async function learningMarkdown(env, state) {
     lines.push(`### 阶段 ${id}`);
     for (const [key, value] of Object.entries(artifact)) lines.push(`- ${key}：${value || '待补充'}`);
   }
+  lines.push('', '## 导学位置与对话',`- 当前阶段：${state.learning_context?.lesson_id||1}；题目：${(state.learning_context?.step_idx||0)+1}；显示：${state.learning_context?.view_mode||'directory'}`);
+  for(const item of state.learning_context?.conversation||[])lines.push(`- ${item.role}：${item.content}`);
   lines.push('', '## 手算教学');
   for (const [index, record] of Object.entries(state.tutorial.records || {})) {
     lines.push(`- 第 ${Number(index) + 1} 步：作答 ${record.choice}；尝试 ${record.attempts} 次；${record.passed ? '已通过' : '待修正'}。`);
@@ -172,6 +199,7 @@ async function learningMarkdown(env, state) {
 }
 
 function startLesson(state, id) {
+  if(!state._course_projection){const projected=learningProjection(state);startLesson(projected,id);commitLearningProjection(state,projected);return;}
   const item = lesson(id);
   state.stage = 'lesson';
   state.lesson_idx = id;
@@ -217,6 +245,10 @@ function checkFree(step, text) {
 }
 
 function lessonAction(state, raw) {
+  if(!state._course_projection){
+    if(ensureLearningContext(state).status!=='active'||ensureLearningContext(state).view_mode!=='continue')throw new Error('请先从课程目录开始或继续学习。');
+    const projected=learningProjection(state);lessonAction(projected,raw);commitLearningProjection(state,projected);return;
+  }
   if (state.stage !== 'lesson') throw new Error('当前不在课程阶段。');
   const value = String(raw).trim().slice(0, 2000);
   const [id, index] = position(state);
@@ -237,7 +269,8 @@ function lessonAction(state, raw) {
     return;
   }
   add(state, value, 'user');
-  const record = state.lesson_records.find((entry) => entry.stage === id);
+  let record = state.lesson_records.find((entry) => entry.stage === id);
+  if(!record){record={stage:id,title:item.title,steps:[]};state.lesson_records.push(record);}
   let attempt = record.steps.find((entry) => entry.step_idx === index);
   if (!attempt) {
     attempt = { lesson_id: id, step_idx: index, attempts: 0, first_answer: value, final_answer: '', outcome: '' };
@@ -279,10 +312,12 @@ function lessonAction(state, raw) {
   else add(state, `阶段 ${id}「${item.title}」练习结束。请打开“写成果”补写阶段卡片，再继续下一阶段。`);
 }
 
+export function applyCourseAnswer(state,message){lessonAction(state,message);}
+
 function chatAction(state, message) {
   const text = String(message || '').trim().slice(0, 2000);
   if (!text) throw new Error('请输入具体内容。');
-  if (state.stage === 'lesson') return lessonAction(state, text);
+  if (state.stage === 'lesson'&&ensureLearningContext(state).status==='active') return lessonAction(state, text);
   if (state.stage === 'entry') return chooseEntry(state, ({ '1': 'zero', '2': 'prepare', '3': 'data', '4': 'some', '5': 'free' })[text[0]] || 'zero');
   add(state, text, 'user');
   if (state.stage === 'case_practice') return caseAction(state, text);
@@ -379,14 +414,16 @@ export async function handleSessions(request, env, owner, path) {
   if (state === 'expired') return error('会话已到期，请开始新练习。', 410);
   if (!state) return error('会话不存在或不属于当前浏览器。', 404);
   try {
+    if(tail==='course'&&request.method==='GET'){await touchSession(env,state);return answer({...coursePayload(state),session_id:id,state_version:state.state_version});}
+    if(tail==='course/open'&&request.method==='POST'){const body=await request.json();requireSessionVersion(state,body);openCourse(state,body);await saveSession(env,state);return answer(await sessionPayload(env,state));}
     if(tail==='model-evidence/json'&&request.method==='GET')return answer({session_id:id,records:await modelInteractions(env,id,owner),exported_at:new Date().toISOString(),warning:'实际接口响应不代表结论或来源已认证；仅包含最近 200 条。'});
     if(tail==='model-evidence/md'&&request.method==='GET')return new Response('# 实证学徒 · Agent 交互证据\n\n'+modelEvidenceMarkdown(await modelInteractions(env,id,owner)),{headers:{'Content-Type':'text/markdown; charset=utf-8','Content-Disposition':'attachment; filename="agent-evidence.md"'}});
     if(tail==='drafts'||tail.startsWith('drafts/')){
       const response=await draftEndpoint(request,env,state,tail);
-      if(response){if(response.ok){state.last_activity=Date.now()/1000;await env.DB.prepare('UPDATE sessions SET last_activity=? WHERE id=? AND owner=?').bind(Date.now(),id,owner).run();await syncSessionNodes(env,state);}return response;}
+      if(response){if(response.ok){await touchSession(env,state);}return response;}
       return error('草稿路径或方法无效。',405);
     }
-    if (!tail && request.method === 'GET') { await saveSession(env, state); return answer(await sessionPayload(env, state)); }
+    if (!tail && request.method === 'GET') { await touchSession(env, state); return answer(await sessionPayload(env, state,{syncJobs:new URL(request.url).searchParams.get('include')==='reports'})); }
     if (!tail && request.method === 'DELETE') {
       const localRunning=await env.DB.prepare("SELECT id FROM local_stata_tasks WHERE session_id=? AND owner=? AND status IN ('running','cancel_requested') LIMIT 1").bind(id,owner).first();
       if(localRunning)return error('本机 Stata 任务仍在执行或取消待确认，请先在本机停止并同步状态。',409);
@@ -403,7 +440,7 @@ export async function handleSessions(request, env, owner, path) {
       return new Response(await learningMarkdown(env, state), { headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': 'attachment; filename="learning-report.md"' } });
     }
     if (tail === 'learning-report/json' && request.method === 'GET') {
-      const payload = await sessionPayload(env, state);
+      const payload = await sessionPayload(env, state,{syncJobs:true});
       const jobs = await env.DB.prepare('SELECT body FROM jobs WHERE session_id=? AND owner=? ORDER BY created_at').bind(id, owner).all();
       payload.research_jobs = jobs.results.map(({body}) => { const {owner,nonce,input_key,node_artifacts,...job} = JSON.parse(body); return job; });
       return answer({ ...payload, artifact_history: state.artifact_history, exported_at: new Date().toISOString() });
@@ -414,6 +451,7 @@ export async function handleSessions(request, env, owner, path) {
       return new Response((stale ? '> 注意：研究蓝图已修改，本报告为旧设计的历史结果，请重新计算。\n\n' : '') + state.analysis.report_markdown, { headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': 'attachment; filename="analysis-report.md"' } });
     }
     const body = ['POST', 'PUT', 'PATCH'].includes(request.method) ? await request.json() : null;
+    if(body)requireSessionVersion(state,body);
     const previousEvidence = JSON.stringify(evidenceSnapshot(state));
     if (tail === 'actions' && request.method === 'POST') {
       const action = body?.action;
@@ -431,12 +469,12 @@ export async function handleSessions(request, env, owner, path) {
       const question = String(body.question || '').trim();
       if (!question || question.length > 2000) throw new Error('问题须为 1 到 2000 字。');
       if (modelCapabilities(env).tutor !== 'unconfigured') await reserveModelCall(env, owner);
-      const item = lesson(state.lesson_idx || 1), currentCase = practiceCases[state.current_case_id];
+      const item = lesson(state.learning_context?.lesson_id || state.lesson_idx || 1), currentCase = practiceCases[state.current_case_id];
       const materials = [{id:'current_lesson', content:item ? {title:item.title,intro:item.intro,guide:item.guide,example:item.example} : {}}];
       materials.push({id:'research_preparation',content:{question_type:state.preparation.question_type,adoption_mode:state.preparation.adoption_mode,question:state.preparation.cards.question?.value||'',sample:state.preparation.cards.sample?.value||'',outcome:state.preparation.cards.outcome?.value||'',predictor:state.preparation.cards.predictor?.value||'',limitations:suitability(state)}});
       if (currentCase) materials.push({id:'current_case',content:{title:currentCase.title,data_description:currentCase.data_description}});
       const result = await modelFeedback('tutor', {question,materials,student_answer:state.lesson_records.at(-1)?.steps.at(-1)?.final_answer || ''}, env,{session_id:id,owner});
-      state.tutor_records.push({question,...result,answer_version:state.tutor_records.length+1,lesson_id:state.lesson_idx||null,at:new Date().toISOString()});
+      state.tutor_records.push({question,...result,answer_version:state.tutor_records.length+1,lesson_id:state.learning_context?.lesson_id||state.lesson_idx||null,at:new Date().toISOString()});
     }
     else if (tail === 'variable-dictionary' && request.method === 'PUT') {
       if (!body.dictionary || Array.isArray(body.dictionary) || Object.keys(body.dictionary).length > 60) throw new Error('变量字典无效。');
@@ -509,5 +547,5 @@ export async function handleSessions(request, env, owner, path) {
     if (JSON.stringify(evidenceSnapshot(state)) !== previousEvidence) state.research_revision++;
     await saveSession(env, state);
     return answer(await sessionPayload(env, state));
-  } catch (cause) { return error(cause?.message || '请求无法处理。'); }
+  } catch (cause) { return answer({detail:cause?.message||'请求无法处理。',...(cause.state_version!==undefined?{state_version:cause.state_version}:{})},cause.status||422); }
 }

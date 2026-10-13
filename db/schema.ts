@@ -1,4 +1,5 @@
-import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, sqliteTable, text,uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {sql} from 'drizzle-orm';
 
 // Feasibility-only records. No student uploads are accepted by this prototype.
 export const retentionProbes = sqliteTable('retention_probes', {
@@ -9,6 +10,7 @@ export const retentionProbes = sqliteTable('retention_probes', {
 });
 
 export const sessions = sqliteTable('sessions', {
+  stateVersion:integer('state_version').notNull().default(0),
   id: text('id').primaryKey(),
   owner: text('owner').notNull(),
   body: text('body').notNull(),
@@ -26,9 +28,11 @@ export const jobs = sqliteTable('jobs', {
   createdAt: integer('created_at').notNull(),
   lastActivity: integer('last_activity').notNull(),
   leaseUntil: integer('lease_until').notNull().default(0),
+  requestId:text('request_id'),requestSha256:text('request_sha256'),
 }, (table) => [
   index('jobs_owner_session').on(table.owner, table.sessionId, table.createdAt),
   index('jobs_expiry').on(table.lastActivity, table.status),
+  uniqueIndex('jobs_request_once').on(table.owner,table.sessionId,table.requestId).where(sql`${table.requestId} IS NOT NULL`),
 ]);
 
 export const modelCalls = sqliteTable('model_calls', {
@@ -72,4 +76,10 @@ export const localStataTasks = sqliteTable('local_stata_tasks', {
   id:text('id').primaryKey(),pairingId:text('pairing_id').notNull().references(()=>localPairings.id,{onDelete:'cascade'}),
   sessionId:text('session_id').notNull().references(()=>sessions.id,{onDelete:'cascade'}),owner:text('owner').notNull(),
   status:text('status').notNull(),body:text('body').notNull(),createdAt:integer('created_at').notNull(),updatedAt:integer('updated_at').notNull(),
-},table=>[index('local_stata_tasks_pair_status').on(table.pairingId,table.status,table.createdAt)]);
+  requestId:text('request_id'),requestSha256:text('request_sha256'),
+},table=>[index('local_stata_tasks_pair_status').on(table.pairingId,table.status,table.createdAt),uniqueIndex('local_stata_tasks_request_once').on(table.owner,table.sessionId,table.requestId).where(sql`${table.requestId} IS NOT NULL`)]);
+
+export const accounts=sqliteTable('accounts',{id:text('id').primaryKey(),username:text('username').notNull().unique(),passwordHash:text('password_hash').notNull(),primaryOwner:text('primary_owner').notNull().unique(),createdAt:integer('created_at').notNull()});
+export const accountOwners=sqliteTable('account_owners',{owner:text('owner').primaryKey(),userId:text('user_id').notNull().references(()=>accounts.id),kind:text('kind').notNull(),claimedAt:integer('claimed_at').notNull()},t=>[index('account_owners_user').on(t.userId)]);
+export const authSessions=sqliteTable('auth_sessions',{tokenHash:text('token_hash').primaryKey(),userId:text('user_id').notNull().references(()=>accounts.id),expiresAt:integer('expires_at').notNull()},t=>[index('auth_sessions_expiry').on(t.expiresAt)]);
+export const authAttempts=sqliteTable('auth_attempts',{id:text('id').primaryKey(),kind:text('kind').notNull(),source:text('source').notNull(),username:text('username').notNull(),createdAt:integer('created_at').notNull()},t=>[index('auth_attempts_window').on(t.kind,t.createdAt,t.source,t.username)]);

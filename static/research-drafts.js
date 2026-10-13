@@ -2,7 +2,9 @@
 const eaDraftSessions=new Map();
 let eaDraftRestoreEpoch=0,eaInputHash='';
 function eaDraftStore(id=sessionId){if(!eaDraftSessions.has(id))eaDraftSessions.set(id,new Map());return eaDraftSessions.get(id);}
-function eaDraftEntry(key,id=sessionId){const store=eaDraftStore(id);if(!store.has(key))store.set(key,{key,id,version:0,value:{},dirty:false,serial:0,timer:null,inflight:null});return store.get(key);}
+function eaDraftEntry(key,id=sessionId){const store=eaDraftStore(id);if(!store.has(key)){let cached=null;try{cached=JSON.parse(storageGet('ea_draft_cache:'+id+':'+key)||'null');}catch{}store.set(key,{key,id,version:cached?.version||0,value:cached?.value||{},dirty:!!cached,serial:0,timer:null,inflight:null});}return store.get(key);}
+function eaCacheDraft(entry){if(entry.dirty)storageSet('ea_draft_cache:'+entry.id+':'+entry.key,JSON.stringify({version:entry.version,value:entry.value}));else storageRemove('ea_draft_cache:'+entry.id+':'+entry.key);}
+window.eaFlushAllDrafts=async(id=sessionId)=>{const results=await Promise.all([...eaDraftStore(id).values()].map(entry=>eaFlushDraft(entry.key,id)));return results.every(Boolean);};
 function eaDraftMessage(entry,node){if(node){node.textContent=entry.error|| (entry.dirty?'草稿待保存…':entry.value.submitted?'已提交解释的副本已保存；继续编辑会形成新草稿':entry.version?'草稿已保存到当前练习；尚未提交':'填写后自动保存草稿');node.classList.toggle('is-error',Boolean(entry.error));if(entry.error)node.append(button(entry.conflict?'检查草稿冲突':'重试保存','text-btn',()=>entry.conflict?eaResolveDraft(entry):eaFlushDraft(entry.key,entry.id)));}}
 async function eaResolveDraft(entry){
   try{
@@ -13,26 +15,42 @@ async function eaResolveDraft(entry){
     dialog.append(button('暂不处理，保留本页文字','btn-secondary',close),button('读取服务器版本并刷新','btn-secondary',()=>{entry.dirty=false;entry.conflict=false;close();location.reload();}),button('确认用本页草稿更新服务器','btn-primary',async()=>{entry.version=saved.version;entry.conflict=false;entry.error='';close();await eaFlushDraft(entry.key,entry.id);}));document.body.append(dialog);dialog.showModal();
   }catch(e){entry.error=e.message;eaDraftMessage(entry,entry.node);}
 }
-function eaQueueDraft(key,value,node){
-  const id=sessionId,entry=eaDraftEntry(key,id);
+function eaQueueDraft(key,value,node,id=sessionId){
+  if(!id)return;
+  const entry=eaDraftEntry(key,id);
   entry.node=node;if(JSON.stringify(entry.value)===JSON.stringify(value)){eaDraftMessage(entry,node);return;}
-  entry.value=value;entry.dirty=true;entry.serial++;if(!entry.conflict)entry.error='';eaDraftMessage(entry,node);
+  entry.value=value;entry.dirty=true;entry.serial++;eaCacheDraft(entry);if(!entry.conflict)entry.error='';eaDraftMessage(entry,node);
   clearTimeout(entry.timer);entry.timer=setTimeout(()=>eaFlushDraft(key,id),750);
 }
 async function eaFlushDraft(key,id=sessionId){
   const entry=eaDraftEntry(key,id);clearTimeout(entry.timer);
-  if(entry.inflight)await entry.inflight;
-  if(!entry.dirty)return !entry.error;
-  if(entry.conflict)return false;
-  const serial=entry.serial,value=structuredClone(entry.value);
-  entry.inflight=(async()=>{try{
-    const saved=await api(`/api/sessions/${id}/drafts/${key}`,{method:'PUT',body:{version:entry.version,value}});
-    entry.version=saved.version;entry.updated_at=saved.updated_at;entry.error='';if(serial===entry.serial)entry.dirty=false;
-  }catch(e){entry.error=`草稿未保存：${e.message}`;entry.conflict=e.status===409;}
-  finally{entry.inflight=null;eaDraftMessage(entry,entry.node);}})();
-  await entry.inflight;
-  if(entry.dirty&&!entry.error)return eaFlushDraft(key,id);
-  return !entry.error;
+  // All callers share one drain. Waiting on a previous write must not create
+  // several successors with the same optimistic version.
+  if(entry.inflight)return entry.inflight;
+  if(!entry.dirty||entry.conflict)return !entry.error&&!entry.conflict;
+  entry.inflight=(async()=>{
+    while(entry.dirty&&!entry.conflict){
+      const serial=entry.serial,value=structuredClone(entry.value);entry.error='';
+      try{
+        let saved;
+        try{saved=await api(`/api/sessions/${id}/drafts/${key}`,{method:'PUT',body:{version:entry.version,value}});}
+        catch(error){
+          // A timed-out successful write or an identical remote draft is
+          // recoverable. Different content remains an explicit conflict.
+          if(error.status===409||error.uncertain){
+            const records=await api(`/api/sessions/${id}/drafts`),remote=records.drafts[key];
+            if(remote&&JSON.stringify(remote.value)===JSON.stringify(value))saved=remote;
+            else{entry.remote=remote||null;throw error;}
+          }else throw error;
+        }
+        entry.version=saved.version;entry.updated_at=saved.updated_at;entry.error='';entry.lastSaved=structuredClone(value);
+        if(serial===entry.serial)entry.dirty=false;
+      }catch(error){entry.error=`草稿未保存：${error.message}`;entry.conflict=error.status===409;break;}
+      finally{eaCacheDraft(entry);eaDraftMessage(entry,entry.node);}
+    }
+    return !entry.error&&!entry.conflict;
+  })();
+  try{return await entry.inflight;}finally{entry.inflight=null;eaDraftMessage(entry,entry.node);}
 }
 function eaHydrateDrafts(data){
   for(const [key,saved]of Object.entries(data.research_drafts||{})){

@@ -24,7 +24,7 @@ function eaRenderModelEvidence(records=latestState?.model_interactions||[]){
     for(const [title,value]of [['输入摘要',record.input_summary],['实际提示词',record.messages],['结构化输出',record.output]]){const detail=el('details');detail.append(el('summary','',title),el('pre','',JSON.stringify(value,null,2)));card.append(detail);}root.append(card);
   }
 }
-async function eaRefreshModelEvidence(){if(!sessionId)return;try{const result=await api(`/api/sessions/${sessionId}/model-evidence/json`);latestState.model_interactions=result.records;eaRenderModelEvidence(result.records);}catch(e){toast(e.message);}}
+async function eaRefreshModelEvidence(){if(!sessionId)return;const id=sessionId,account=window.EA_ACCOUNT?.id;try{const result=await api(`/api/sessions/${id}/model-evidence/json`);if(id!==sessionId||account!==window.EA_ACCOUNT?.id)return;latestState.model_interactions=result.records;eaRenderModelEvidence(result.records);}catch(e){toast(e.message);}}
 function eaRenderAgentPreparation(data){
   const root=$('preparationContent');if(!root)return;
   const box=el('details','ea-preparation-agent');box.append(el('summary','','让 AI 帮我补研究问题（没有数据也可开始）'));
@@ -35,7 +35,7 @@ function eaRenderAgentPreparation(data){
   if(latest)draw(latest.output);
   const submit=button('提交问题，获得补问与建议','btn-secondary',async()=>{
     if(!input.value.trim()){notice.textContent='请先描述一个问题或当前缺口。';return;}submit.disabled=true;notice.textContent='正在请求模型；不会上传逐行数据…';
-    try{const result=await api('/api/research/candidate',{method:'POST',body:{session_id:sessionId,question:input.value}});draw(result);notice.textContent=result.ready?'候选方案已记录，仍需检查数据与执行确认。':'补问已记录。请填写准备卡，或在这里继续回答。';}
+    try{const id=sessionId,question=input.value,result=await api('/api/research/candidate',{method:'POST',body:{session_id:id,question}});if(id!==sessionId||question!==input.value)return;draw(result);notice.textContent=result.ready?'候选方案已记录，仍需检查数据与执行确认。':'补问已记录。请填写准备卡，或在这里继续回答。';}
     catch(e){notice.textContent=e.message;}
     finally{submit.disabled=false;await eaRefreshModelEvidence();}
   });

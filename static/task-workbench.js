@@ -9,31 +9,29 @@ document.querySelector('.layout').before(eaNav);
 const eaDrawer=el('dialog','ea-evidence-drawer');eaDrawer.id='eaEvidence';eaDrawer.setAttribute('aria-label','资料与证据');
 const drawerHead=el('div','ea-drawer-head');drawerHead.append(el('h2','','资料与证据'),button('关闭','btn-secondary',()=>eaCloseEvidence()));eaDrawer.append(drawerHead);document.body.append(eaDrawer);
 const eaBody=document.querySelector('.workspace-body');
-function eaCloseEvidence(){for(const p of eaDrawer.querySelectorAll('[role=tabpanel]'))eaBody.append(p);eaDrawer.close();eaOriginalTab(({prepare:'preparation',research:'research',records:'records',hand:'tutorial'})[eaTask]||'blueprint');}
-eaDrawer.addEventListener('cancel',eaCloseEvidence);
+let eaEvidenceReturnTab=null;
+function eaCloseEvidence(restore=true){for(const p of eaDrawer.querySelectorAll('[role=tabpanel]'))eaBody.append(p);eaDrawer.close();if(restore&&eaEvidenceReturnTab)eaOriginalTab(eaEvidenceReturnTab);eaEvidenceReturnTab=null;}
+eaDrawer.addEventListener('cancel',()=>eaCloseEvidence());
 selectTab=function(tab){
   if(['blueprint','materials'].includes(tab)){
-    if(latestState?.stage==='entry'||eaSkipSync)return eaOriginalTab(tab);
-    eaCloseEvidence();eaOriginalTab(tab);const p=$(`pane-${tab}`);eaDrawer.append(p);eaDrawer.showModal();return;
+    if(eaSkipSync)return eaOriginalTab(tab);
+    const previousTab=activeTab;eaCloseEvidence(false);eaEvidenceReturnTab=previousTab;eaOriginalTab(tab);const p=$(`pane-${tab}`);eaDrawer.append(p);eaDrawer.showModal();return;
   }
-  eaCloseEvidence();eaOriginalTab(tab);
-  if(!eaSkipSync)eaSetTask(({preparation:'prepare',research:'research',records:'records',tutorial:'hand',analysis:'hand'})[tab]||'learn',true);
+  eaCloseEvidence(false);eaOriginalTab(tab);
+  if(!eaSkipSync)eaSetTask(({preparation:'prepare',research:'research',records:'records',tutorial:'tutorial',analysis:'hand'})[tab]||'learn',true);
 };
 function eaSetTask(task,selected=false){
-  if(latestState?.stage==='entry'&&['prepare','research'].includes(task)){mutate('entry',{path:task==='prepare'?'prepare':'data'});return;}
-  eaCloseEvidence();eaPreviousTask=eaTask;eaTask=task;
-  const map={prepare:'preparation',research:'research',records:'records',hand:'tutorial'};
+  eaCloseEvidence(false);if(eaTask!==task)eaPreviousTask=eaTask;eaTask=task;
+  const map={prepare:'preparation',research:'research',records:'records',hand:'analysis',tutorial:'tutorial'};
   if(map[task]&&!selected){eaSkipSync=true;eaOriginalTab(map[task]);eaSkipSync=false;}
   const layout=document.querySelector('.layout');layout.dataset.task=task;
   layout.classList.remove('workspace-collapsed','work-view');
-  layout.classList.toggle('research-focus',task==='research');layout.classList.toggle('tutorial-focus',task==='hand');
-  eaNav.querySelectorAll('button').forEach(b=>b.setAttribute('aria-current',b.dataset.task===(task==='hand'?'learn':task)?'page':'false'));
+  layout.classList.toggle('research-focus',task==='research');layout.classList.toggle('tutorial-focus',['hand','tutorial'].includes(task));
+  eaNav.querySelectorAll('button').forEach(b=>b.setAttribute('aria-current',b.dataset.task===(['hand','tutorial'].includes(task)?'learn':task)?'page':'false'));
   document.querySelector('.learning-scroll').scrollTop=0;
   if(typeof stopLearningAnimation==='function')stopLearningAnimation();
   if(task==='research')eaResearchStep(eaStep);
-  if(task==='learn'&&latestState&&latestState.entry_path!=='zero'&&latestState.stage!=='entry'&&!latestState.lesson_ui){
-    if(!$('eaStartCourse')){const start=button('开始八阶段课程','btn-primary',()=>mutate('entry',{path:'zero'}));start.id='eaStartCourse';$('quickActions').append(start);}
-  }
+  window.eaTaskChanged?.(task);
 }
 function eaRestoreTask(data,previous){
   if(typeof eaRenderModelEvidence==='function')eaRenderModelEvidence(data.model_interactions||[]);
@@ -41,11 +39,7 @@ function eaRestoreTask(data,previous){
   if(!previous||previous.session_id!==data.session_id)eaRestoreWorkbench(data);
   const statuses=data.model_capabilities||{};
   const statusBox=$('eaModelCapabilities');if(statusBox)statusBox.textContent=['candidate','tutor','reflection'].map((key,i)=>`${['候选方案','课程问答','解释反馈'][i]}：${statuses[key]==='configured_not_verified'?'已配置，待实测':'模型未配置'}`).join(' · ');
-  if(data.stage==='entry'){eaSetTask('learn');return;}
-  if(!previous||previous.session_id!==data.session_id||previous.stage==='entry')eaSetTask(data.entry_path==='prepare'?'prepare':data.entry_path==='data'?'research':'learn');
-  if(data.stage==='project_choice')eaSetTask('learn');
-  if(data.stage==='summary'&&previous?.stage!=='summary')eaSetTask('records');
-  if(eaTask==='learn')eaSetTask('learn');
+  if(!previous||previous.session_id!==data.session_id)eaSetTask(window.EA_MODULE==='analysis'?'research':'learn');
   const record=data.tutor_records?.at(-1);if(record){const box=$('eaTutorAnswer');box.replaceChildren(el('p','workspace-note',record.warning));const prose=el('div','prose');markdown(prose,record.answer);box.append(prose);}
 }
 document.querySelector('.header-actions').prepend(button('资料与证据','btn-secondary',()=>selectTab('materials')));
@@ -117,7 +111,7 @@ function eaUpdateStepAction(){
   const confirmation=$('researchConfirm').closest('label');
   confirmation.classList.toggle('ea-stage-hidden',eaStep!=='plan'||!researchPlan);
   $('eaNextAction').textContent={data:'检查数据与变量',health:'选择方法并整理方案',plan:researchPlan?'核对确认后执行':'整理待确认方案',execute:'进入结果解释',explain:researchJob?.status==='succeeded'?(researchJob.reflections?.length?'提交修订并更新报告':'提交解释并更新报告'):'选择数据开始分析'}[eaStep];
-  $('eaNextAction').disabled=(eaStep==='plan'&&(researchRunning||Boolean(researchPlan&&!$('researchConfirm').checked)))||(eaStep==='execute'&&researchJob?.status!=='succeeded')||(eaStep==='explain'&&Boolean($('researchReflectionSubmit')?.disabled));
+  $('eaNextAction').disabled=researchRunning||researchInputBusy||(eaStep==='plan'&&(researchRunning||Boolean(researchPlan&&!$('researchConfirm').checked)))||(eaStep==='execute'&&researchJob?.status!=='succeeded')||(eaStep==='explain'&&Boolean($('researchReflectionSubmit')?.disabled));
   if(eaStep==='execute'&&researchJob?.status!=='succeeded')$('eaNextAction').textContent=['failed','interrupted','cancelled'].includes(researchJob?.status)?'执行未完成，请先处理上方提示':'等待计算完成';
   $('pane-research').querySelector(':scope>h2').textContent={data:'选择数据，开始一次分析',health:'核对数据与变量',plan:'整理方案，核对后执行',execute:'查看真实执行与结果',explain:'解释系数，记录自己的理解'}[eaStep];
   let hint=$('eaStepHint');if(!hint){hint=el('p','workspace-note');hint.id='eaStepHint';stepper.after(hint);}

@@ -1,4 +1,5 @@
-import {loadOwnedSession,saveSession} from './sessions.js';
+import {loadOwnedSession,touchSession,requireSessionVersion} from './sessions.js';
+import {requestIdentity,repeatedTask} from './request-consistency.js';
 import {evidenceSnapshot,didConflict} from './evidence.js';
 import {requestModel,reserveModelCall,modelCapabilities} from './model.js';
 import {storeModelInteraction} from './model-evidence.js';
@@ -15,7 +16,7 @@ export function cleanProfile(value){
 function publicPair(pair){const body=JSON.parse(pair.body);return {id:pair.id,session_id:pair.session_id,online:Date.now()-pair.last_seen<45000,last_seen:pair.last_seen,mcp_available:body.mcp_available===true,mcp_version:body.mcp_version||null,input_sha256:body.input_sha256||null,profile:body.profile||null,revoked:!!pair.revoked};}
 async function browserPair(env,owner,session){return env.DB.prepare('SELECT * FROM local_pairings WHERE session_id=? AND owner=? AND revoked=0 ORDER BY created_at DESC LIMIT 1').bind(session,owner).first();}
 async function authenticatedPair(request,env,id){const token=request.headers.get('Authorization')?.replace(/^Bearer /,'')||'';if(!/^[0-9a-f]{64}$/.test(token))return null;const pair=await env.DB.prepare('SELECT * FROM local_pairings WHERE id=? AND token_hash=? AND revoked=0').bind(id,await hash(token)).first();if(!pair||pair.expires_at<=Date.now())return null;if(pair.owner){const session=await loadOwnedSession(env,pair.owner,pair.session_id);if(!session||session==='expired')return null;}return pair;}
-async function updateTask(env,task,status){const previous=task.status;task.status=status;task.updated_at=Date.now();const changed=await env.DB.prepare('UPDATE local_stata_tasks SET status=?,body=?,updated_at=? WHERE id=? AND pairing_id=? AND status=?').bind(status,JSON.stringify(task),task.updated_at,task.id,task.pairing_id,previous).run();if(!changed.meta.changes)throw Error('任务状态已变化，请重新读取。');}
+async function updateTask(env,task,status){const previous=task.status;task.status=status;task.updated_at=Date.now();const changed=await env.DB.prepare('UPDATE local_stata_tasks SET status=?,body=?,updated_at=? WHERE id=? AND pairing_id=? AND status=?').bind(status,JSON.stringify(task),task.updated_at,task.id,task.pairing_id,previous).run();if(!changed.meta.changes){const error=Error('任务状态已变化，请重新读取。');error.status=409;throw error;}}
 export async function localTasks(env,owner,session){const rows=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE session_id=? AND owner=? ORDER BY created_at DESC LIMIT 30').bind(session,owner).all();return rows.results.map(r=>{const {owner,...task}=JSON.parse(r.body);return task;});}
 function validResult(value,task){
   if(!value||typeof value!=='object'||typeof value.summary!=='string'||value.summary.length>6000||typeof value.software_version!=='string'||value.software_version.length>100)throw Error('结果摘要或软件版本无效。');
@@ -82,13 +83,13 @@ export async function handleLocalStata(request,env,owner,path){
     }
     if(!owner)return fail('接口不存在。',404);
     const query=new URL(request.url).searchParams,sessionId=String(body?.session_id||query.get('session_id')||'');
-    const session=await loadOwnedSession(env,owner,sessionId);if(!session||session==='expired')return fail('练习不存在、已到期或不属于当前浏览器。',404);
+    const session=await loadOwnedSession(env,owner,sessionId);if(session==='expired')return fail('练习已到期。',410);if(!session)return fail('练习不存在或不可读取。',404);
     if(path==='/api/local-stata/pairings/claim'&&request.method==='POST'){
       const attempt=await env.DB.prepare('INSERT INTO local_pair_attempts SELECT ?,?,? WHERE (SELECT COUNT(*) FROM local_pair_attempts WHERE owner=? AND created_at>?)<5').bind(crypto.randomUUID(),owner,Date.now(),owner,Date.now()-300000).run();if(!attempt.meta.changes)return fail('五分钟内最多尝试五次，请稍后重试。',429);
       const old=await browserPair(env,owner,sessionId);if(old&&!old.revoked)return fail('请先解除当前设备配对。',409);
       const row=await env.DB.prepare('SELECT id FROM local_pairings WHERE code=? AND owner IS NULL AND revoked=0 AND expires_at>?').bind(String(body.code||''),Date.now()).first();if(!row)return fail('配对码无效或已过期。',404);
       const changed=await env.DB.prepare('UPDATE local_pairings SET owner=?,session_id=?,expires_at=? WHERE id=? AND owner IS NULL AND expires_at>?').bind(owner,sessionId,Math.round((session.last_activity+604800)*1000),row.id,Date.now()).run();if(!changed.meta.changes)return fail('配对码已被使用。',409);
-      await saveSession(env,session);return json({paired:true});
+      await touchSession(env,session);return json({paired:true});
     }
     const pair=await browserPair(env,owner,sessionId);
     if(path==='/api/local-stata/pairings'&&request.method==='GET')return json({pairing:pair?publicPair(pair):null,tasks:await localTasks(env,owner,sessionId)});
@@ -96,6 +97,7 @@ export async function handleLocalStata(request,env,owner,path){
       if(pair){const tasks=await localTasks(env,owner,sessionId);if(tasks.some(t=>active.includes(t.status)))return fail('请先取消或完成当前任务，再解除配对。',409);await env.DB.prepare('UPDATE local_pairings SET revoked=1 WHERE id=? AND owner=?').bind(pair.id,owner).run();}return json({revoked:true});
     }
     if(path==='/api/local-stata/tasks/code'&&request.method==='POST'){
+      requireSessionVersion(session,body);
       if(!pair)return fail('请先配对本机助手。',409);const profile=JSON.parse(pair.body).profile;if(!profile)return fail('请在助手选择本机CSV/TSV文件。',409);
       if(modelCapabilities(env).candidate==='unconfigured')return fail('模型未配置，可在网页自行填写代码。',503);
       await reserveModelCall(env,owner);const question=String(body.question||'').trim().slice(0,2000);if(!question)return fail('请写下操作目标。');
@@ -104,6 +106,9 @@ export async function handleLocalStata(request,env,owner,path){
       const start=Date.now();try{const response=await requestModel(env,messages);if(typeof response.raw.code!=='string'||response.raw.code.length>16000||typeof response.raw.explanation!=='string')throw Error('格式无效');const output={code:response.raw.code,explanation:response.raw.explanation.slice(0,3000),model:response.actual_model,prompt_version:'ea-stata-code-v1',mode:'ai_advice'};await storeModelInteraction(env,{session_id:sessionId,owner},{kind:'candidate',status:output.code?'response_valid':'needs_information',prompt_version:output.prompt_version,model:output.model,input_summary:context,messages,output,mode:output.mode,duration_ms:Date.now()-start});return json(output);}catch{await storeModelInteraction(env,{session_id:sessionId,owner},{kind:'candidate',status:'failed',prompt_version:'ea-stata-code-v1',input_summary:context,messages,output:{detail:'模型失败，可手动填写代码'},mode:'manual',duration_ms:Date.now()-start});return fail('模型超时或响应失败，可手动填写代码。',502);}
     }
     if(path==='/api/local-stata/tasks'&&request.method==='POST'){
+      const identity=await requestIdentity(body),repeated=await repeatedTask(env,'local_stata_tasks',owner,sessionId,identity);
+      if(repeated)return json({task:repeated,state_version:session.state_version},202);
+      requireSessionVersion(session,body);
       if(!pair||!publicPair(pair).online||!publicPair(pair).mcp_available)return fail('本机助手或Stata MCP尚未在线。',409);
       const info=JSON.parse(pair.body),profile=cleanProfile(info.profile);
       if(body.input_sha256!==info.input_sha256||body.research_revision!==session.research_revision||body.confirmed!==true)return fail('输入、资料或确认已变化，请重新核对。',409);
@@ -118,8 +123,10 @@ export async function handleLocalStata(request,env,owner,path){
         if(plan.vcov==='cluster'&&!names.has(plan.cluster))return fail('请选择聚类列。');
         if(plan.method==='did'&&(!plan.same_batch||!names.has(plan.treated)||!Number.isInteger(plan.policy_year)||plan.policy_year<1800||plan.policy_year>2200||didConflict(session)))return fail(didConflict(session)||'同批DID需要核对实施年、组别与批次。');
       }else{code=String(body.code||'').trim();if(!code||code.length>16000)return fail('代码不能为空且最多16000字。');}
-      const task={id:crypto.randomUUID(),pairing_id:pair.id,owner,session_id:sessionId,kind,code,plan,plan_sha256:await hash(JSON.stringify({kind,code,plan})),profile,input_sha256:info.input_sha256,research_revision:session.research_revision,evidence_snapshot:evidenceSnapshot(session),dictionary:session.variable_dictionary,question:String(body.question||'').slice(0,2000),engine_id:'stata_local_mcp',software:'stata',execution_location:'local_mcp',status:'queued',created_at:Date.now(),record_version:1,result:null,reflections:[]};
-      await env.DB.prepare('INSERT INTO local_stata_tasks VALUES(?,?,?,?,?,?,?,?)').bind(task.id,pair.id,sessionId,owner,task.status,JSON.stringify(task),task.created_at,task.created_at).run();await saveSession(env,session);return json({task},202);
+      const task={id:crypto.randomUUID(),request_id:identity.id,pairing_id:pair.id,owner,session_id:sessionId,kind,code,plan,plan_sha256:await hash(JSON.stringify({kind,code,plan})),profile,input_sha256:info.input_sha256,research_revision:session.research_revision,evidence_snapshot:evidenceSnapshot(session),dictionary:session.variable_dictionary,question:String(body.question||'').slice(0,2000),engine_id:'stata_local_mcp',software:'stata',execution_location:'local_mcp',status:'queued',created_at:Date.now(),record_version:1,result:null,reflections:[]};
+      try{const inserted=await env.DB.prepare("INSERT INTO local_stata_tasks(id,pairing_id,session_id,owner,status,body,created_at,updated_at,request_id,request_sha256) SELECT ?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM local_stata_tasks WHERE pairing_id=? AND status IN ('queued','awaiting_approval','running','awaiting_upload','cancel_requested')) AND EXISTS(SELECT 1 FROM sessions WHERE id=? AND owner=? AND state_version=?) AND EXISTS(SELECT 1 FROM local_pairings WHERE id=? AND revoked=0 AND json_extract(body,'$.input_sha256')=?)").bind(task.id,pair.id,sessionId,owner,task.status,JSON.stringify(task),task.created_at,task.created_at,identity.id,identity.sha256,pair.id,sessionId,owner,session.state_version,pair.id,info.input_sha256).run();if(!inserted.meta.changes){const replay=await repeatedTask(env,'local_stata_tasks',owner,sessionId,identity);if(replay)return json({task:replay,state_version:session.state_version},202);return fail('任务、输入或资料在提交期间已变化，请读取最新状态后重新确认。',409);}}
+      catch(error){const replay=await repeatedTask(env,'local_stata_tasks',owner,sessionId,identity);if(replay)return json({task:replay,state_version:session.state_version},202);throw error;}
+      await touchSession(env,session);return json({task,state_version:session.state_version},202);
     }
     if(path==='/api/local-stata/tasks/cancel'&&request.method==='POST'){
       const row=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE id=? AND session_id=? AND owner=?').bind(String(body.task_id||''),sessionId,owner).first();if(!row)return fail('任务不存在。',404);const task=JSON.parse(row.body);if(!terminal.has(task.status))await updateTask(env,task,task.status==='queued'?'cancelled':'cancel_requested');return json({task});
@@ -133,5 +140,5 @@ export async function handleLocalStata(request,env,owner,path){
       const saved=await env.DB.prepare("UPDATE local_stata_tasks SET body=?,updated_at=? WHERE id=? AND owner=? AND json_extract(body,'$.record_version')=?").bind(JSON.stringify(task),Date.now(),task.id,owner,version).run();if(!saved.meta.changes)return fail('记录已在另一标签页变化，请刷新。',409);return json({task});
     }
     return fail('接口不存在。',404);
-  }catch(error){return fail(error.message||'本机连接请求失败。');}
+  }catch(error){return json({detail:error.message||'本机连接请求失败。',...(error.state_version!==undefined?{state_version:error.state_version}:{})},error.status||422);}
 }

@@ -1,6 +1,7 @@
 import { engineMetadata, engineCapabilities, nodeRequest, digest } from './executor.js';
 import { fixtures } from './fixtures.js';
-import { loadOwnedSession, saveSession } from './sessions.js';
+import { loadOwnedSession, saveSession, touchSession, requireSessionVersion } from './sessions.js';
+import {requestIdentity,repeatedTask} from './request-consistency.js';
 import { zipFiles } from './zip.js';
 import { proposeCandidate, modelFeedback, reserveModelCall, modelCapabilities } from './model.js';
 import { evidenceSnapshot, didConflict } from './evidence.js';
@@ -12,6 +13,8 @@ const MAX_ROWS = 20_000;
 const MISSING = new Set(['', 'NA', 'N/A', 'null', 'NaN']);
 const resultJson = (value, status = 200) => Response.json(value, { status });
 const fault = (message, status = 422) => resultJson({ detail: message }, status);
+const jobSnapshots=new WeakMap();
+const requestFault=cause=>resultJson({detail:cause?.message||'分析请求无法处理。',...(cause?.state_version!==undefined?{state_version:cause.state_version}:{})},cause?.status||422);
 
 export function parseCsv(text, filename = 'data.csv') {
   if (typeof text !== 'string' || new TextEncoder().encode(text).length > MAX_BYTES) throw new Error('文件最多 2 MB。');
@@ -154,6 +157,7 @@ async function getJob(env, owner, id, touch=false) {
   const row = await env.DB.prepare('SELECT body,last_activity,lease_until FROM jobs WHERE id=? AND owner=?').bind(id, owner).first();
   if (!row || row.last_activity + RETENTION <= Date.now()) return null;
   const job = JSON.parse(row.body);
+  jobSnapshots.set(job,row.body);
   const session = await loadOwnedSession(env, owner, job.session_id,touch);
   if (!session || session==='expired') return null;
   job.stale = !!session && session !== 'expired' && job.research_revision !== undefined && job.research_revision !== session.research_revision;
@@ -161,19 +165,22 @@ async function getJob(env, owner, id, touch=false) {
   if (job.execution_location === 'cloud_native') await syncCloudJob(env,job,session);
   if (job.execution_location !== 'cloud_native' && job.status === 'running' && row.lease_until < Date.now()) {
     job.status = 'interrupted'; job.error = '浏览器执行已中断，可从保存的输入重新运行。';
-    await saveJob(env, job);
+    try{await saveJob(env,job);}catch(error){if(error.status!==409)throw error;const current=await env.DB.prepare('SELECT body FROM jobs WHERE id=? AND owner=?').bind(id,owner).first();if(current){Object.assign(job,JSON.parse(current.body));jobSnapshots.set(job,current.body);}}
   }
   return job;
 }
 
-async function saveJob(env, job, touchSession = false) {
+async function saveJob(env, job, touchOwner = false) {
   const now = Date.now();
   job.last_activity = now;
-  await env.DB.prepare('UPDATE jobs SET body=?,status=?,last_activity=?,lease_until=? WHERE id=? AND owner=?')
-    .bind(JSON.stringify(job), job.status, now, job.status === 'running' ? now + 30000 : 0, job.id, job.owner).run();
-  if (touchSession) {
+  const previous=jobSnapshots.get(job),body=JSON.stringify(job);
+  const changed=await env.DB.prepare('UPDATE jobs SET body=?,status=?,last_activity=?,lease_until=? WHERE id=? AND owner=? AND body=?')
+    .bind(body,job.status,now,job.status==='running'?now+30000:0,job.id,job.owner,previous??body).run();
+  if(!changed.meta.changes){const error=Error('任务状态已变化，请读取最新结果后再操作。');error.status=409;throw error;}
+  jobSnapshots.set(job,body);
+  if (touchOwner) {
     const session = await loadOwnedSession(env, job.owner, job.session_id);
-    if (session && session !== 'expired') await saveSession(env, session);
+    if (session && session !== 'expired') await touchSession(env, session);
   }
 }
 
@@ -211,13 +218,14 @@ export async function handleResearch(request, env, owner, path) {
     try {
       const body = await request.json();
       const session = await loadOwnedSession(env, owner, String(body?.session_id || ''));
-      if (!session || session === 'expired') return fault('会话不存在或已到期。', 404);
+      if(session==='expired')return fault('练习已到期。',410);if(!session)return fault('练习不存在或不可读取。',404);
+      requireSessionVersion(session,body);
       const profile = body?.text===undefined?{row_count:0,columns:[]}:parseCsv(body.text, body.filename || 'data.csv').profile;
       if(modelCapabilities(env).candidate!=='unconfigured')await reserveModelCall(env, owner);
       const history=(await modelInteractions(env,session.session_id,owner)).filter(x=>x.kind==='candidate').slice(-3).map(x=>({question:x.input_summary.question,output:x.output}));
       const preparation={question_type:session.preparation.question_type,adoption_mode:session.preparation.adoption_mode,effective_date:session.preparation.cards.effective_date?.value||'',sample_batch_note:session.preparation.sample_batch_note||''};
       return await proposeCandidate({ question: body.question, profile,preparation,blocker:didConflict(session),history }, env,{session_id:session.session_id,owner});
-    } catch (cause) { return fault(cause?.message || '方案建议失败。'); }
+    } catch (cause) { return requestFault(cause); }
   }
   const example = /^\/api\/research\/examples\/(ols|panel_fe|did)$/.exec(path);
   if (example && request.method === 'GET') return resultJson(fixtures[example[1]]);
@@ -229,20 +237,27 @@ export async function handleResearch(request, env, owner, path) {
     try {
       const action = sessionRoute[2];
       if (action === 'jobs' && request.method === 'GET') {
-        await saveSession(env,session);
+        await touchSession(env,session);
         const rows = await env.DB.prepare('SELECT body FROM jobs WHERE session_id=? AND owner=? AND last_activity>? ORDER BY created_at DESC LIMIT 30')
           .bind(session.session_id, owner, Date.now() - RETENTION).all();
         return resultJson({ jobs: await Promise.all(rows.results.map(async row => publicJob(await getJob(env,owner,JSON.parse(row.body).id)))) });
       }
       if (request.method !== 'POST') return fault('方法不支持。', 405);
       const body = await request.json();
+      let identity=null;
+      if(action==='jobs'){
+        identity=await requestIdentity(body);
+        const repeated=await repeatedTask(env,'jobs',owner,session.session_id,identity);
+        if(repeated)return resultJson({...publicJob(repeated),execution_nonce:repeated.nonce,state_version:session.state_version},202);
+      }
+      if(action!=='inspect')requireSessionVersion(session,body);
       const data = parseCsv(body?.text, body?.filename || 'data.csv');
       if (action === 'inspect') return resultJson(data.profile);
       if (action === 'plan') {
         const { plan, missingLines } = validatePlan(body.candidate, data, session.project, session);
         session.pending_confirmation = { token: crypto.randomUUID(), input_sha256: await sha256(body.text), plan_sha256: await sha256(JSON.stringify(plan)), research_revision: session.research_revision };
         await saveSession(env, session);
-        return resultJson({ plan, confirmation: session.pending_confirmation, description: description(plan), profile: data.profile,
+        return resultJson({ plan, state_version:session.state_version, confirmation: session.pending_confirmation, description: description(plan), profile: data.profile,
           note: `基于当前手选字段整理；未连接在线模型。原始 ${data.rows.length} 行，选定变量缺失 ${missingLines.length} 行。来源、单位和方法假设仍需学生核对。` });
       }
       if (action === 'jobs') {
@@ -260,7 +275,7 @@ export async function handleResearch(request, env, owner, path) {
         const dictionary = Object.fromEntries(Object.entries(submittedDictionary)
           .filter(([name, value]) => data.headers.includes(name) && typeof value === 'string')
           .slice(0, 60).map(([name, value]) => [name, value.slice(0, 300)]));
-        const job = { id, owner, session_id: session.session_id, status: 'running', created: Date.now() / 1000,
+        const job = { id, owner, session_id: session.session_id, request_id:identity.id,status: 'running', created: Date.now() / 1000,
           last_activity: Date.now(), execution_location: plan.execution_location, software:plan.software, engine_id:plan.engine_id, nonce: crypto.randomUUID(),
           input_key: key, input_sha256: inputHash, plan_sha256: planHash, n_rows: data.rows.length,
           filename: String(body.filename || 'data.csv').slice(0, 200), plan, description: description(plan),
@@ -271,14 +286,17 @@ export async function handleResearch(request, env, owner, path) {
         };
         await env.FILES.put(key, body.text);
         try {
-          await env.DB.prepare('INSERT INTO jobs(id,session_id,owner,body,status,input_key,created_at,last_activity,lease_until) VALUES(?,?,?,?,?,?,?,?,?)')
-            .bind(id, session.session_id, owner, JSON.stringify(job), 'running', key, Date.now(), Date.now(), Date.now() + 30000).run();
-        } catch (cause) { await env.FILES.delete(key); throw cause; }
+          const persisted=JSON.stringify(job);
+          const inserted=await env.DB.prepare('INSERT INTO jobs(id,session_id,owner,body,status,input_key,created_at,last_activity,lease_until,request_id,request_sha256) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM sessions WHERE id=? AND owner=? AND state_version=?)')
+            .bind(id,session.session_id,owner,persisted,'running',key,Date.now(),Date.now(),Date.now()+30000,identity.id,identity.sha256,session.session_id,owner,session.state_version).run();
+          if(!inserted.meta.changes){const error=Error('方案在提交期间已变化，请读取最新资料并重新确认。');error.status=409;throw error;}
+          jobSnapshots.set(job,persisted);
+        } catch (cause) { await env.FILES.delete(key);const repeated=await repeatedTask(env,'jobs',owner,session.session_id,identity);if(repeated)return resultJson({...publicJob(repeated),execution_nonce:repeated.nonce,state_version:session.state_version},202);throw cause; }
         if(job.execution_location==='cloud_native') await submitCloudJob(env,job,body.text,session);
-        await saveSession(env, session);
-        return resultJson({ ...publicJob(job), execution_nonce: job.nonce }, 202);
+        await touchSession(env, session);
+        return resultJson({ ...publicJob(job), execution_nonce: job.nonce,state_version:session.state_version }, 202);
       }
-    } catch (cause) { return fault(cause?.message || '分析请求无法处理。'); }
+    } catch (cause) { return requestFault(cause); }
   }
   const jobRoute = /^\/api\/research\/jobs\/([0-9a-f-]{36})(?:\/(.*))?$/.exec(path);
   if (!jobRoute) return null;
@@ -298,7 +316,9 @@ export async function handleResearch(request, env, owner, path) {
     if (job.execution_location==='cloud_native' && ['complete','fail','heartbeat'].includes(tail)) return fault('云端任务仅接受签名执行节点的结果。',409);
     if (tail === 'heartbeat' && request.method === 'POST') {
       if (job.status !== 'running') return fault('任务已结束。', 409);
-      await saveJob(env, job, true); return resultJson({ ok: true });
+      const now=Date.now(),renewed=await env.DB.prepare("UPDATE jobs SET last_activity=?,lease_until=? WHERE id=? AND owner=? AND status='running' AND lease_until>=?").bind(now,now+30000,job.id,owner,now).run();
+      if(!renewed.meta.changes)return fault('任务已结束或执行心跳已失效，请读取最新状态。',409);
+      return resultJson({ ok: true });
     }
     if (tail === 'interrupt' && request.method === 'POST') {
       if(job.execution_location==='cloud_native'){job.cancel_requested=true;await saveJob(env,job);await syncCloudJob(env,job);return resultJson(publicJob(job));}
@@ -355,7 +375,8 @@ export async function handleResearch(request, env, owner, path) {
       const clone={...job,id,input_key:key,nonce:crypto.randomUUID(),status:'running',created:Date.now()/1000,result:null,reflections:[],reflection:null,verification:null,verification_of_job_id:job.id,record_version:1};
       delete clone.completed;delete clone.error;delete clone.node_artifacts;delete clone.remote_submitted;delete clone.remote_synced;delete clone.cancel_requested;clone.execution_location=job.execution_location||'browser_webr';clone.engine_id=job.engine_id||'browser_webr';
       await env.FILES.put(key,originalText);
-      try { await env.DB.prepare('INSERT INTO jobs(id,session_id,owner,body,status,input_key,created_at,last_activity,lease_until) VALUES(?,?,?,?,?,?,?,?,?)').bind(id,job.session_id,owner,JSON.stringify(clone),'running',key,Date.now(),Date.now(),Date.now()+30000).run(); }
+      delete clone.request_id;
+      try {const persisted=JSON.stringify(clone);await env.DB.prepare('INSERT INTO jobs(id,session_id,owner,body,status,input_key,created_at,last_activity,lease_until) VALUES(?,?,?,?,?,?,?,?,?)').bind(id,job.session_id,owner,persisted,'running',key,Date.now(),Date.now(),Date.now()+30000).run();jobSnapshots.set(clone,persisted);}
       catch(cause){await env.FILES.delete(key);throw cause;}
       if(clone.execution_location==='cloud_native')await submitCloudJob(env,clone,originalText);
       return resultJson({...publicJob(clone),execution_nonce:clone.nonce},202);
@@ -393,7 +414,7 @@ export async function handleResearch(request, env, owner, path) {
       return new Response(groupTrendsSvg(job, parseCsv(await object.text(), job.filename)), { headers: { 'Content-Type': 'image/svg+xml; charset=utf-8' } });
     }
     return null;
-  } catch (cause) { return fault(cause?.message || '任务请求无法处理。'); }
+  } catch (cause) { return requestFault(cause); }
 }
 
 export function reportMarkdown(job) {
@@ -504,6 +525,7 @@ async function submitCloudJob(env,job,text,session){
 }
 export async function syncCloudJob(env,job,session){
   if(job.execution_location!=='cloud_native')return;
+  if(!jobSnapshots.has(job))jobSnapshots.set(job,JSON.stringify(job));
   if(job.remote_synced && ['succeeded','failed','interrupted','cancelled'].includes(job.status))return;
   try {
     if(job.cancel_requested){
@@ -527,5 +549,5 @@ export async function syncCloudJob(env,job,session){
     job.status=remote.status;job.error=remote.error;job.sync_error=null;
     job.remote_synced=['succeeded','failed','interrupted','cancelled'].includes(remote.status);
     await saveJob(env,job);
-  } catch(e){job.sync_error=e.message;} // Keep running cloud jobs recoverable during connectivity loss.
+  } catch(e){if(e.status===409){const row=await env.DB.prepare('SELECT body FROM jobs WHERE id=? AND owner=?').bind(job.id,job.owner).first();if(row){Object.assign(job,JSON.parse(row.body));jobSnapshots.set(job,row.body);}}else job.sync_error=e.message;} // Keep running cloud jobs recoverable during connectivity loss.
 }

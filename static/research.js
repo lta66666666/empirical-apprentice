@@ -2,13 +2,31 @@
 let researchData=null,researchPlan=null,researchSession=null,researchJob=null,researchPoll=null,researchEpoch=0,researchRunning=false,researchProfileCache=null;
 const researchNames={ols:'线性回归',panel_fe:'面板固定效应',did:'同批 DID'};
 let researchRuntime=null;
+let researchInputEpoch=0,researchConfigEpoch=0,researchOperationEpoch=0,researchInputBusy=false,researchPendingSubmission=null;
+function researchContext(){return {session:sessionId,account:window.EA_ACCOUNT?.id||'',input:researchInputEpoch,config:researchConfigEpoch,revision:latestState?.research_revision};}
+function researchContextCurrent(context,config=true){return context.session===sessionId&&context.account===(window.EA_ACCOUNT?.id||'')&&context.input===researchInputEpoch&&(!config||(context.config===researchConfigEpoch&&context.revision===latestState?.research_revision));}
+function researchBusyFeedback(text){researchNotice(text);if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}
+function researchBeginInput(){researchInputEpoch++;if(typeof eaDraftRestoreEpoch!=='undefined')eaDraftRestoreEpoch++;researchInvalidate();researchInputBusy=true;researchBusyFeedback('正在读取并检查数据；只采用最后一次选择。');return researchContext();}
+async function researchCommitInput(data,profile,preset,context){
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(data.text));
+  if(!researchContextCurrent(context,false))return false;
+  // Input, column summary, dictionary and hash become visible together.
+  if(typeof eaInputHash!=='undefined')eaInputHash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+  researchData={...data,dictionary:{...(data.dictionary||{})}};
+  $('eaDictionaryEditor')?.replaceChildren();$('researchInstruction').value=data.question||'';$('researchSource').value=data.source||'';
+  researchSetFields(profile,preset||{});$('researchDictionary').replaceChildren();
+  if(Object.keys(researchData.dictionary).length){$('researchDictionary').append(el('summary','','查看案例变量与单位'));for(const [name,meaning]of Object.entries(researchData.dictionary))$('researchDictionary').append(el('p','',`${name}：${meaning}`));}
+  if(typeof eaCaptureInput==='function')await eaCaptureInput();
+  return researchContextCurrent(context,false);
+}
+window.eaLoadResearchInput=async(data,profile,preset={})=>{if(researchRunning){researchNotice('请等待当前操作完成或取消计算，再更换数据。',true);return false;}const context=researchBeginInput();try{return await researchCommitInput(data,profile,preset,context);}finally{if(researchContextCurrent(context,false)){researchInputBusy=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}};
 function researchField(id,title,type='select'){
   const l=el('label','research-field',title),n=el(type);n.id=id;
   if(type==='select')n.append(new Option('请选择',''));
   l.append(n);return l;
 }
 function researchNotice(text,error=false){$('researchNotice').textContent=text;$('researchNotice').classList.toggle('is-error',error);$('researchNotice').classList.toggle('ea-restore-note',text.startsWith('已恢复'));}
-function researchInvalidate(){researchPlan=null;$('researchConfirm').checked=false;$('researchRun').disabled=true;$('researchPlanCard').replaceChildren(el('p','muted','参数或数据已变化，请重新整理方案。'));if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}
+function researchInvalidate(){researchConfigEpoch++;researchPendingSubmission=null;researchPlan=null;$('researchConfirm').checked=false;$('researchRun').disabled=true;$('researchPlanCard').replaceChildren(el('p','muted','参数或数据已变化，请重新整理方案。'));if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}
 function researchCandidate(){
   const method=$('researchMethod').value;
   return {method,engine_id:$('researchEngine').value,outcome:$('researchOutcome').value,predictors:[...document.querySelectorAll('#researchPredictors input:checked')].map(n=>n.value),
@@ -95,16 +113,15 @@ function researchOfferPreparation(){
   }));
 }
 async function researchSample(name){
-  if(researchRunning||!sessionId)return;
+  if(!sessionId){researchNotice('练习正在连接，请稍后载入数据。',true);return;}
+  if(researchRunning){researchNotice('当前操作尚未完成，请等待或取消后更换数据。',true);return;}
+  const context=researchBeginInput();
   try{
-    const d=await api(`/api/research/examples/${name}`);researchData={...d,fixture_method:name};
-    $('researchInstruction').value=d.question;$('researchSource').value=d.source;
-    const p=await api(`/api/sessions/${sessionId}/research/inspect`,{method:'POST',body:{filename:d.filename,text:d.text}});
-    researchSetFields(p,d.plan);$('researchDictionary').replaceChildren(el('summary','','查看案例变量与单位'));
-    if(typeof eaCaptureInput==='function')await eaCaptureInput();
-    for(const [name,meaning] of Object.entries(d.dictionary))$('researchDictionary').append(el('p','',`${name}：${meaning}`));
-    researchNotice(`已载入“${d.title}”。这是模拟数据；请阅读字段与方法条件，再整理方案。`);
-  }catch(e){researchNotice(e.message,true);}
+    const d=await api(`/api/research/examples/${name}`);if(!researchContextCurrent(context,false))return;
+    const p=await api(`/api/sessions/${context.session}/research/inspect`,{method:'POST',body:{filename:d.filename,text:d.text}});
+    if(await researchCommitInput({...d,fixture_method:name},p,d.plan,context))researchNotice(`已载入“${d.title}”。这是模拟数据；请阅读字段与方法条件，再整理方案。`);
+  }catch(e){if(researchContextCurrent(context,false))researchNotice(e.message,true);}
+  finally{if(researchContextCurrent(context,false)){researchInputBusy=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}
 }
 function researchRenderPlan(answer){
   researchPlan=answer;const box=$('researchPlanCard');box.replaceChildren(el('span','section-kicker','02 核对方案'),el('h3','',answer.description.label),el('code','research-formula',answer.description.formula),el('p','',answer.description.meaning),el('p','',`请核实：${answer.description.checks}`),el('p','muted',answer.note));
@@ -119,44 +136,55 @@ function researchRenderPlan(answer){
 }
 async function researchMakePlan(){
   if(!$('researchEngine').value){researchNotice('请先点击“使用浏览器 R / fixest”，或选择已经可用的云端引擎，再整理方案。',true);return;}
-  if(researchRunning||!researchData||!sessionId){researchNotice('请先选择模拟案例或上传数据。',true);return;}
-  researchRunning=true;$('researchMakePlan').disabled=true;
+  if(researchRunning||researchInputBusy){researchNotice('数据或方案正在处理中，请等待完成。',true);return;}
+  if(!researchData||!sessionId){researchNotice('请先选择模拟案例或上传数据。',true);return;}
+  const context=researchContext(),operation=++researchOperationEpoch,snapshot={filename:researchData.filename,text:researchData.text,instruction:$('researchInstruction').value,candidate:researchCandidate()};
+  researchRunning=true;$('researchMakePlan').disabled=true;researchBusyFeedback('正在整理当前方案，完成前不会执行计算。');
   try{
     if(typeof eaFlushDraft==='function'){
-      await eaFlushDraft('workbench');
+      if(!await eaFlushDraft('workbench',context.session)){researchNotice('草稿尚未保存。请先重试或核对冲突，再整理方案。',true);return;}
+      if(!researchContextCurrent(context))return;
       const dict=eaDictionaryValues(),submitted=researchData.dictionary||latestState.variable_dictionary||{};
       if(Object.keys(dict).some(k=>(dict[k]||'')!==(submitted[k]||''))){researchNotice('变量字典仍有未提交修改。请在体检步骤提交字典，再整理方案。',true);eaResearchStep('health');return;}
     }
-    const a=await api(`/api/sessions/${sessionId}/research/plan`,{method:'POST',body:{filename:researchData.filename,text:researchData.text,instruction:$('researchInstruction').value,candidate:researchCandidate()}});
-    researchRenderPlan(a);
-  }catch(e){researchNotice(e.message,true);}finally{researchRunning=false;$('researchMakePlan').disabled=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}
+    const a=await api(`/api/sessions/${context.session}/research/plan`,{method:'POST',body:snapshot});
+    if(!researchContextCurrent(context)){if(context.session===sessionId)researchNotice('参数、数据或资料已经变化，旧方案回复已丢弃。请重新整理。');return;}
+    researchRenderPlan(a);researchPlan.context=researchContext();
+  }catch(e){if(context.session===sessionId)researchNotice(e.message,true);}finally{if(operation===researchOperationEpoch){researchRunning=false;$('researchMakePlan').disabled=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}
 }
 async function researchAskModel(){
   if(!researchData||!sessionId){researchNotice('请先载入数据，在线模型只会收到列摘要。',true);return;}
-  const button=$('researchAiCandidate');button.disabled=true;
+  const button=$('researchAiCandidate');if(button.disabled)return;button.disabled=true;
   researchInvalidate();
+  const context=researchContext(),snapshot={session_id:context.session,filename:researchData.filename,text:researchData.text,question:$('researchInstruction').value};
   try{
     researchNotice('正在获取受约束的候选方案；逐行数据不会发送给模型。');
-    const result=await api('/api/research/candidate',{method:'POST',body:{session_id:sessionId,
-      filename:researchData.filename,text:researchData.text,question:$('researchInstruction').value}});
+    const result=await api('/api/research/candidate',{method:'POST',body:snapshot});
+    if(!researchContextCurrent(context)){if(context.session===sessionId)researchNotice('输入已变化，旧候选回复未填入表单。请核对当前数据后重新提问。');return;}
     if(result.candidate&&researchProfileCache)researchSetFields(researchProfileCache,result.candidate);else researchInvalidate();
     const box=$('researchAiNote');box.replaceChildren(el('p','',result.warning),el('p','',result.reason||'模型未给出理由。'));
-    for(const question of result.questions)box.append(el('p','',`待核对：${question}`));
+    for(const question of result.questions||[])box.append(el('p','',`待核对：${question}`));
     researchNotice(result.ready?'AI 候选方案已填入表单，请检查后再整理与确认。':'仍需补充信息或核对方法条件；请先回答补问。');
     if(typeof eaSaveWorkbenchDraft==='function')eaSaveWorkbenchDraft();
-  }catch(e){researchNotice(e.message,true);}finally{button.disabled=false;if(typeof eaRefreshModelEvidence==='function')eaRefreshModelEvidence();}
+  }catch(e){if(context.session===sessionId)researchNotice(e.message,true);}finally{button.disabled=false;if(context.session===sessionId&&typeof eaRefreshModelEvidence==='function')eaRefreshModelEvidence();}
 }
 async function researchRun(){
-  if(researchRunning)return;
+  if(researchRunning||researchInputBusy){researchNotice('当前操作正在处理中，请等待完成。',true);return;}
   if(!researchPlan||!researchData){researchNotice('请先载入原始数据并整理当前方案。',true);return;}
+  if(researchPlan.context&&!researchContextCurrent(researchPlan.context)){researchInvalidate();researchNotice('输入、资料或参数已变化，请重新整理方案。',true);return;}
   if(!researchRuntime?.engines?.[$('researchEngine').value]?.ready){researchNotice('当前执行环境不可用。请选择可用引擎，再重新整理与确认方案。',true);return;}
   if(!$('researchConfirm').checked){researchNotice('请先核对方案并勾选执行确认。',true);return;}
-  researchRunning=true;$('researchRun').disabled=true;
+  const context=researchContext(),operation=++researchOperationEpoch;
+  const payload={filename:researchData.filename,text:researchData.text,plan:researchPlan.plan,confirmation_token:researchPlan.confirmation.token,confirmed:true,source:$('researchSource').value,dictionary:researchData.dictionary||latestState.variable_dictionary||{},simulated:Boolean(researchData.simulated),question:$('researchInstruction').value};
+  const signature=JSON.stringify([context.session,payload]);if(!researchPendingSubmission||researchPendingSubmission.signature!==signature)researchPendingSubmission={signature,id:crypto.randomUUID()};payload.request_id=researchPendingSubmission.id;
+  researchRunning=true;$('researchRun').disabled=true;researchBusyFeedback('正在保存已确认的执行任务，请勿重复提交。');
   try{
-    const j=await api(`/api/sessions/${sessionId}/research/jobs`,{method:'POST',body:{filename:researchData.filename,text:researchData.text,plan:researchPlan.plan,confirmation_token:researchPlan.confirmation.token,confirmed:true,source:$('researchSource').value,dictionary:researchData.dictionary||latestState.variable_dictionary||{},simulated:Boolean(researchData.simulated),question:$('researchInstruction').value}});
+    const j=await api(`/api/sessions/${context.session}/research/jobs`,{method:'POST',body:payload});
+    if(!researchContextCurrent(context,false))return;
+    researchPendingSubmission=null;
     if(typeof eaResearchStep==='function')eaResearchStep('execute');
     researchWatch(j.id);if(j.execution_location==='browser_webr')await browserRunJob(j);else researchNotice('任务已提交云端；关闭网页后仍继续执行。');
-  }catch(e){researchNotice(e.message,true);}finally{researchRunning=false;$('researchRun').disabled=!researchPlan||!researchRuntime?.engines?.[$('researchEngine').value]?.ready;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}
+  }catch(e){if(context.session===sessionId)researchNotice(e.uncertain?'提交结果待确认；输入已保留。重新提交同一方案会核对原任务，不会重复计算。':e.message,true);}finally{if(operation===researchOperationEpoch){researchRunning=false;$('researchRun').disabled=!researchPlan||!researchRuntime?.engines?.[$('researchEngine').value]?.ready;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}
 }
 function researchDownload(url,filename){const a=el('a','btn-secondary',filename);a.href=url;a.download=filename;return a;}
 function researchWarning(text){
@@ -171,7 +199,7 @@ function researchWarning(text){
 }
 function researchDrawJob(j){
   const signature=JSON.stringify([j.id,j.status,j.record_version,j.error,j.sync_error,j.stale,j.verification]);
-  researchJob=j;const box=$('researchResult');
+  researchJob=j;window.eaSelectedTask={id:j.id,session_id:j.session_id||sessionId,engine_id:j.engine_id||'browser_webr'};const box=$('researchResult');
   if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();
   if(box.dataset.signature===signature)return;
   box.dataset.signature=signature;box.replaceChildren();
@@ -190,15 +218,15 @@ function researchDrawJob(j){
     box.append(el('p','resource-caution',j.error||'执行中断。没有产生可用回归结果。'));
     box.append(button('检查执行环境','btn-secondary',()=>{eaResearchStep('data');$('researchRuntime').open=true;$('researchRuntime').scrollIntoView({block:'start'});}));
     box.append(button('载入已保存输入，重新核对方案','btn-secondary',async()=>{
+      if(researchRunning){researchNotice('请等待当前操作完成。',true);return;}const context=researchBeginInput();
       try{
         const saved=await api(`/api/research/jobs/${j.id}/input`);
-        researchData={filename:saved.filename,text:saved.original_text,simulated:j.simulated,dictionary:j.dictionary};
-        const profile=await api(`/api/sessions/${sessionId}/research/inspect`,{method:'POST',body:{filename:saved.filename,text:saved.original_text}});
-        researchSetFields(profile,j.plan);
+        if(!researchContextCurrent(context,false))return;
+        const profile=await api(`/api/sessions/${context.session}/research/inspect`,{method:'POST',body:{filename:saved.filename,text:saved.original_text}});
+        if(!await researchCommitInput({filename:saved.filename,text:saved.original_text,simulated:j.simulated,dictionary:j.dictionary,source:j.source||'',question:j.question||''},profile,j.plan,context))return;
         eaResearchStep('plan');
-        $('researchSource').value=j.source||'';$('researchInstruction').value=j.question||'';
         researchNotice('已恢复输入。请重新整理并确认方案后再运行。');
-      }catch(e){researchNotice(e.message,true);}
+      }catch(e){if(researchContextCurrent(context,false))researchNotice(e.message,true);}finally{if(researchContextCurrent(context,false)){researchInputBusy=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}
     }));return;
   }
   if(j.status!=='succeeded'){box.append(el('p','muted','任务保存在服务器，刷新后可从当前练习的分析记录继续查看。'));return;}
@@ -207,7 +235,7 @@ function researchDrawJob(j){
   for(const node of [box.querySelector('.research-progress'),box.querySelector(':scope>.workspace-note'),box.querySelector(':scope>.research-formula')])if(node)evidenceBody.append(node);
   box.append(el('p','ea-result-summary',`实际估计 ${r.n_used} 行 · ${j.execution_location==='cloud_native'?'云端原生 '+(j.software==='stata'?'Stata':'R'):'浏览器 webR'} · 资料版本 ${j.research_revision??'历史未记录'} · 导出版本 ${j.record_version||1} · ${j.verification?.status==='consistent'?'同引擎复算一致':j.verification?.status==='inconsistent'?'同引擎复算有差异':'尚未独立核对'}`));
   if(j.verification?.differences?.length)evidenceBody.append(el('pre','',JSON.stringify(j.verification.differences,null,2)));
-  evidenceBody.append(button('从原始输入独立重跑核对','btn-secondary',async()=>{if(researchRunning)return;researchRunning=true;try{const next=await api(`/api/research/jobs/${j.id}/rerun`,{method:'POST'});eaResearchStep('execute');await researchWatch(next.id);if(next.execution_location!=='cloud_native')await browserRunJob(next,true);}catch(e){researchNotice(e.message,true);}finally{researchRunning=false;}}));
+  let rerunRequestId=null;const rerun=button('从原始输入独立重跑核对','btn-secondary',async()=>{if(researchRunning){researchNotice('当前操作正在处理中，请稍后重跑。',true);return;}const context=researchContext(),operation=++researchOperationEpoch;researchRunning=true;rerun.disabled=true;researchBusyFeedback('正在创建独立重跑任务…');rerunRequestId||=crypto.randomUUID();try{const next=await api(`/api/research/jobs/${j.id}/rerun`,{method:'POST',body:{request_id:rerunRequestId}});if(!researchContextCurrent(context,false))return;rerunRequestId=null;eaResearchStep('execute');await researchWatch(next.id);if(next.execution_location!=='cloud_native')await browserRunJob(next,true);}catch(e){if(context.session===sessionId)researchNotice(e.message,true);}finally{if(operation===researchOperationEpoch){researchRunning=false;rerun.disabled=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}});evidenceBody.append(rerun);
   evidenceBody.append(el('p','',`${r.software_version||r.r_version} · ${JSON.stringify(r.package_versions)} · 实际估计 ${r.n_used} 行${r.clusters?' · '+r.clusters+' 个聚类':''}`));
   const wrap=el('div','table-scroll'),table=el('table','research-table'),head=el('tr');
   for(const label of ['变量','系数','标准误','p 值','95% 区间'])head.append(el('th','',label));table.append(head);
@@ -226,7 +254,7 @@ function researchDrawJob(j){
   box.append(focus);selectCoefficient(r.coefficients.find(c=>c.term!=='(Intercept)')||r.coefficients[0],table.querySelectorAll('tr')[r.coefficients.findIndex(c=>c.term!=='(Intercept)')+1]||table.querySelectorAll('tr')[1]);
   const selector=el('select');selector.setAttribute('aria-label','选择要解释的系数');for(const c of r.coefficients)selector.append(new Option(c.term,c.term));selector.value=(r.coefficients.find(c=>c.term!=='(Intercept)')||r.coefficients[0]).term;
   for(const option of selector.options)option.textContent=option.value==='(Intercept)'?'截距（查看零点含义）':`${option.value} · 查看系数、区间与单位`;
-  selector.className='ea-coefficient-selector';selector.onchange=()=>{const index=r.coefficients.findIndex(c=>c.term===selector.value);selectCoefficient(r.coefficients[index],table.querySelectorAll('tr')[index+1]);};box.insertBefore(selector,focus);
+  selector.className='ea-coefficient-selector';selector.onchange=()=>{const index=r.coefficients.findIndex(c=>c.term===selector.value);selectCoefficient(r.coefficients[index],table.querySelectorAll('tr')[index+1]);const other=$('researchExplanation')?.querySelector('.ea-coefficient-selector');if(other)other.value=selector.value;};box.insertBefore(selector,focus);
   const figure=el('figure'),img=el('img');img.src=`/api/research/jobs/${j.id}/artifacts/coefficients.svg`;img.alt='本次执行的系数与95%置信区间图';figure.append(img,el('figcaption','muted',j.execution_location==='cloud_native'?'系数与区间来自云端原生执行；来源与识别条件仍需核对。':'系数及区间由浏览器 webR 提交，服务器未独立重算。'));evidenceBody.append(figure);
   if(j.plan.method==='did'){
     const f=el('figure'),im=el('img');im.src=`/api/research/jobs/${j.id}/artifacts/group_trends.svg`;im.alt='本次样本的处理组与对照组均值变化';f.append(im,el('figcaption','muted','组均值变化：描述性图，不是事件研究回归或平行趋势证明。'));evidenceBody.append(f);
@@ -253,18 +281,18 @@ function researchDrawJob(j){
   input.oninput=()=>eaQueueDraft(draftKey,{answer:input.value,based_on_answer_version:attempts.length},draftNote);
   const feedback=el('div','prose');
   const submit=button(attempts.length?'提交修订解释':'提交首次解释','btn-primary',async()=>{
-    if(!input.value.trim()){feedback.textContent='请先写下系数、单位及一个尚未验证的条件。';input.focus();return;}submit.disabled=true;$('eaNextAction').disabled=true;
-    try{await eaFlushDraft(draftKey);const submitted=input.value;await api(`/api/research/jobs/${j.id}/reflection`,{method:'POST',body:{answer:submitted,answer_version:attempts.length}});eaQueueDraft(draftKey,{answer:submitted,based_on_answer_version:attempts.length+1,submitted:true},draftNote);await eaFlushDraft(draftKey);await researchWatch(j.id);toast('解释已提交，报告已更新；草稿与成果分别记录。');}
-    catch(e){feedback.textContent=e.message;}finally{submit.disabled=false;eaUpdateStepAction();}
+    if(submit.disabled)return;if(!input.value.trim()){feedback.textContent='请先写下系数、单位及一个尚未验证的条件。';input.focus();return;}const context=researchContext(),submitted=input.value;submit.disabled=true;$('eaNextAction').disabled=true;feedback.textContent='正在保存解释并获取反馈；可继续编辑下一版草稿。';
+    try{if(!await eaFlushDraft(draftKey,context.session))throw Error('解释草稿尚未保存，请先处理保存错误或版本冲突。');await api(`/api/research/jobs/${j.id}/reflection`,{method:'POST',body:{answer:submitted,answer_version:attempts.length,session_id:context.session}});if(context.session!==sessionId)return;if(input.value===submitted)eaQueueDraft(draftKey,{answer:submitted,based_on_answer_version:attempts.length+1,submitted:true},draftNote,context.session);await eaFlushDraft(draftKey,context.session);if(researchJob?.id===j.id)await researchWatch(j.id);if(typeof eaRefreshModelEvidence==='function')await eaRefreshModelEvidence();toast('解释已提交，报告已更新；等待期间的新文字保留为草稿。');}
+    catch(e){if(context.session===sessionId)feedback.textContent=e.message;}finally{submit.disabled=false;if(context.session===sessionId)eaUpdateStepAction();}
   });submit.id='researchReflectionSubmit';reflection.append(input,draftNote,el('p','muted','AI 反馈只接收你的回答与汇总结果，不上传逐行数据；无模型时提供明确标注的自查清单。'),submit,feedback);explanation.append(reflection,el('p','workspace-note',attempts.length?'已提交解释，可继续修订。':'解释练习待完成；草稿不作为已完成成果。'),links.cloneNode(true));
   if(attempts.length){const past=el('details','ea-reflection-history');past.append(el('summary','',`查看首次解释与修订历史（${attempts.length} 次）`),history);reflection.append(past);}
   if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();
 }
 async function researchWatch(id){
-  clearTimeout(researchPoll);const epoch=++researchEpoch;
+  clearTimeout(researchPoll);const epoch=++researchEpoch,context=researchContext();
   async function poll(){
     try{
-      const j=await api(`/api/research/jobs/${id}`);if(epoch!==researchEpoch)return;researchDrawJob(j);
+      const j=await api(`/api/research/jobs/${id}`);if(epoch!==researchEpoch||context.session!==sessionId||context.account!==(window.EA_ACCOUNT?.id||'')||j.session_id&&j.session_id!==sessionId)return;researchDrawJob(j);
       if(['queued','running','preparing','estimating','saving'].includes(j.status))researchPoll=setTimeout(poll,1200);
       else researchRefreshHistory();
     }catch(e){if(epoch===researchEpoch)researchNotice(e.message,true);}
@@ -273,7 +301,7 @@ async function researchWatch(id){
 }
 async function researchRefreshHistory(){
   if(!sessionId)return;
-  try{const r=await api(`/api/sessions/${sessionId}/research/jobs`);researchHistory(r.jobs);}catch(e){researchNotice(e.message,true);}
+  const id=sessionId;try{const r=await api(`/api/sessions/${id}/research/jobs`);if(id===sessionId)researchHistory(r.jobs);}catch(e){if(id===sessionId)researchNotice(e.message,true);}
 }
 function researchHistory(jobs){
   const box=$('researchHistory');box.replaceChildren(el('h4','','当前练习的分析记录'));
@@ -285,7 +313,7 @@ function renderResearch(data){
   if(researchPlan && researchPlan.confirmation?.research_revision !== data.research_revision)researchInvalidate();
   if(researchSession!==data.session_id){
     if(typeof eaDraftRestoreEpoch!=='undefined'){eaDraftRestoreEpoch++;eaInputHash='';$('eaDictionaryEditor')?.replaceChildren();}
-    researchSession=data.session_id;researchData=null;researchProfileCache=null;researchPlan=null;researchJob=null;clearTimeout(researchPoll);researchEpoch++;
+    researchSession=data.session_id;researchInputEpoch++;researchOperationEpoch++;researchInputBusy=false;researchRunning=false;researchPendingSubmission=null;window.eaSelectedTask=null;researchData=null;researchProfileCache=null;researchPlan=null;researchJob=null;clearTimeout(researchPoll);researchEpoch++;
     $('researchResult').replaceChildren();$('researchProfile').replaceChildren();$('researchDictionary').replaceChildren();researchInvalidate();
     const recent=data.research_jobs?.[0];if(recent)researchWatch(recent.id);
   }
@@ -304,7 +332,7 @@ function setupResearch(){
   const grid=el('div','research-grid'),form=el('section','research-input'),output=el('section','research-output');
   form.append(el('span','section-kicker','01 准备数据'),el('h3','','数据与研究问题'));
   const label=el('label','research-field','或上传 UTF-8 CSV / TSV（最多 2 MB、20000 行）'),file=el('input');file.type='file';file.accept='.csv,.tsv';file.id='researchFile';label.append(file);form.append(label);
-  file.onchange=async()=>{const f=file.files[0];if(!f)return;if(f.size>2000000){researchNotice('文件超过 2 MB。',true);return;}try{const text=await f.text();const p=await api(`/api/sessions/${sessionId}/research/inspect`,{method:'POST',body:{filename:f.name,text}});researchData={filename:f.name,text,simulated:false};$('researchSource').value='';researchSetFields(p);$('researchDictionary').replaceChildren();researchNotice('数据已检查。请选择变量，填写来源，整理方案。');if(typeof eaCaptureInput==='function')await eaCaptureInput();}catch(e){researchNotice(e.message,true);}};
+  file.onchange=async()=>{const f=file.files[0];if(!f)return;if(f.size>2000000){researchNotice('文件超过 2 MB。',true);return;}if(!sessionId||researchRunning){researchNotice('练习尚未就绪或当前操作未完成，请稍后选择文件。',true);return;}const context=researchBeginInput();try{const text=await f.text();if(!researchContextCurrent(context,false))return;const p=await api(`/api/sessions/${context.session}/research/inspect`,{method:'POST',body:{filename:f.name,text}});if(await researchCommitInput({filename:f.name,text,simulated:false,dictionary:{}},p,{},context))researchNotice('数据已检查。请选择变量，填写来源，整理方案。');}catch(e){if(researchContextCurrent(context,false))researchNotice(e.message,true);}finally{if(researchContextCurrent(context,false)){researchInputBusy=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}};
   const download=button('下载当前案例或数据','text-btn',()=>{if(!researchData)return;const a=el('a');const url=URL.createObjectURL(new Blob([researchData.text],{type:'text/csv;charset=utf-8'}));a.href=url;a.download=researchData.filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});form.append(download);
   const profile=el('div','research-profile');profile.id='researchProfile';form.append(profile);const dictionary=el('details','research-dictionary');dictionary.id='researchDictionary';form.append(dictionary);
   const instruction=researchField('researchInstruction','用自然语言描述你想研究什么','textarea');instruction.querySelector('textarea').rows=3;instruction.querySelector('textarea').maxLength=2000;form.append(instruction);

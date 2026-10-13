@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import {fixtures} from '../worker/fixtures.js';
-const root='http://127.0.0.1:8788';let cookie='';
+const root='http://127.0.0.1:8788';let cookie='';const versions=new Map();
 async function call(path,method='GET',body,owned=true){
+  const sid=(/^\/api\/sessions\/([a-z0-9]{12})/.exec(path)||[])[1]||body?.session_id;if(body&&sid&&versions.has(sid)&&body.state_version===undefined)body={...body,state_version:versions.get(sid)};
   const response=await fetch(root+path,{method,headers:{Origin:root,...(owned&&cookie?{Cookie:cookie}:{}),...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});
   if(owned&&response.headers.get('set-cookie'))cookie=response.headers.get('set-cookie').split(';')[0];
-  const value=(response.headers.get('content-type')||'').includes('json')?await response.json():await response.text();return {status:response.status,value};
+  const value=(response.headers.get('content-type')||'').includes('json')?await response.json():await response.text();if(Number.isInteger(value?.state_version)&&value.session_id||Number.isInteger(value?.state_version)&&sid)versions.set(value.session_id||sid,value.state_version);return {status:response.status,value};
 }
 await call('/api/auth/register','POST',{username:'smoke_'+Date.now(),password:'Smoke-test-password12!',password_confirmation:'Smoke-test-password12!'});
 const session=(await call('/api/sessions','POST')).value,id=session.session_id;

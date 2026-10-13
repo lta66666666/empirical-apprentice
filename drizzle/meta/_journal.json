@@ -43,6 +43,20 @@
       "when": 1791500016806,
       "tag": "0005_practical_local_stata",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791700016806,
+      "tag": "0006_account_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791770016806,
+      "tag": "0007_interaction_consistency",
+      "breakpoints": true
     }
   ]
 }

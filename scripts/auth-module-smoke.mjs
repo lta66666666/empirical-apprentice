@@ -32,7 +32,7 @@ try{
   assert.equal((await call('/api/sessions')).value.sessions.length,2);
   // Claim itself must not refresh the prior activity timestamp.
   const preserved=await env.DB.prepare('SELECT claimed_at FROM account_owners WHERE owner=?').bind(legacyOwner).first();assert.ok(preserved);
-  for(const intent of ['analysis','knowledge','guided','reflection']){const fresh=(await call('/api/sessions/'+session.session_id)).value;const response=await call('/api/research/chat','POST',{session_id:session.session_id,research_revision:fresh.research_revision,message:'请解释OLS',intent,profile:{row_count:0,columns:[]}});assert.equal(response.status,200);assert.ok(['analysis','knowledge','guided'].includes(response.value.display_mode));}
+  for(const intent of ['analysis','knowledge','guided','reflection']){const fresh=(await call('/api/sessions/'+session.session_id)).value;const response=await call('/api/research/chat','POST',{session_id:session.session_id,research_revision:fresh.research_revision,state_version:fresh.state_version,message:'请解释OLS',intent,profile:{row_count:0,columns:[]}});assert.equal(response.status,200);assert.ok(['analysis','knowledge','guided'].includes(response.value.display_mode));}
   const secret=await env.DB.prepare('SELECT password_hash FROM accounts WHERE id=?').bind(accountA).first();assert.match(secret.password_hash,/^\$2[ab]\$12\$/);assert.equal(secret.password_hash.includes('Test-password'),false);
   assert.equal((await worker.fetch(new Request(origin+'/api/auth/logout',{method:'POST',headers:{Cookie:credentials,Origin:'https://elsewhere.test'}}),env)).status,403);
   assert.equal((await call('/static/home.html','GET',undefined,'')).status,303);

@@ -47,4 +47,5 @@ window.eaParseCsv=function(text, filename = 'data.csv') {
   return { headers, rows: body, lines, profile: { row_count: body.length, columns, format: delimiter === '\t' ? 'TSV' : 'CSV' } };
 }
 
+window.eaParseFragmentAsync=(text,filename)=>{if(typeof Worker==='undefined')return Promise.resolve(window.eaParseCsv(text,filename));return new Promise((resolve,reject)=>{const worker=new Worker('/static/data-fragment-worker.js');const timer=setTimeout(()=>{worker.terminate();reject(Error('数据片段解析超时，文字已保留，请精简或上传文件。'));},15000);const finish=()=>{clearTimeout(timer);worker.terminate();};worker.onmessage=event=>{finish();event.data.error?reject(Error(event.data.error)):resolve(event.data);};worker.onerror=()=>{finish();reject(Error('本地解析未完成，文字已保留，请重试或上传文件。'));};worker.postMessage({text,filename});});};
 })();

@@ -245,21 +245,21 @@ window.Teaching = (() => {
     }
     icons();
   }
-  function selectPane(value){
-    pane=value;
+  function selectPane(value,persist=false){
+    pane=value;if(persist)window.eaSaveCourseCursor?.({pane:value});
     for(const name of ["learn","practice","workbook"]){$(name+"Pane").hidden=name!==pane;document.querySelector(`[data-learn-pane="${name}"]`).setAttribute("aria-pressed",String(name===pane));}
-    const ui=latestState?.lesson_ui;
-    if(latestState?.stage==="lesson")$("composerWrap").hidden=showHistory||pane!=="practice"||["choice","calc","checkpoint"].includes(ui?.step_type);
+    const ui=latestState?.course?.lesson_ui||latestState?.lesson_ui;
+    if(latestState?.stage==='lesson'||window.EA_MODULE==='learn'&&latestState?.learning_context?.status==='active')$("composerWrap").hidden=showHistory||pane!=="practice"||["choice","calc","checkpoint"].includes(ui?.step_type);
   }
   function render(ui,state){
     const key=`${state.session_id}:${ui.lesson_id}`;
-    if(key!==currentKey){currentKey=key;pane="learn";}
+    if(key!==currentKey){currentKey=key;pane=['learn','practice','workbook'].includes(state.learning_context?.pane)?state.learning_context.pane:'learn';}
     $("lessonGoal").replaceChildren(el("p","",ui.goal),el("div","lesson-goal-meta",`${ui.case_label} · 建议 ${ui.duration} · 本阶段产出：${ui.output}`));
     $("teachingVisual").replaceChildren(visualize(ui.visual));$("teachingDetails").replaceChildren(details(ui));
     $("lessonWorkbook").replaceChildren(workbook(ui,state));
     if(ui.step_type==="checkpoint")$("lessonWorkbook").append(button("返回阶段检查点，继续学习","btn-secondary",()=>selectPane("practice")));
-    document.querySelectorAll("[data-learn-pane]").forEach(b=>b.onclick=()=>{selectPane(b.dataset.learnPane);$("learningScroll").scrollTop=0;});
-    $("goPractice").onclick=()=>{selectPane("practice");$("learningScroll").scrollTop=0;};$("backToLesson").onclick=()=>selectPane("learn");
+    document.querySelectorAll("[data-learn-pane]").forEach(b=>b.onclick=()=>{selectPane(b.dataset.learnPane,true);$("learningScroll").scrollTop=0;});
+    $("goPractice").onclick=()=>{selectPane("practice",true);$("learningScroll").scrollTop=0;};$("backToLesson").onclick=()=>selectPane("learn",true);
     selectPane(pane);
   }
   function review(item){
