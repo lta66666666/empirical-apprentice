@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {fixtures} from '../worker/fixtures.js';
-const root='http://127.0.0.1:8788';let cookie='';const versions=new Map();
+const root=process.env.EA_TEST_URL||'http://127.0.0.1:8788';let cookie='';const versions=new Map();
 async function call(path,method='GET',body,owned=true){
   const sid=(/^\/api\/sessions\/([a-z0-9]{12})/.exec(path)||[])[1]||body?.session_id;if(body&&sid&&versions.has(sid)&&body.state_version===undefined)body={...body,state_version:versions.get(sid)};
   const response=await fetch(root+path,{method,headers:{Origin:root,...(owned&&cookie?{Cookie:cookie}:{}),...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});

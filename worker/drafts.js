@@ -6,7 +6,7 @@ export async function readDrafts(env, sessionId) {
 export async function draftEndpoint(request,env,state,tail) {
   if(tail==='drafts'&&request.method==='GET') return Response.json({drafts:await readDrafts(env,state.session_id)});
   const key=tail.slice(7);
-  if(!/^drafts\/(workbench|local-workbench|practical-chat|reflection:[a-z0-9-]{36}|local-reflection:[a-z0-9-]{36})$/.test(tail)||request.method!=='PUT')return null;
+  if(!/^drafts\/(workbench|local-workbench|practical-chat|analysis-formula|reflection:[a-z0-9-]{36}|local-reflection:[a-z0-9-]{36})$/.test(tail)||request.method!=='PUT')return null;
   if(key.startsWith('local-reflection:')){
     const task=await env.DB.prepare('SELECT id FROM local_stata_tasks WHERE id=? AND session_id=? AND owner=?').bind(key.slice('local-reflection:'.length),state.session_id,state.owner_id).first();
     if(!task)return Response.json({detail:'本机解释任务不存在。'},{status:404});

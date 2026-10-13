@@ -103,7 +103,7 @@ const footer=el('div','ea-step-actions'),nextAction=button('检查数据与变�
   else if(eaStep==='health')eaResearchStep('plan');
   else if(eaStep==='plan'){if(!researchPlan){await researchMakePlan();return;}await researchRun();}
   else if(eaStep==='execute'&&researchJob?.status==='succeeded'){eaResearchStep('explain');}
-  else if(researchJob?.status==='succeeded'){$('researchReflectionSubmit')?.click();}
+  else if(researchJob?.status==='succeeded'){if(window.eaOpenAnswer)await window.eaOpenAnswer(researchJob.id);else $('researchReflectionSubmit')?.click();}
   else{eaResearchStep('data');}
 });nextAction.id='eaNextAction';footer.append(nextAction);$('pane-research').append(footer);
 function eaUpdateStepAction(){

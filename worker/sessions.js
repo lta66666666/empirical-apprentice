@@ -112,7 +112,7 @@ export async function sessionPayload(env, state, {syncJobs=false}={}) {
     return { id: job.id, record_version:job.record_version||1, status: job.status, created: job.created, plan: job.plan, description: job.description,execution_location:job.execution_location||'browser_webr',engine_id:job.engine_id||'browser_webr' };
   }));
   return {
-    session_id: state.session_id, state_version:state.state_version, learning_context:state.learning_context,course:coursePayload(state), stage: state.stage, entry_path: state.entry_path,
+    session_id: state.session_id, state_version:state.state_version, analysis_workspace:state.analysis_workspace||null,learning_context:state.learning_context,course:coursePayload(state), stage: state.stage, entry_path: state.entry_path,
     blueprint: state.project, conversation: state.conversation, case_answers: state.case_answers,
     lesson_records: state.lesson_records, learning_artifacts: state.learning_artifacts,
     preparation: state.preparation, method_learning: state.method_learning,

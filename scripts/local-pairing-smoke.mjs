@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {randomBytes,createHash} from 'node:crypto';
-const root='http://127.0.0.1:8788';let cookie='';const versions=new Map();
+const root=process.env.EA_TEST_URL||'http://127.0.0.1:8788';let cookie='';const versions=new Map();
 async function call(path,body,options={}){const sid=body?.session_id;if(body&&sid&&versions.has(sid)&&body.state_version===undefined)body={...body,state_version:versions.get(sid)};const response=await fetch(root+path,{method:body?'POST':'GET',headers:{Origin:root,...(cookie&&!options.other?{Cookie:cookie}:{}),...(options.token?{Authorization:'Bearer '+options.token}:{}),'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});if(!options.other&&response.headers.get('set-cookie'))cookie=response.headers.get('set-cookie').split(';')[0];const value=await response.json();if(Number.isInteger(value?.state_version)&&(value.session_id||sid))versions.set(value.session_id||sid,value.state_version);return {status:response.status,value};}
 await call('/api/auth/register',{username:'smoke_'+Date.now(),password:'Smoke-test-password12!',password_confirmation:'Smoke-test-password12!'});
 const state=(await call('/api/sessions',{})).value,id=state.session_id;
