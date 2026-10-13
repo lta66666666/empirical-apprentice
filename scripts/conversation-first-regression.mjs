@@ -36,13 +36,13 @@ try{
  async function say(text){input.value=text;input.dispatchEvent(new w.Event('input'));w.eaConversation.submit.click();await until(()=>!w.eval('busy')&&!w.eaConversation.submit.disabled&&d.querySelectorAll('.coach-message.assistant').length===turn);}
  await say('我想评估政策对就业的影响');
  assert.match(d.querySelector('.coach-message.assistant').textContent,/哪项政策/);assert.doesNotMatch(d.querySelector('.coach-message.assistant').textContent,/method|row_count|请补充：/);assert.equal(w.eval('latestState.preparation.cards.question'),undefined);
- await say('政策是就业扶持政策');assert.match([...d.querySelectorAll('.coach-message.assistant')].at(-1).textContent,/对象|时期/);
+ await say('政策是就业扶持政策');assert.match([...d.querySelectorAll('.coach-message.assistant')].at(-1).textContent,/研究城市、企业，还是个人|对象|时期/);
  await say('某地区2010至2020年，就业人数单位人，2015年同批实施');
  assert.match([...d.querySelectorAll('.coach-message.assistant')].at(-1).textContent,/提交政策原文/);
- assert.match(JSON.stringify(modelInputs[2]),/就业扶持政策/);
+ assert.match(JSON.stringify(modelInputs[2]),/就业扶持政策/);assert.equal(w.eval('latestState.research_summary.fields.unit.value'),'人');assert.equal(w.eval('latestState.research_summary.fields.unit.status'),'provided');assert.equal(w.eval('latestState.research_summary.fields.effective_date.value'),'2015年');
  pass('多轮逐项补问、记住前文，未确认信息不自动修改资料');
- assert.equal([...d.querySelectorAll('.coach-materials button')].filter(shown).length,1);
- assert.equal([...d.querySelectorAll('.coach-materials button')].filter(shown)[0].textContent,'提交政策材料');
+ assert.equal([...d.querySelectorAll('.coach-materials button.btn-primary')].filter(shown).length,1);
+ assert.equal([...d.querySelectorAll('.coach-materials button.btn-primary')].filter(shown)[0].textContent,'提交政策材料');
  pass('右侧只出现当前需要的提交入口');
  d.querySelector('.coach-attach').click();assert.equal(d.querySelector('.coach-upload').open,true);
  [...d.querySelectorAll('.coach-upload button')].find(x=>x.textContent==='政策原文或链接').click();
@@ -74,12 +74,12 @@ try{
  await w.newSession();
  globalThis.fetch=async()=>Response.json({choices:[{message:{content:JSON.stringify({method:null,reason:'缺条件',questions:[],proposed_cards:{}})}}]});
  async function answerWithoutExtraction(text){const before=d.querySelectorAll('.coach-message.assistant').length;input.value=text;input.dispatchEvent(new w.Event('input'));w.eaConversation.submit.click();await until(()=>!w.eval('busy')&&!w.eaConversation.submit.disabled&&d.querySelectorAll('.coach-message.assistant').length>before);}
- await answerWithoutExtraction('我想评估就业政策的影响');
+ await answerWithoutExtraction('我想评估一项政策对就业的影响');
  assert.match([...d.querySelectorAll('.coach-message.assistant')].at(-1).textContent,/政策名称/);
  await answerWithoutExtraction('政策是就业扶持政策');
- assert.match([...d.querySelectorAll('.coach-message.assistant')].at(-1).textContent,/对象|时期/);
+ assert.match([...d.querySelectorAll('.coach-message.assistant')].at(-1).textContent,/研究城市、企业，还是个人|对象|时期/);
  await answerWithoutExtraction('某地区企业，2010至2020年');
- assert.match([...d.querySelectorAll('.coach-message.assistant')].at(-1).textContent,/哪个结果/);
+ assert.equal(w.eval('latestState.research_summary.next_gap.field'),'outcome');assert.match([...d.querySelectorAll('.coach-message.assistant')].at(-1).textContent,/衡量就业|具体指标|哪个结果/);
  await answerWithoutExtraction('就业人数，单位人');
  assert.match([...d.querySelectorAll('.coach-message.assistant')].at(-1).textContent,/什么时候/);
  pass('模型完全漏抽取字段时仍保留明确目标与逐轮原文回答，不回退重问');

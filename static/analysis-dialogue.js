@@ -34,6 +34,7 @@
  const r=await api('/api/sessions/'+c.session+'/analysis/actions',{method:'POST',body:{...payload,state_version:latestState.state_version,request_id:pendingAction.id}});pendingAction=null;
  if(!same(c))return null;
  Object.assign(latestState,{state_version:r.state_version,research_revision:r.research_revision,preparation:r.preparation,variable_dictionary:r.variable_dictionary,analysis_workspace:r.analysis_workspace});
+ if(r.research_summary)latestState.research_summary=r.research_summary;
  if(!document.activeElement?.closest('#pane-preparation'))renderPreparation(latestState);setView(r.analysis_workspace.view,r.analysis_workspace.mode);
  if(r.action_result?.plan&&configuration!==researchConfigEpoch){info('建议已保存，但等待期间参数有变化；未覆盖本页参数，请重新核对。');return r;}
  if(r.action_result?.plan){if(researchProfileCache){researchSetFields(researchProfileCache,{...researchCandidate(),...r.action_result.plan});eaSaveWorkbenchDraft();await eaFlushDraft('workbench');}else if(window.eaLocalSummary?.profile){window.eaApplyLocalCandidate?.(r.action_result.plan);}else throw Error('建议已保存，请载入原数据后应用字段。');}
@@ -57,7 +58,7 @@
  }
  function teaching(reply){
  const context=reply?.context,root=parts.lesson;root.replaceChildren(el('span','eyebrow','对应当前任务的知识'));
- const method=context?.focus_method||context?.draft_plan?.method||context?.executed_result?.plan?.method||($('researchMethod')?.value);
+ const method=context?.focus_method||context?.draft_plan?.method||context?.executed_result?.plan?.method;
  root.append(el('h3','',researchNames[method]||'研究准备'),el('p','',context?.executed_result?'讲解依据：已执行任务 '+context.executed_result.id:'当前为未确认草稿；没有执行结果。'));
  for(const item of reply?.teaching||[]){const section=el('section','context-material');section.append(el('h4','',item.title));const body=el('div','prose');markdown(body,item.content);section.append(body,el('p','muted',item.section+' · '+item.version+' · '+item.review_status));if(item.source&&/^(https:\/\/|\/static\/)/.test(item.source)){const link=el('a','','查看材料来源');link.href=item.source;link.target='_blank';link.rel='noopener';section.append(link);}root.append(section);}
  if(!reply?.teaching?.length)root.append(el('p','','提问后展示与当前任务匹配的课程和操作材料。'));

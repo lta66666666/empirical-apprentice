@@ -4,55 +4,67 @@
  document.body.classList.add('coach-minimal');const resizeViewport=()=>{if(window.visualViewport)document.body.style.setProperty('--coach-height',window.visualViewport.height+'px');};window.visualViewport?.addEventListener('resize',resizeViewport);resizeViewport();
  const parts=eaConversation,shell=document.querySelector('.analysis-shell'),top=shell.querySelector('.analysis-top'),dock=shell.querySelector('.analysis-dock');
  const left=el('aside','coach-knowledge'),center=el('section','coach-center'),right=el('aside','coach-materials'),feed=el('div','coach-feed');
- left.append(el('h2','','相关知识'),parts.lesson);right.append(el('h2','','本次研究'));
- const rightBody=el('div');right.append(rightBody);center.append(feed,dock);shell.replaceChildren(left,center,right);
+ const knowledgeBody=el('div','coach-knowledge-body'),rightBody=el('div','coach-research-body');
+ left.setAttribute('aria-label','当前知识');right.setAttribute('aria-label','本次研究');feed.setAttribute('role','log');feed.setAttribute('aria-label','研究对话');
+ left.append(el('h2','','当前知识'),knowledgeBody);right.append(el('h2','','本次研究'),rightBody);center.append(feed,dock);shell.replaceChildren(left,center,right);
  const review=el('dialog','coach-review'),reviewTitle=el('h2','','核对资料与分析建议'),reviewBody=el('div'),reviewClose=button('关闭','text-btn',()=>review.close());
- review.append(reviewTitle,reviewClose,reviewBody,top);document.body.append(review);top.classList.add('coach-controller');
- const toolbar=document.querySelector('.module-toolbar'),home=toolbar.querySelector('a'),brand=toolbar.querySelector('strong'),more=el('details','coach-more');
- const menu=el('div','coach-menu');more.append(el('summary','','更多'),menu);for(const n of [...toolbar.children])if(n!==home&&n!==brand&&n.id!=='eaOperationStatus')menu.append(n);
- toolbar.replaceChildren(home,brand,button('知识','text-btn',()=>showSidebar(left)),button('材料','text-btn',()=>showSidebar(right)),more);
+ reviewTitle.id='coach-review-title';review.setAttribute('aria-labelledby',reviewTitle.id);review.append(reviewTitle,reviewClose,reviewBody,top);document.body.append(review);top.classList.add('coach-controller');
+ // Legacy resources stay mounted for compatibility, but never select the visible learning card.
+ parts.lesson.hidden=true;review.append(parts.lesson);
+ const reading=el('dialog','coach-reading'),readingTitle=el('h2'),readingBody=el('div','prose');readingTitle.id='coach-reading-title';reading.setAttribute('aria-labelledby',readingTitle.id);
+ reading.append(readingTitle,button('关闭','text-btn',()=>reading.close()),readingBody);document.body.append(reading);
+ function openReading(title,content,source){readingTitle.textContent=title;markdown(readingBody,content);if(source)readingBody.append(sourceDetails(source));reading.showModal();}
+ function sourceDetails(card){const detail=el('details','coach-source'),sources=Array.isArray(card.source)?card.source:[card.source];detail.append(el('summary','','材料来源与说明'));
+ for(const item of sources){const raw=typeof item==='string'?item:item?.url||item?.source,title=typeof item==='object'?item?.title||item?.name:'';if(title)detail.append(el('p','',title));if(typeof raw==='string'&&(/^(https:\/\/|\/static\/)/.test(raw))){const link=el('a','','查看原始材料');link.href=raw;link.target='_blank';link.rel='noopener noreferrer';detail.append(link);}else if(raw)detail.append(el('p','',String(raw)));}
+ if(card.version)detail.append(el('p','muted','材料版本：'+card.version));if(card.review_status)detail.append(el('p','muted','审校说明：'+card.review_status));return detail;}
+ const toolbar=document.querySelector('.module-toolbar'),home=toolbar.querySelector('a'),brand=toolbar.querySelector('strong'),more=el('details','coach-more'),menu=el('div','coach-menu');
+ more.append(el('summary','','更多'),menu);for(const n of [...toolbar.children])if(n!==home&&n!==brand&&n.id!=='eaOperationStatus')menu.append(n);
+ toolbar.replaceChildren(home,brand,button('知识','text-btn coach-sidebar-toggle',()=>showSidebar(left)),button('研究','text-btn coach-sidebar-toggle',()=>showSidebar(right)),more);
  const sideDialog=el('dialog','coach-side-dialog');sideDialog.append(button('关闭','text-btn',()=>sideDialog.close()));document.body.append(sideDialog);
- function showSidebar(panel){const prior=sideDialog.querySelector('aside');if(prior)shell.insertBefore(prior,prior===left?shell.firstChild:null);sideDialog.append(panel);sideDialog.showModal();}
- sideDialog.addEventListener('close',()=>{const p=sideDialog.querySelector('aside');if(p)shell.insertBefore(p,p===left?shell.firstChild:null);});
- let history=[],shown=8,lastReply=null,lastRendered='',queryBusy=false,dataEpoch=0;
+ function restoreSidebar(){const p=sideDialog.querySelector('aside');if(p)shell.insertBefore(p,p===left?shell.firstChild:null);}
+ function showSidebar(panel){restoreSidebar();sideDialog.append(panel);sideDialog.showModal();}sideDialog.addEventListener('close',restoreSidebar);
+ let history=[],shown=8,lastReply=null,lastRendered='',queryBusy=false,dataEpoch=0,lastSession='',knowledgeSignature='',paintedIds=[],rows=new Map(),staleQuestions=new Set();
+ const earlier=button('更早对话','text-btn coach-earlier',()=>{const height=feed.scrollHeight,position=feed.scrollTop;shown+=10;paintFeed({older:true,height,position});});
+ const newest=button('查看最新回复','text-btn coach-newest',()=>{feed.scrollTop=feed.scrollHeight;newest.hidden=true;});newest.hidden=true;center.insertBefore(newest,dock);
+ feed.addEventListener('scroll',()=>{if(feed.scrollHeight-feed.scrollTop-feed.clientHeight<80)newest.hidden=true;},{passive:true});
  const historyHook=window.eaConversationHistory;
- window.eaConversationHistory=messages=>{history=messages||[];historyHook(messages);lastReply=[...history].reverse().find(x=>x.role==='assistant');paintFeed();paintMaterials();};
- function paintFeed(){
- feed.replaceChildren();
- if(!history.length){feed.append(el('h1','','你想研究什么？'),el('p','coach-welcome','直接说出你的目标。我会根据你的回答补问，需要政策材料或数据时再请你提交。'));return;}
- if(history.length>shown)feed.append(button('更早对话','text-btn',()=>{shown+=10;paintFeed();}));
- for(const item of history.slice(-shown)){const row=el('article','coach-message '+item.role),body=el('div','prose');row.append(el('small','',item.role==='user'?'你':'实证学徒'));
- if(item.role==='assistant'&&(!item.context||item.output?.prompt_version==='ea-candidate-v4-dialogue')){const old=el('details');old.append(el('summary','','查看之前的回复'));markdown(body,item.content);old.append(body);row.append(old);}
- else {if(item.role==='assistant'&&item.content.length>600){row.append(el('p','',item.content.slice(0,240)+'…'),el('small','muted','讲解预览'));const full=el('details');full.append(el('summary','','展开完整讲解'));markdown(body,item.content);full.append(body);row.append(full);}else{markdown(body,item.content);row.append(body);}}
- feed.append(row);}
- feed.scrollTop=feed.scrollHeight;
+ window.eaConversationHistory=messages=>{history=messages||[];if(lastSession!==sessionId){lastSession=sessionId;shown=8;rows.clear();staleQuestions.clear();paintedIds=[];feed.replaceChildren();newest.hidden=true;}historyHook(messages);lastReply=[...history].reverse().find(x=>x.role==='assistant');paintFeed();paintKnowledge();paintMaterials();};
+ function renderMessage(item,row){row.replaceChildren(el('small','',item.role==='user'?'你':'实证学徒'));const dialogue=item.dialogue,body=el('div','prose');
+ if(item.role==='assistant'&&dialogue){markdown(body,dialogue.summary||item.content||'');row.append(body);
+ if(item===lastReply&&!window.eaReflectionMode){const choices=el('div','coach-choices');for(const choice of (dialogue.choices||[]).slice(0,3)){const question=dialogue.current_question;if(!question?.id||!choice.id)continue;
+ const b=button(choice.label,'btn-secondary',async()=>{if(item!==lastReply||lastSession!==sessionId||parts.submit.disabled){parts.status.textContent='这个问题已更新，请回答当前问题。';return;}b.disabled=true;const sent=await parts.send({question_id:question.id,choice_id:choice.id,message:choice.answer||''});if(sent?.status===409||/这个问题已更新|回答选项无效/.test(parts.status.textContent))staleQuestions.add(question.id);syncChoiceControls();});b.dataset.questionId=question.id;b.dataset.choiceId=choice.id;choices.append(b);}if(choices.children.length)row.append(choices);
+ if(dialogue.recovery?.can_retry){const recovery=el('div','coach-recovery');recovery.append(el('small','muted','模型暂不可用 · 以下为固定教学帮助'),button(dialogue.recovery.label||'重试在线辅导','text-btn',async()=>{if(parts.submit.disabled)return;await parts.send({retry_of_message_id:dialogue.recovery.retry_of_message_id,message:''});}));row.append(recovery);}}
+ }else if(item.role==='assistant'){const old=el('details','coach-old-message');old.append(el('summary','','查看之前的回复'));markdown(body,item.content||'');old.append(body);row.append(old);}else{markdown(body,item.content||'');row.append(body);}}
+ function paintFeed({older=false,height,position}={}){const focusOnChoice=document.activeElement?.closest('.coach-choices,.coach-recovery'),priorTop=feed.scrollTop,atBottom=feed.scrollHeight-feed.scrollTop-feed.clientHeight<80,visible=history.slice(-shown),ids=visible.map((m,i)=>m.id||m.role+':'+(history.length-visible.length+i)),hasNew=ids.some(id=>!paintedIds.includes(id));
+ if(!history.length){if(!feed.querySelector('.coach-welcome'))feed.replaceChildren(el('h1','','你想研究什么？'),el('p','coach-welcome','直接说出你的目标。我会一次补问一个关键问题，需要材料时再请你提交。'));paintedIds=[];return;}
+ feed.querySelector('.coach-welcome')?.remove();feed.querySelector('h1')?.remove();earlier.hidden=history.length<=shown;if(!feed.contains(earlier))feed.prepend(earlier);
+ const wanted=new Set(ids);for(const [id,row]of rows)if(!wanted.has(id)){row.remove();rows.delete(id);}
+ let previous=earlier;for(let i=0;i<visible.length;i++){const item=visible[i],id=ids[i],signature=JSON.stringify([item.content,item.dialogue,item===lastReply,Boolean(window.eaReflectionMode)]);let row=rows.get(id);if(!row){row=el('article','coach-message '+item.role);row.dataset.messageId=id;rows.set(id,row);}if(row.dataset.signature!==signature){renderMessage(item,row);row.dataset.signature=signature;}if(previous.nextSibling!==row)previous.after(row);previous=row;}
+ if(older)feed.scrollTop=position+(feed.scrollHeight-height);else if(atBottom&&hasNew||!paintedIds.length)feed.scrollTop=feed.scrollHeight;else feed.scrollTop=priorTop;
+ if(hasNew&&!older&&!atBottom&&paintedIds.length)newest.hidden=false;paintedIds=ids;syncChoiceControls();if(focusOnChoice&&!document.contains(focusOnChoice))(feed.querySelector('.coach-choices button')||parts.input).focus({preventScroll:true});
  }
- const actualFacts=()=>Object.fromEntries(Object.entries(latestState?.preparation?.cards||{}).map(([k,c])=>[k,c.value]));
- function paintMaterials(){
- rightBody.replaceChildren();const facts={...actualFacts(),...Object.assign({},...history.filter(m=>m.role==='assistant').map(m=>m.proposal?.cards||{}))};
- const factsBox=el('div','coach-facts');for(const [k,label]of [['question','目标'],['sample','对象与时期'],['outcome','结果'],['policy_name','政策名称'],['policy_doc','政策材料']])if(facts[k])factsBox.append(el('small','',label),el('p','',facts[k]));if(factsBox.children.length)rightBody.append(factsBox,el('small','muted','对话整理的资料，仍需核对。'));
+ function paintKnowledge(){const card=lastReply?.dialogue?.learning_card||{title:'从研究问题开始',summary:'先说明你希望了解什么，再逐步核对研究对象、结果指标和数据。',example:'例如：想了解低碳城市试点政策是否影响城市碳排放。',reminder:'还不知道答案也可以直接说，我会帮你梳理。',content:'研究问题先确定对象和希望观察的结果。方法取决于问题和实际数据，不能只凭一个主题自动选择。'};const signature=JSON.stringify(card);if(signature===knowledgeSignature)return;knowledgeSignature=signature;
+ knowledgeBody.replaceChildren(el('h3','',card.title),el('p','',card.summary));if(card.example)knowledgeBody.append(el('div','coach-knowledge-example','例子：'+card.example));if(card.reminder)knowledgeBody.append(el('p','coach-reminder',card.reminder));if(card.content)knowledgeBody.append(button('完整讲解','text-btn',()=>openReading(card.title,card.content,card)));if(card.source||card.version||card.review_status)knowledgeBody.append(sourceDetails(card));}
+ function paintMaterials(){rightBody.replaceChildren();const summary=latestState?.research_summary||{},fields=summary.fields||{},entries=Object.entries(fields).filter(([k,f])=>f?.value&&(k!=='goal'||f.value!==fields.policy?.value)).sort(([a],[b])=>(['goal','object','outcome','unit','period','policy'].indexOf(a)+1||99)-(['goal','object','outcome','unit','period','policy'].indexOf(b)+1||99)),gap=summary.next_gap||lastReply?.dialogue?.next_gap;
+ const factsBox=el('div','coach-facts');for(const [k,f]of entries.slice(0,4)){const row=el('div','coach-fact'),label=f.status==='provided'?'你已提供':f.status==='suggested'?'AI建议':'待确认';row.append(el('small','',f.label||'研究资料'),el('span','coach-fact-status '+(f.status||'unknown'),label),el('p','',f.value));factsBox.append(row);}rightBody.append(factsBox);
+ if(entries.length>4||entries.some(([,f])=>f.value.length>70))rightBody.append(button('查看全部研究资料','text-btn',()=>openReading('全部研究资料',entries.map(([,f])=>'### '+f.label+'\n'+f.value+'\n\n'+(f.status==='provided'?'你已提供':f.status==='suggested'?'AI建议':'待确认')).join('\n\n'))));
+ if(gap)rightBody.append(el('section','coach-next-gap','接下来：'+(gap.label||gap.prompt)),el('small','muted','摘要用于整理研究，来源和执行方案仍需核对。'));if(!entries.length&&!gap)rightBody.append(el('p','muted','说出研究目标后，这里会整理你已提供的内容和下一步。'));
  if(researchJob?.status==='running'){rightBody.append(el('p','','分析正在实际运行。'),button('查看运行情况','btn-secondary',()=>openController('execute','运行情况')));return;}
- if(researchJob?.status==='succeeded'&&researchJob.result&&researchJob.input_sha256===eaInputHash&&researchJob.research_revision===latestState.research_revision){
- const result=researchJob.result,c=result.coefficients?.find(x=>researchJob.plan.predictors?.includes(x.term))||result.coefficients?.[0];
- rightBody.append(el('h3','','分析结果'),el('p','',result.n_used+' 个实际估计样本'));
- if(c)rightBody.append(el('p','',c.term+'：'+Number(c.estimate).toPrecision(5)),el('small','', '95%区间 ['+Number(c.ci_low).toPrecision(5)+', '+Number(c.ci_high).toPrecision(5)+']'));
- rightBody.append(button('写下我的解释','btn-primary',async()=>{await eaOpenAnswer(researchJob.id);review.close();}),button('查看结果与报告','text-btn',()=>openController('explain','结果与报告')));return;
- }
- const apply=!latestState?.analysis_workspace?.applied?.some(x=>x.message_id===lastReply?.id&&x.action_id==='apply')?lastReply?.actions?.find(a=>a.kind==='apply'&&a.proposal.plan):null;
+ if(researchJob?.status==='succeeded'&&researchJob.result&&researchJob.input_sha256===eaInputHash&&researchJob.research_revision===latestState.research_revision){const result=researchJob.result,c=result.coefficients?.find(x=>researchJob.plan.predictors?.includes(x.term))||result.coefficients?.[0];rightBody.append(el('h3','','分析结果'),el('p','',result.n_used+' 个实际估计样本'));if(c)rightBody.append(el('p','',c.term+'：'+Number(c.estimate).toPrecision(5)),el('small','','95%区间 ['+Number(c.ci_low).toPrecision(5)+', '+Number(c.ci_high).toPrecision(5)+']'));rightBody.append(button('写下我的解释','btn-primary',async()=>{await eaOpenAnswer(researchJob.id);review.close();}),button('查看结果与报告','text-btn',()=>openController('explain','结果与报告')));return;}
+ const applied=latestState?.analysis_workspace?.applied?.some(x=>x.message_id===lastReply?.id&&x.action_id==='apply'),apply=applied?null:lastReply?.actions?.find(a=>a.kind==='apply'&&a.proposal.plan);
  if(apply){rightBody.append(el('h3','','分析建议'),el('p','',(researchNames[apply.proposal.plan.method]||'方法待核对')+' · '+apply.proposal.plan.outcome),button('核对建议','btn-primary',openProposal));return;}
- if(researchData){rightBody.append(el('p','','已收到 '+researchData.filename),el('small','',(researchProfileCache?.row_count||0)+' 行，'+(researchProfileCache?.columns?.length||0)+' 列。'));return;}
- const ask=lastReply?.content||'';
- if(/政策原文|政策文件|政策材料|政策链接/.test(ask))rightBody.append(button('提交政策材料','btn-primary',()=>openMaterials('policy')));
- else if(/提交.*数据|上传|数据文件|CSV|可用数据/.test(ask))rightBody.append(button('提交数据','btn-primary',()=>openMaterials('data')));
+ if(researchData)rightBody.append(el('p','coach-data-note','数据：'+researchData.filename),el('small','',(researchProfileCache?.row_count||0)+' 行，'+(researchProfileCache?.columns?.length||0)+' 列'));
+ const field=gap?.field,ask=lastReply?.dialogue?.current_question?.prompt||lastReply?.content||'';
+ if(field==='policy_doc'||/政策原文|政策文件|政策材料|政策链接/.test(ask))rightBody.append(button('提交政策材料','btn-primary',()=>openMaterials('policy')));
+ else if(['data','data_status'].includes(field)||/提交.*数据|上传|数据文件|CSV|可用数据/.test(ask))rightBody.append(button('提交数据','btn-primary',()=>openMaterials('data')));
  else if(history.filter(x=>x.role==='user').at(-1)?.content.match(/stata/i)&&!window.eaLocalSummary?.profile)rightBody.append(button('连接本机Stata','btn-primary',()=>openController('data','本机Stata连接',true)));
- else if(!factsBox.children.length)rightBody.append(el('p','muted','需要材料时，我会在这里告诉你提交什么。'));
  }
  function openController(view,title,local=false){$('pane-research').classList.toggle('coach-local-view',local);if(local){$('pcLocalStata').hidden=false;$('pcLocalStata').open=true;}reviewTitle.textContent=title;reviewBody.replaceChildren();top.hidden=false;window.eaCurrentAnalysisView=view;eaResearchStep(view);review.showModal();}
  function openProposal(){
  const source=document.querySelector('.analysis-current-turn .analysis-proposal');if(!source){parts.status.textContent='建议已变化，请重新提问。';return;}
  reviewTitle.textContent='核对 AI 整理的资料';reviewBody.replaceChildren();top.hidden=true;
- const facts=lastReply.proposal?.cards||{};for(const [k,v]of Object.entries(facts))reviewBody.append(el('p','',({question:'目标',sample:'对象与时期',outcome:'结果与单位',predictor:'解释变量',data_source:'来源',access:'使用条件',policy_name:'政策名称',policy_doc:'政策材料',effective_date:'实施日期',treated_list:'实施对象',comparison:'比较对象'})[k]+ '：'+v));
- const edits=el('details');edits.append(el('summary','','需要修改？'));const apply=source.querySelector('.btn-primary');for(const n of [...source.children])if(n!==apply)edits.append(n);reviewBody.append(edits,apply);
+ const facts=lastReply.proposal?.cards||{};for(const [k,v]of Object.entries(facts))reviewBody.append(el('p','',(({question:'目标',sample:'对象与时期',outcome:'结果与单位',predictor:'解释变量',data_source:'来源',access:'使用条件',policy_name:'政策名称',policy_doc:'政策材料',effective_date:'实施日期',treated_list:'实施对象',comparison:'比较对象'})[k]||'研究资料')+ '：'+v));
+ const edits=el('details');edits.append(el('summary','','需要修改？'));const apply=source.querySelector('.btn-primary');for(const n of [...source.children])if(n!==apply)edits.append(n);if(!apply){parts.status.textContent='当前建议已应用，请重新整理执行方案。';return;}reviewBody.append(edits,apply);
  const runNext=button('继续核对执行方案','btn-primary',async()=>{top.hidden=false;eaResearchStep('plan');if(!researchData&&window.eaLocalSummary?.profile){$('pane-research').classList.add('coach-local-view');$('pcLocalStata').hidden=false;$('pcLocalStata').open=true;reviewTitle.textContent='本机Stata确认与批准';}else if(!$('researchEngine').value)researchNotice('请选择执行软件，再点击整理方案。确认后才会计算。');else await researchMakePlan();});
  runNext.hidden=true;reviewBody.append(runNext);const originalApply=apply.onclick;apply.onclick=async()=>{await originalApply();if(apply.textContent.includes('已应用')){runNext.hidden=false;apply.hidden=true;edits.open=false;paintMaterials();}};
  review.showModal();
@@ -62,11 +74,11 @@
  materialBody.replaceChildren(el('h2','',kind==='policy'?'提交政策资料':'提交数据'));
  if(kind==='data'){
  const note=el('p','','支持 CSV / TSV，最多2MB。原始观测不会发给模型。'),file=$('researchFile');file.setAttribute('aria-label','提交CSV或TSV数据');
- materialBody.append(note,file,button('使用现有教学数据','text-btn',()=>{const choices=el('div');for(const [key,label]of Object.entries(researchNames))choices.append(button(label,'btn-secondary',async()=>{await researchSample(key);materialDialog.close();paintMaterials();await askFromAction('我已选择现有模拟教学数据，请告诉我下一步需要补充什么。');}));materialBody.append(choices);}));
+ materialBody.append(note,file,button('使用现有教学数据','text-btn',()=>{const choices=el('div');for(const [key,label]of Object.entries(researchNames))choices.append(button(label,'btn-secondary',async()=>{const before=researchData;await researchSample(key);if(!researchData||researchData===before){parts.status.textContent='教学数据载入失败：'+$('researchNotice').textContent;return;}materialDialog.close();paintMaterials();await askFromAction('我已选择现有模拟教学数据，请告诉我下一步需要补充什么。');}));materialBody.append(choices);}));
  }else{
  const url=el('input'),text=el('textarea'),file=el('input');url.type='url';url.placeholder='政策原文链接（可选）';url.setAttribute('aria-label','政策原文链接');text.placeholder='粘贴与研究有关的政策段落、实施日期等';text.setAttribute('aria-label','政策材料内容');text.maxLength=1500;file.type='file';file.accept='.txt,.md';
- file.onchange=async()=>{const f=file.files[0];if(f){if(f.size>2000000){parts.status.textContent='资料超过2MB，请提交相关段落。';return;}text.value=(await f.text()).slice(0,1500);}};
- materialBody.append(url,text,el('small','muted','可以粘贴原文或上传TXT/Markdown；保留来源，尚未自动核实。'),file,button('提交给本次研究','btn-primary',async()=>{
+ file.onchange=async()=>{const f=file.files[0];if(f){try{if(f.size>2000000)throw Error('资料超过2MB，请提交相关段落。');text.value=(await f.text()).slice(0,1500);}catch(e){parts.status.textContent='读取政策材料失败：'+e.message;}}};
+ materialBody.append(url,text,el('small','muted','可以粘贴原文或上传TXT/Markdown；PDF可提交原文链接或相关段落。保留来源，尚未自动核实。'),file,button('提交给本次研究','btn-primary',async()=>{
  if(!text.value.trim()&&!url.value.trim())return;const answer=text.value.trim()||'政策原文链接：'+url.value;
  if(!await mutate('preparation/type',{question_type:'policy_evaluation'},{method:'PUT'}))return;
  if(!await mutate('preparation/cards/policy_doc',{value:answer,source_url:url.value,source_title:'学生提交的政策材料',verify:false},{method:'PUT'}))return;
@@ -77,23 +89,19 @@
  const upload=button('＋ 提交材料','coach-attach',()=>{materialBody.replaceChildren(el('h2','','你要提交什么？'),button('数据 CSV / TSV','btn-primary',()=>openMaterials('data')),button('政策原文或链接','btn-secondary',()=>openMaterials('policy')));materialDialog.showModal();});
  parts.input.before(upload);
  const originalFile=$('researchFile').onchange;$('researchFile').onchange=async e=>{const epoch=++dataEpoch,before=researchData;await originalFile?.(e);if(epoch!==dataEpoch)return;if(researchData&&researchData!==before){materialDialog.close();paintMaterials();await askFromAction('我已提交数据，请结合字段摘要告诉我下一步。');}else{parts.status.textContent='提交失败：'+$('researchNotice').textContent;}};
- async function askFromAction(message){
- if(queryBusy||parts.submit.disabled){parts.status.textContent='材料已收到，上一条回复结束后请继续提问。';return;}queryBusy=true;const id=sessionId;
- try{if(window.eaFlushAllDrafts&&!await eaFlushAllDrafts())throw Error('材料草稿保存未完成。');
- const response=await api('/api/research/chat',{method:'POST',body:{session_id:id,state_version:latestState.state_version,research_revision:latestState.research_revision,request_id:crypto.randomUUID(),message,intent:'analysis',profile:researchProfileCache||window.eaLocalSummary?.profile||{row_count:0,columns:[]},draft_plan:researchProfileCache?researchCandidate():window.eaLocalDraftPlan?.()||{}}});
- if(id!==sessionId)return;latestState.practical_messages=response.messages;window.eaConversationHistory(response.messages);
- }catch(e){parts.status.textContent='材料已保留：'+e.message;}finally{queryBusy=false;}
- }
+ async function askFromAction(message){if(queryBusy||parts.submit.disabled){parts.status.textContent='材料已收到，上一条回复结束后请继续提问。';return;}queryBusy=true;try{await parts.send({message});}finally{queryBusy=false;}}
  const nativeDraw=researchDrawJob;researchDrawJob=function(job){nativeDraw(job);paintMaterials();};
  const legacyCurrent=document.querySelector('.analysis-current-turn');
  new MutationObserver(()=>{
  const title=legacyCurrent.querySelector('h3')?.textContent||'';
- if(/解释已提交|最新已提交解释/.test(title)&&legacyCurrent.textContent!==lastRendered){lastRendered=legacyCurrent.textContent;const item=el('article','coach-message assistant');item.append(...[...legacyCurrent.children].map(n=>n.cloneNode(true)));feed.append(item);feed.scrollTop=feed.scrollHeight;paintMaterials();}
+ if(/解释已提交|最新已提交解释/.test(title)&&legacyCurrent.textContent!==lastRendered){lastRendered=legacyCurrent.textContent;const item=el('article','coach-message assistant');const atBottom=feed.scrollHeight-feed.scrollTop-feed.clientHeight<80;item.append(...[...legacyCurrent.children].map(n=>n.cloneNode(true)));feed.append(item);if(atBottom)feed.scrollTop=feed.scrollHeight;else newest.hidden=false;paintMaterials();}
  }).observe(legacyCurrent,{childList:true,subtree:true});
  for(const b of parts.dialogue.querySelectorAll(':scope > button'))if(b.textContent==='返回问答')b.classList.add('coach-exit');
- const mode=dock.querySelector('.analysis-answer-mode');new MutationObserver(()=>{mode.hidden=!window.eaReflectionMode;}).observe(mode,{childList:true,subtree:true});mode.hidden=true;
- const status=parts.status;new MutationObserver(()=>{status.hidden=!/正在|失败|错误|超时|过期|保留|处理中/.test(status.textContent);}).observe(status,{childList:true,subtree:true});status.hidden=true;
+ const mode=dock.querySelector('.analysis-answer-mode');new MutationObserver(()=>{mode.hidden=!window.eaReflectionMode;paintFeed();}).observe(mode,{childList:true,subtree:true});mode.hidden=true;
+ function syncChoiceControls(){for(const b of feed.querySelectorAll('.coach-choices button'))b.disabled=parts.submit.disabled||Boolean(window.eaReflectionMode)||b.dataset.questionId!==lastReply?.dialogue?.current_question?.id||staleQuestions.has(b.dataset.questionId);for(const b of feed.querySelectorAll('.coach-recovery button'))b.disabled=parts.submit.disabled;}
+ new MutationObserver(syncChoiceControls).observe(parts.submit,{attributes:true,attributeFilter:['disabled']});
+ const status=parts.status;new MutationObserver(()=>{status.hidden=!/正在|失败|错误|超时|过期|保留|处理中|已更新|固定教学/.test(status.textContent);syncChoiceControls();}).observe(status,{childList:true,subtree:true});status.hidden=true;
  for(const p of document.querySelectorAll('p'))if(p.textContent.startsWith('试用版：'))p.hidden=true;
  parts.input.placeholder='告诉我你想研究什么，或继续回答上一个问题…';
- paintFeed();paintMaterials();if(latestState)window.eaConversationHistory(latestState.practical_messages||[]);
+ paintFeed();paintKnowledge();paintMaterials();if(latestState)window.eaConversationHistory(latestState.practical_messages||[]);
 })();

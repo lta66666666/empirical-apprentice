@@ -17,6 +17,7 @@ export function modelEvidenceMarkdown(records,full=true){
   for(const record of records){
     lines.push('',`### ${record.kind} · ${record.created_at}`,`- 记录：${record.id}；版本：${record.record_version}；任务：${record.task_id||'研究准备或课程'}`,`- 状态：${record.status}；模式：${record.mode}；模型：${record.model||'未配置'}；提示词：${record.prompt_version}；耗时：${record.duration_ms} ms`);
     if(record.failure_reason)lines.push(`- 失败或受阻原因：${record.failure_reason}`);
+    if(record.diagnostics){const d=record.diagnostics;lines.push(`- 请求诊断：阶段 ${d.stage||'未知'}；尝试 ${d.attempts??0} 次；HTTP ${d.http_status??'无'}；结束原因 ${d.finish_reason||'无'}；输出长度 ${d.output_length??0} 字符；字段校验 ${(d.validation_errors||[]).join('、')||'通过或未进入'}`);}
     if(full)lines.push('','#### 输入摘要','```json',JSON.stringify(record.input_summary,null,2),'```','#### 实际提示词','```json',JSON.stringify(record.messages,null,2),'```','#### 输出','```json',JSON.stringify(record.output,null,2),'```');
     else lines.push(`- 问题／作答：${String(record.input_summary.question||record.input_summary.answer||'').slice(0,300)}`,`- 输出摘要：${String(record.output.reason||record.output.answer||record.output.detail||'').slice(0,400)}`,'- 完整提示词与输入输出见同一练习的 Agent 交互证据下载；任务反馈另见复现包 agent_interactions.json。');
   }

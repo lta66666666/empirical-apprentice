@@ -6,6 +6,7 @@ import { modelFeedback, reserveModelCall, modelCapabilities } from './model.js';
 import { draftEndpoint, readDrafts } from './drafts.js';
 import {modelInteractions,modelEvidenceMarkdown} from './model-evidence.js';
 import {practicalMessages} from './practical.js';
+import {researchSummary,refreshUnderstandingFromPreparation} from './research-understanding.js';
 import {localTasks} from './local-stata.js';
 import {ensureLearningContext,coursePayload,openCourse,learningProjection,commitLearningProjection,courseView} from './course.js';
 
@@ -111,8 +112,9 @@ export async function sessionPayload(env, state, {syncJobs=false}={}) {
     if(syncJobs)await syncCloudJob(env,job,state);
     return { id: job.id, record_version:job.record_version||1, status: job.status, created: job.created, plan: job.plan, description: job.description,execution_location:job.execution_location||'browser_webr',engine_id:job.engine_id||'browser_webr' };
   }));
+  const messages=await practicalMessages(env,state.owner_id,state.session_id);
   return {
-    session_id: state.session_id, state_version:state.state_version, analysis_workspace:state.analysis_workspace||null,learning_context:state.learning_context,course:coursePayload(state), stage: state.stage, entry_path: state.entry_path,
+    session_id: state.session_id, state_version:state.state_version, analysis_workspace:state.analysis_workspace||null,research_summary:researchSummary(state,messages),learning_context:state.learning_context,course:coursePayload(state), stage: state.stage, entry_path: state.entry_path,
     blueprint: state.project, conversation: state.conversation, case_answers: state.case_answers,
     lesson_records: state.lesson_records, learning_artifacts: state.learning_artifacts,
     preparation: state.preparation, method_learning: state.method_learning,
@@ -120,7 +122,7 @@ export async function sessionPayload(env, state, {syncJobs=false}={}) {
     suitability: suitability(state), tutor_records: state.tutor_records,
     model_capabilities: modelCapabilities(env),
     model_interactions: await modelInteractions(env,state.session_id,state.owner_id),
-    practical_messages: await practicalMessages(env,state.owner_id,state.session_id),
+    practical_messages: messages,
     local_stata_tasks: await localTasks(env,state.owner_id,state.session_id),
     research_drafts: await readDrafts(env,state.session_id),
     expires_at: state.last_activity + 7 * 86400, analysis: state.analysis,
@@ -511,6 +513,7 @@ export async function handleSessions(request, env, owner, path) {
       if (body?.verify && (!card.value || !(card.source_title || card.source_url))) throw new Error('已核对需要内容与可回查来源。');
       card.status = body?.verify ? 'verified' : card.value ? 'filled' : 'to_find';
       state.preparation.cards[key] = card;
+      refreshUnderstandingFromPreparation(state,key);
     } else if (/^method-learning\/(ols|panel_fe)$/.test(tail) && request.method === 'POST') {
       const method = tail.split('/').pop(), choice = String(body?.choice || '');
       if (!/^[ABC]$/.test(choice) && choice !== 'skip') throw new Error('请选 A、B 或 C。');

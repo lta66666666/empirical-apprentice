@@ -1,3 +1,4 @@
+import {understandingExecutionGap} from './research-understanding.js';
 import {loadOwnedSession,touchSession,requireSessionVersion} from './sessions.js';
 import {requestIdentity,repeatedTask} from './request-consistency.js';
 import {evidenceSnapshot,didConflict} from './evidence.js';
@@ -115,7 +116,7 @@ export async function handleLocalStata(request,env,owner,path){
       const tasks=await localTasks(env,owner,sessionId);if(tasks.some(t=>active.includes(t.status)))return fail('请先完成或取消上一项本机任务。',409);
       const count=await env.DB.prepare(env.ACCOUNT_ID?'SELECT ((SELECT COUNT(*) FROM local_stata_tasks WHERE owner IN (SELECT owner FROM account_owners WHERE user_id=?) AND created_at>?)+(SELECT COUNT(*) FROM jobs WHERE owner IN (SELECT owner FROM account_owners WHERE user_id=?) AND created_at>?)) AS n':'SELECT ((SELECT COUNT(*) FROM local_stata_tasks WHERE owner=? AND created_at>?)+(SELECT COUNT(*) FROM jobs WHERE owner=? AND created_at>?)) AS n').bind(env.ACCOUNT_ID||owner,Date.now()-86400000,env.ACCOUNT_ID||owner,Date.now()-86400000).first();if(count.n>=30)return fail('本机分析每日最多30次。',429);
       const kind=body.kind==='template'?'template':'code',names=new Set(profile.columns.map(c=>c.name));let plan=null,code='';
-      if(kind==='template'){
+      if(kind==='template'){const gap=understandingExecutionGap(session);if(gap)return fail(gap);
         const input=body.plan||{};plan={method:input.method,outcome:input.outcome,predictors:Array.isArray(input.predictors)?input.predictors:[],unit:input.unit||'',time:input.time||'',treated:input.treated||'',policy_year:input.policy_year??null,same_batch:input.same_batch===true,vcov:input.vcov||'hetero',cluster:input.cluster||'',missing:input.missing||'block'};
         if(!['ols','panel_fe','did'].includes(plan.method)||!names.has(plan.outcome)||plan.predictors.length>12||new Set(plan.predictors).size!==plan.predictors.length||plan.predictors.includes(plan.outcome)||!plan.predictors.every(n=>names.has(n))||!['iid','hetero','cluster'].includes(plan.vcov)||!['block','drop'].includes(plan.missing))return fail('方法或字段设置无效。');
         if(plan.method!=='did'&&!plan.predictors.length)return fail('请选择解释变量。');

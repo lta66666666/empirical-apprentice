@@ -3,6 +3,7 @@ import {suitability} from './evidence.js';
 import {knowledgeContext} from './knowledge.js';
 import {requestIdentity} from './request-consistency.js';
 import {readDrafts} from './drafts.js';
+import {applyUnderstanding,researchSummary} from './research-understanding.js';
 const cards=['question','sample','outcome','predictor','data_source','access','policy_name','policy_doc','effective_date','treated_list','comparison'];
 const methods=['ols','panel_fe','did'],steps=['prepare','data','health','plan','execute','explain','reports'];
 const labels={prepare:'整理研究准备',data:'载入数据',health:'检查数据与变量',plan:'核对完整方案',execute:'确认并执行',explain:'解释与修订',reports:'下载并核验报告'};
@@ -31,8 +32,9 @@ export async function analysisContext(env,owner,state,body){
  executed_result:selected?{id:selected.id,record_version:selected.record_version,plan:selected.plan,dictionary:selected.dictionary,n_used:selected.result?.n_used,coefficients:selected.result?.coefficients,warnings:selected.result?.warnings,execution_location:selected.execution_location,server_recomputed:false}:null};
 }
 export async function teachingMaterials(question,context){
- const name={ols:'OLS 线性回归',panel_fe:'固定效应 面板',did:'DID 政策'}[context.focus_method||context.draft_plan.method||context.executed_result?.plan?.method]||'研究准备';
- return knowledgeContext(question+' '+name+' '+(labels[context.step]||''));
+ const name={ols:'OLS 线性回归',panel_fe:'固定效应 面板',did:'DID 政策'}[context.focus_method]||'研究准备';
+ const materials=await knowledgeContext(question+' '+name+' '+(context.focus_method?labels[context.step]||'':'研究对象、结果与单位'));
+ return context.focus_method||/\b(?:stata|fixest|feols|vcov|ssc)\b|软件命令|剔除样本|实际样本/i.test(question)?materials:materials.filter(x=>x.id.startsWith('lesson_'));
 }
 export function messageActions(state,context,output,intent){
  const pendingCards=output.ready?Object.fromEntries(Object.entries(context.unconfirmed_preparation?.cards||{}).filter(([,v])=>v.status==='suggested').map(([k,v])=>[k,v.value])):{};
@@ -78,6 +80,7 @@ export async function handleAnalysisAction(request,env,owner,path){
  for(const k of allowed){const value=String(edits[k]??proposal.cards[k]).trim().slice(0,2000);state.preparation.cards[k]={value,status:value?'filled':'to_find',source_title:'对话整理，学生确认填写；来源待核对',source_url:'',accessed_on:''};}
  const dict=proposal.dictionary||{},dictEdits=body.dictionary_edits||{};if(Object.keys(dictEdits).some(k=>!Object.hasOwn(dict,k)))throw fail('单位修改超出当前建议字段');for(const [k,v]of Object.entries(dict)){const edited=dictEdits[k]??v;if(typeof edited!=='string'||edited.length>300)throw fail('变量单位须为300字以内文字');state.variable_dictionary[k]=edited;}
  if(proposal.design){state.preparation.question_type=proposal.design.question_type;state.preparation.adoption_mode=proposal.design.adoption_mode;}
+ applyUnderstanding(state,proposal,edits,message.id);
  let plan=proposal.plan;
  if(body.plan_edits){if(!plan)throw fail('没有可编辑的候选方案');const allowedPlan=['method','outcome','predictors','unit','time','treated','cluster'];if(Object.keys(body.plan_edits).some(k=>!allowedPlan.includes(k)))throw fail('方案修改字段无效');const names=new Set(message.context.profile.columns.map(c=>c.name));for(const [k,v]of Object.entries(body.plan_edits)){if(k==='method'){if(!methods.includes(v))throw fail('尚未支持该方法');}else if(k==='predictors'){if(!Array.isArray(v)||v.length>12||v.some(n=>!names.has(n)))throw fail('解释变量不在当前字段中');}else if(v!==''&&!names.has(v))throw fail('变量不在当前字段中');}plan={...plan,...body.plan_edits,same_batch:false};}
  state.research_revision++;state.pending_confirmation=null;result={plan,requires_reconfirmation:true};current.view=proposal.plan?'plan':'prepare';

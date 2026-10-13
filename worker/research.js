@@ -1,3 +1,4 @@
+import {understandingExecutionGap} from './research-understanding.js';
 import { engineMetadata, engineCapabilities, nodeRequest, digest } from './executor.js';
 import { fixtures } from './fixtures.js';
 import { loadOwnedSession, saveSession, touchSession, requireSessionVersion } from './sessions.js';
@@ -251,6 +252,7 @@ export async function handleResearch(request, env, owner, path) {
         if(repeated)return resultJson({...publicJob(repeated),execution_nonce:repeated.nonce,state_version:session.state_version},202);
       }
       if(action!=='inspect')requireSessionVersion(session,body);
+      if(action==='plan'||action==='jobs'){const gap=understandingExecutionGap(session);if(gap)return fault(gap,422);}
       const data = parseCsv(body?.text, body?.filename || 'data.csv');
       if (action === 'inspect') return resultJson(data.profile);
       if (action === 'plan') {
