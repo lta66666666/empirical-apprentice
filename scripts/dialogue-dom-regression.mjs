@@ -39,7 +39,7 @@ try{
 
  globalThis.fetch=async()=>Response.json({choices:[{message:{content:JSON.stringify({method:'ols',outcome:'income',predictors:['education'],reason:'一般关联',questions:[],proposed_cards:{}})}}]});
  await w.researchSample('ols');input.value='使用OLS研究教育与收入关联';input.dispatchEvent(new w.Event('input'));w.eaConversation.submit.click();
- await until(()=>d.querySelector('.analysis-proposal select'),'candidate plan preview');
+ try{await until(()=>d.querySelector('.analysis-proposal select'),'candidate plan preview');}catch(e){console.log('candidate-debug',w.eval('JSON.stringify({status:eaConversation.status.textContent,last:latestState.practical_messages?.at(-1)?.output,dict:latestState.practical_messages?.at(-1)?.context?.dictionary})'));throw e;}
  const methodEdit=d.querySelector('.analysis-proposal select');assert.equal(methodEdit.value,'ols');
  d.querySelector('.analysis-proposal .btn-primary').click();await until(()=>d.querySelector('.analysis-proposal .btn-primary').textContent.includes('已应用'));
  assert.equal(w.eval('researchCandidate().outcome'),'income');assert.deepEqual(Array.from(w.eval('researchCandidate().predictors')),['education']);assert.equal(d.querySelector('#researchConfirm').checked,false);pass('真实模拟输入字段的候选预览与应用不勾选执行确认');
@@ -56,6 +56,6 @@ try{
  const countBeforeShortcut=report.research_jobs.find(j=>j.id===id).reflections.length;[...d.querySelectorAll('.dock-shortcuts button')].find(n=>n.textContent==='讲解知识点').click();await until(()=>d.querySelector('.analysis-answer-mode').textContent.includes('普通问答'));const unchanged=await (await call('/api/research/jobs/'+id)).json();assert.equal(unchanged.reflections.length,countBeforeShortcut);pass('快捷知识问答不被误提交为学生成果');
  const exit=[...d.querySelectorAll('button')].find(n=>n.textContent==='返回问答');exit.click();await until(()=>d.querySelector('.analysis-answer-mode').textContent.includes('普通问答'));assert.match(d.querySelector('.analysis-answer-mode').textContent,/普通问答/);
 
- await until(()=>!w.eval('busy'));globalThis.fetch=native;
+ await until(()=>!w.eval('busy')&&!w.eaConversation.submit.disabled);globalThis.fetch=native;
  assert.deepEqual(errors,[]);await writeFile('outputs/dialogue-dom-regression.json',JSON.stringify({date:new Date().toISOString(),scope:'JSDOM with actual Worker and controlled model; not real viewport/device',checks},null,2));
 }finally{for(const dom of windows)dom.window.close();store.close();}

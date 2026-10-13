@@ -33,11 +33,11 @@
  const signature=JSON.stringify([c,payload,researchConfigEpoch]);if(!pendingAction||pendingAction.signature!==signature)pendingAction={signature,id:crypto.randomUUID()};
  const r=await api('/api/sessions/'+c.session+'/analysis/actions',{method:'POST',body:{...payload,state_version:latestState.state_version,request_id:pendingAction.id}});pendingAction=null;
  if(!same(c))return null;
- Object.assign(latestState,{state_version:r.state_version,research_revision:r.research_revision,preparation:r.preparation,analysis_workspace:r.analysis_workspace});
+ Object.assign(latestState,{state_version:r.state_version,research_revision:r.research_revision,preparation:r.preparation,variable_dictionary:r.variable_dictionary,analysis_workspace:r.analysis_workspace});
  if(!document.activeElement?.closest('#pane-preparation'))renderPreparation(latestState);setView(r.analysis_workspace.view,r.analysis_workspace.mode);
  if(r.action_result?.plan&&configuration!==researchConfigEpoch){info('建议已保存，但等待期间参数有变化；未覆盖本页参数，请重新核对。');return r;}
  if(r.action_result?.plan){if(researchProfileCache){researchSetFields(researchProfileCache,{...researchCandidate(),...r.action_result.plan});eaSaveWorkbenchDraft();await eaFlushDraft('workbench');}else if(window.eaLocalSummary?.profile){window.eaApplyLocalCandidate?.(r.action_result.plan);}else throw Error('建议已保存，请载入原数据后应用字段。');}
- if(r.action_result?.requires_reconfirmation)researchInvalidate();
+ if(r.action_result?.requires_reconfirmation){if(researchData)researchData.dictionary={...(researchData.dictionary||{}),...r.variable_dictionary};researchInvalidate();}
  info('操作已保存。'+(r.action_result?.requires_reconfirmation?'资料已变化，原执行确认失效。':''));return r;
  }catch(e){if(e.status&&e.status!==408)pendingAction=null;info(e.message+(e.uncertain?'；原操作编号已保留，请读取最新状态或重试同一操作。':''));return null;}finally{busy=false;if(buttonNode)buttonNode.disabled=false;}
  }
@@ -64,11 +64,12 @@
  if(context?.executed_result)root.append(el('p','workspace-note','实际样本 '+context.executed_result.n_used+'；单位按执行快照核对。'));
  }
  function proposal(reply,a){
- const panel=el('section','analysis-proposal');panel.append(el('h4','','核对将要填入的内容'));const edits={};
+ const panel=el('section','analysis-proposal');panel.append(el('h4','','核对将要填入的内容'));const edits={},dictionaryEdits={};
  for(const [k,v]of Object.entries(a.proposal.cards||{})){const l=el('label','',cardNames[k]||k),n=el('textarea');n.value=v;n.maxLength=1500;edits[k]=n;l.append(el('small','', '原值：'+(latestState.preparation?.cards?.[k]?.value||'未填写')),n);panel.append(l);}
+ for(const [k,v]of Object.entries(a.proposal.dictionary||{})){const label=el('label','','变量 '+k+' 的含义与单位'),n=el('input');n.value=v;n.maxLength=300;dictionaryEdits[k]=n;label.append(n);panel.append(label);}
  const planEdits={};if(a.proposal.plan){panel.append(el('p','muted','核对候选方法与字段；可修改后应用。'));const columns=reply.context.profile.columns.map(c=>c.name);for(const key of ['method','outcome','unit','time','treated','cluster']){const label=el('label','',({method:'方法',outcome:'结果变量',unit:'个体编号',time:'时间',treated:'处理组',cluster:'聚类字段'})[key]),n=el('select');for(const val of (key==='method'?['ols','panel_fe','did']:['',...columns]))n.append(new Option(key==='method'?researchNames[val]:val||'留空',val));n.value=a.proposal.plan[key]||'';planEdits[key]=n;label.append(n);panel.append(label);}const predictors=el('fieldset');predictors.append(el('legend','','解释变量'));planEdits.predictors=[];for(const col of columns){const l=el('label'),n=el('input');n.type='checkbox';n.value=col;n.checked=a.proposal.plan.predictors.includes(col);planEdits.predictors.push(n);l.append(n,document.createTextNode(col));predictors.append(l);}panel.append(predictors);}
  panel.append(el('p','muted','建议只写入草稿；来源不会自动标为已核对，执行仍需重新确认。'));
- let b=button('应用到草稿','btn-primary',async()=>{const result=await action({message_id:reply.id,action_id:a.id,edits:Object.fromEntries(Object.entries(edits).map(([k,n])=>[k,n.value])),...(a.proposal.plan?{plan_edits:Object.fromEntries(Object.entries(planEdits).map(([k,n])=>[k,k==='predictors'?n.filter(x=>x.checked).map(x=>x.value):n.value]))}:{})},b);if(result){b.textContent='已应用；修改后的方案仍需确认';b.disabled=true;}});panel.append(b);return panel;
+ let b=button('应用到草稿','btn-primary',async()=>{const result=await action({message_id:reply.id,action_id:a.id,edits:Object.fromEntries(Object.entries(edits).map(([k,n])=>[k,n.value])),dictionary_edits:Object.fromEntries(Object.entries(dictionaryEdits).map(([k,n])=>[k,n.value])),...(a.proposal.plan?{plan_edits:Object.fromEntries(Object.entries(planEdits).map(([k,n])=>[k,k==='predictors'?n.filter(x=>x.checked).map(x=>x.value):n.value]))}:{})},b);if(result){b.textContent='已应用；修改后的方案仍需确认';b.disabled=true;}});panel.append(b);return panel;
  }
  async function openAnswer(taskId){
  const c=scope();try{
@@ -90,14 +91,14 @@
  if(last){
  const question=(last.request_id?history.find(e=>e.role==='user'&&e.request_id===last.request_id):null)||history[history.indexOf(last)-1];
  if(question){current.append(el('h3','','我的问题'),el('p','',question.content),button('复用到输入草稿','text-btn',()=>window.eaReusePrompt(question.content)));}
- const body=el('div','prose');markdown(body,last.content);current.append(el('h3','','当前回复'),body);
+ const body=el('div','prose');markdown(body,last.content);current.append(el('h3','',last.context?'当前回复':'旧对话 · 仅供回顾'),body);if(!last.context)current.append(el('p','workspace-note','此历史回复未绑定当前任务上下文，也没有本轮行动卡。请重新提问获取当前建议；不补造历史版本或行动。'));
  for(const a of last.actions||[]){const card=el('section','analysis-action');card.append(el('strong','',a.label),el('p','',a.reason));
  if(a.kind==='apply'){const details=el('details');details.append(el('summary','','查看修改预览'),proposal(last,a));card.append(details);}
  else {let b=button(a.label,'btn-secondary',async()=>{const r=await action({message_id:last.id,action_id:a.id},b);if(r?.action_result?.reflection_task)await openAnswer(r.action_result.reflection_task);});card.append(b);}
  current.append(card);}
- current.append(el('p','muted','资料版本 '+last.research_revision+' · '+(last.output?.prompt_version||'固定提示')+(last.related_task?' · 关联任务 '+last.related_task:'')));
+ current.append(el('p','muted','资料版本 '+(last.research_revision??'历史未记录')+' · '+(last.output?.prompt_version||'固定提示')+(last.related_task?' · 关联任务 '+last.related_task:'')));
  // Older DOM entries remain in the expandable history only.
- const all=[...parts.messages.children];all.slice(-2).forEach(n=>n.remove());
+ const all=[...parts.messages.children];all.slice(-2).forEach(n=>n.remove());const historyTitle=dock.querySelector('.dock-history > summary');if(historyTitle)historyTitle.textContent='较早对话 · '+parts.messages.children.length+' 条记录';
  if(!busy&&last.intent==='guided')localMode='guided';else if(!busy)localMode=last.display_mode||'analysis';
  top.dataset.mode=localMode;teaching(last);
  }else {current.append(el('p','muted','等待你的问题；没有自动开始分析。'));teaching(null);}
