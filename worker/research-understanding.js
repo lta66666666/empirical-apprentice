@@ -2,7 +2,8 @@ import {knowledgeChunks,knowledgeVersion} from './knowledge.js';
 
 const labels={goal:'研究目标',policy:'政策名称',object:'研究对象',period:'观察时期',outcome:'结果指标',unit:'指标单位',predictor:'解释变量',data_source:'数据来源',access:'使用条件',policy_doc:'政策原文',effective_date:'实际实施时间',adoption_mode:'实施批次',treated_list:'政策对象',comparison:'比较对象'};
 const cardFields={question:'goal',policy_name:'policy',sample:'object',outcome:'outcome',predictor:'predictor',data_source:'data_source',access:'access',policy_doc:'policy_doc',effective_date:'effective_date',treated_list:'treated_list',comparison:'comparison'};
-const unknown=/不知道|不清楚|不确定|不了解|还没|尚未|待查|待明确|待确认|待核实|未提供|没有数据|什么(?:意思|单位)/;
+export function isResearchHelpQuestion(text){return /为什么|有什么区别|怎么做|怎么办|能举例|可以吗|有哪些|有什么(?:指标|选择|区别)|还有(?:别的|其他)|怎么(?:选|选择|衡量|理解|确定)|如何(?:选|衡量|理解|确定)|什么意思|能举例|举个例|推荐.*(?:指标|变量)|(?:具体指标|指标).*是什么|什么是/.test(String(text||''));}
+const unknown=/未知|等[^，。；;]*确认|需[^，。；;]*确认|不知道|不清楚|不确定|不了解|还没|尚未|待查|待明确|待确认|待核实|未提供|没有数据|什么(?:意思|单位)/;
 const allPeriod=/全部(?:的)?(?:时期|时间|年份|年度)|所有(?:的)?(?:时期|年份)|全(?:部)?(?:样本|期间)|数据覆盖/;
 const invalid=k=>['goal','policy','object','period','outcome','unit','predictor','data_source','access','policy_doc','effective_date','adoption_mode','treated_list','comparison'].includes(k);
 function blank(field){return {label:labels[field],value:'',status:'unknown',source:null,history:[]};}
@@ -28,7 +29,7 @@ function explicitFacts(u,text,message,field){
  if(namedUnit&&!unknown.test(namedUnit[1])&&!/什么|不知|不清楚/.test(namedUnit[1]))put('unit',namedUnit[1].replace(/计量|衡量|表示$/,'').trim());
  const namedPolicy=value.match(/(?:政策(?:名称)?(?:是|为|叫)|评估)\s*[:：]?\s*([^，。；;\n]{2,100}?政策)(?=[的对，。；;]|$)/)||value.match(/(低碳城市(?:试点)?政策)/);
  if(namedPolicy&&!/^(?:一项|某项|这项|一个|某个|有关)/.test(namedPolicy[1]))put('policy',namedPolicy[1]);
- const measured=value.match(/((?:城市|企业|居民|家庭|个人)?(?:年度|年)?(?:碳排放|收入|工资|就业|产出|生产率|消费|污染)(?:人数|量|总量|强度|水平|率)?)/);
+ const measured=value.match(/(月工资|年度劳动收入|小时工资|就业人数|就业率)/)||value.match(/((?:城市|企业|居民|家庭|个人)?(?:年度|年)?(?:碳排放|收入|工资|就业|产出|生产率|消费|污染)(?:人数|量|总量|强度|水平|率)?)/);
  const policyOnly=!!namedPolicy&&/政策(?:名称)?(?:是|为|叫)/.test(value)&&!/结果|指标|观察|对.*(?:影响|作用)/.test(value)||field==='policy'&&!/结果|指标|观察|对.*(?:影响|作用)/.test(value);
  if(measured&&!policyOnly&&!/例如|比如|什么是|是什么/.test(value)){put('outcome',measured[1]);if(/^城市/.test(measured[1])&&!known(u.fields.object))put('object','城市');}
  const goal=/研究|分析|评估|考察/.test(value)&&!/^讲解|^解释|^我已提交|^我已选择/.test(value);
@@ -49,14 +50,14 @@ function explicitFacts(u,text,message,field){
  else if(field==='period'&&!noAnswer&&!allPeriod.test(value)&&!years&&!goal&&value.length<=200)put('period',value);
  else if(field==='effective_date'&&!noAnswer&&!date&&/\d/.test(value)&&value.length<=100)put('effective_date',value);
  else if(['predictor','data_source','access','policy_doc','treated_list','comparison'].includes(field)&&!noAnswer&&!goal)put(field,value);
- if(/不知道.*单位|不清楚.*单位|单位.*(?:不知道|不清楚|待查|待确认)/.test(value))put('unit','','unknown');
+ if(/不知道.*单位|不清楚.*单位|单位.*(?:不知道|不清楚|待查|待确认|等.*确认|需.*确认|未知)/.test(value))put('unit','','unknown');
  if(/拿到数据后|等数据后|数据说明后|数据到手后/.test(value)&&(/单位/.test(value)||field==='unit'))put('unit','待数据说明确认','awaiting_data');
  if(correction&&!field&&measured)put('outcome',measured[1]);
  return changed;
 }
 
 export function understanding(state,messages=[]){
- if(state.research_understanding?.schema_version===1){const copy=JSON.parse(JSON.stringify(state.research_understanding));for(const key of Object.keys(labels))copy.fields[key]||=blank(key);return copy;}
+ if(state.research_understanding?.schema_version===1){const copy=JSON.parse(JSON.stringify(state.research_understanding));for(const key of Object.keys(labels)){copy.fields[key]||=blank(key);if(copy.fields[key].source?.kind==='user'&&isResearchHelpQuestion(copy.fields[key].value)){copy.fields[key].status='unknown';copy.fields[key].value='';}}return copy;}
  const u={schema_version:1,revision:0,fields:Object.fromEntries(Object.keys(labels).map(k=>[k,blank(k)])),active_question:null};
  for(const [card,field]of Object.entries(cardFields)){const record=state.preparation?.cards?.[card];if(!record?.value)continue;
   const status=record.status==='suggested'?'suggested':unknown.test(record.value)?'unknown':'provided';
@@ -135,7 +136,7 @@ export function understandingExecutionGap(state,u=understanding(state)){
 }
 const choiceDefinitions={
  unit:[{id:'read_unit',label:'我先查看数据说明',answer:'我先查看数据说明，指标单位待确认。',status:'awaiting_data',value:'待数据说明确认'},{id:'wait_unit',label:'拿到数据后确认',answer:'拿到数据后再确认指标单位。',status:'awaiting_data',value:'待数据说明确认'}],
- outcome:[{id:'annual_total',label:'城市年度总量',answer:'我关注城市年度碳排放总量，单位待查。'},{id:'gdp_intensity',label:'单位GDP排放强度',answer:'我关注单位GDP碳排放强度，单位待查。'},{id:'read_indicator',label:'先查看数据说明',answer:'我先查看数据说明，再确定结果指标。',status:'awaiting_data',value:'待数据说明明确指标'}],
+ outcome:[{id:'wage_monthly',label:'月工资',answer:'我选择月工资作为结果指标，单位等数据说明确认。',value:'月工资',status:'provided'},{id:'wage_annual',label:'年度劳动收入',answer:'我选择年度劳动收入作为结果指标，单位等数据说明确认。',value:'年度劳动收入',status:'provided'},{id:'wage_hourly',label:'小时工资',answer:'我选择小时工资作为结果指标，单位等数据说明确认。',value:'小时工资',status:'provided'},{id:'employment_count',label:'就业人数',answer:'我选择就业人数作为结果指标，单位等数据说明确认。',value:'就业人数',status:'provided'},{id:'employment_rate',label:'就业率',answer:'我选择就业率作为结果指标，单位等数据说明确认。',value:'就业率',status:'provided'},{id:'annual_total',label:'城市年度总量',answer:'我关注城市年度碳排放总量，单位待查。'},{id:'gdp_intensity',label:'单位GDP排放强度',answer:'我关注单位GDP碳排放强度，单位待查。'},{id:'read_indicator',label:'先查看数据说明',answer:'我先查看数据说明，再确定结果指标。',status:'awaiting_data',value:'待数据说明明确指标'}],
  period:[{id:'all_period',label:'数据覆盖的全部年份',answer:'希望使用数据覆盖的全部年份，具体范围待确认。',status:'awaiting_data',value:'希望使用数据覆盖的全部年份（范围待确认）'}],
  adoption_mode:[{id:'same_batch',label:'同一批、同一时间',answer:'政策是在同一批对象、同一时间实施。',value:'single_batch',status:'provided'},{id:'staggered',label:'分批实施',answer:'政策是分批实施。',value:'staggered',status:'provided'},{id:'read_batch',label:'还需要核对',answer:'政策实施批次还需要核对。',value:'待政策原文核对',status:'awaiting_data'}],
 };
@@ -167,9 +168,20 @@ function preparationCard(gap,u){
  return {id:'research_'+field,title,summary,example:contextualExample,reminder,content:[summary,contextualExample,reminder,material.content].join('\n\n'),source:material.source,version:material.version,review_status:material.review_status,knowledge_version:knowledgeVersion,material_id:material.id};
 }
 function humanReply(value){return clean(value).replace(/\s*[（(](?:lesson_\d+|analysis_context|research_preparation)[）)]/g,'').replace(/\b(?:lesson_\d+|analysis_context|research_preparation)\b/g,'').replace(/method\s*(?:为|[:：=])\s*null|row_count\s*(?:为|[:：=])\s*\d+/gi,'').trim();}
+function indicatorHelp(u,text){
+ if(!isResearchHelpQuestion(text)||!/指标|工资|收入|结果|就业/.test(text))return null;
+ const topic=text+' '+u.fields.outcome.value+' '+u.fields.goal.value;
+ let ids,explanation;
+ if(/工资|收入|薪酬/.test(topic)){ids=['wage_monthly','wage_annual','wage_hourly'];explanation='可以按研究目的选：月工资看日常薪酬，年度劳动收入包含全年劳动报酬，小时工资方便比较工时不同的人。需要区分税前税后、奖金和工时口径；具体单位等数据说明确认。';}
+ else if(/就业/.test(topic)){ids=['employment_count','employment_rate'];explanation='就业人数看岗位或就业规模，就业率看指定人口中有工作的比例。两者回答不同的问题，需要核对统计对象与就业率的分母。';}
+ else if(/碳排放/.test(topic)){ids=['annual_total','gdp_intensity'];explanation='年度碳排放总量看整体排放变化，单位GDP排放强度看经济产出对应的排放。先按研究问题选指标，不能仅按数据是否显著来选。';}
+ else return null;
+ return {choices:choiceDefinitions.outcome.filter(x=>ids.includes(x.id)).map(({id,label,answer})=>({id,label,answer})),explanation,prompt:'你更想研究哪一个？也可以说说你的研究目的。'};
+}
 export function coachingDialogue(state,u,output,context,user,assistantId,intent){
- const gap=/不知道.*单位|不清楚.*单位|单位.*(?:不知道|不清楚|待查)/.test(user.content)?{field:'unit',label:labels.unit,prompt:'你可以先查看数据说明，也可以拿到数据后再确认单位。'}:nextGap(state,u,context.profile),failure=!!output.error_type||['manual','rules','checklist'].includes(output.mode),q={id:assistantId+':'+gap.field,field:gap.field,prompt:gap.prompt};
- let choices=(choiceDefinitions[gap.field]||[]).map(({id,label,answer})=>({id,label,answer}));
+ const help=indicatorHelp(u,user.content);
+ const gap=help?{field:'outcome',label:labels.outcome,prompt:help.prompt}:/不知道.*单位|不清楚.*单位|单位.*(?:不知道|不清楚|待查)/.test(user.content)?{field:'unit',label:labels.unit,prompt:'你可以先查看数据说明，也可以拿到数据后再确认单位。'}:nextGap(state,u,context.profile),failure=!!output.error_type||['manual','rules','checklist'].includes(output.mode),q={id:assistantId+':'+gap.field,field:gap.field,prompt:gap.prompt};
+ let choices=(choiceDefinitions[gap.field]||[]).filter(x=>!['wage_monthly','wage_annual','wage_hourly','employment_count','employment_rate'].includes(x.id)).map(({id,label,answer})=>({id,label,answer}));
  if(gap.field==='outcome'&&!/碳排放/.test(u.fields.outcome.value+' '+u.fields.goal.value))choices=[];
  if(gap.field==='unit'&&!unknown.test(user.content))choices=[];
  let content;
@@ -181,7 +193,9 @@ export function coachingDialogue(state,u,output,context,user,assistantId,intent)
  else if(gap.field==='outcome'&&/碳排放/.test(u.fields.outcome.value))content='“碳排放”可以指总量，也可以指强度。\n'+gap.prompt;
  else content=gap.prompt;
  if(failure)content='在线模型暂不可用，你的回答和研究摘要已保留。以下是固定教学帮助。\n'+(intent==='knowledge'?preparationCard(gap,u).summary:content);
+ if(help){choices=help.choices;const direct=humanReply(output.answer||'');content=(failure?'在线模型暂不可用，你的回答已保留。以下是固定教学帮助。\n'+help.explanation:direct||help.explanation);if(!/[？?]/.test(content))content+='\n'+help.prompt;}
  const learning_card=preparationCard(gap,u);
  if(intent==='knowledge'&&!failure&&output.answer){learning_card.content=humanReply(output.answer);learning_card.title='当前问题讲解';learning_card.summary=learning_card.content.length<=180?learning_card.content:learning_card.content.match(/^[\s\S]{1,160}?[。！？](?:\s|$)/)?.[0]?.trim()||'这份讲解结合当前研究资料说明概念、例子和需要核对的条件。完整正文可以按需打开。';const relevant=context.focus_method&&output.retrieval?.find?.(x=>!x.id?.startsWith('fixest_'));if(relevant)Object.assign(learning_card,{source:relevant.source,material_id:relevant.id});}
+ if(help){learning_card.title='选择与你问题对应的指标';learning_card.summary=help.explanation;learning_card.example='可选指标只是讨论方向，点击后仍需核对数据定义与单位。';}
  return {summary:content,current_question:output.ready||intent==='reflection'?null:q,choices,learning_card,next_gap:gap,recovery:{can_retry:failure&&!['configuration','rate_limit'].includes(output.error_type)&&output.mode!=='rules',retry_of_message_id:failure?user.id:null,error_type:output.error_type||(failure?'unavailable':null),label:failure?'重试在线回复':null}};
 }
