@@ -1,3 +1,9 @@
+## 2026-10-15：本机双引擎候选（尚未替换公网）
+
+修复 Stata 标量 p 值导出；增加旧 MCP、stata-code/PyStata 与 StatsPAI Python 受控适配器。三方法本机真实执行、九条账号协议闭环及一次浏览器 OLS 对照已验证，仍缺公网、第二台 Windows、休眠与断网恢复验收。参见 [验收报告](LOCAL_DUAL_ACCEPTANCE.md) 与 [助手安装说明](local_stata/README.md)。两次本机批准及原始输入留本机规则保留。
+
+重现实测前运行 node scripts/export-local-fixtures.mjs。依赖锁定 Python3.11 和两套审计源码提交；下载助手不含 Stata、输入、凭据或运行时。
+
 ## 2026-10-13：对话驱动分析重构
 
 底部当前轮持久行动、预览后应用、上下文教学、请求式引导与正式解释模式。验收范围见 [优化说明](DIALOGUE_OPTIMIZATION.md) 和 [测试报告](DIALOGUE_TEST_REPORT.md)，不将受控模型或结果夹具记为真实数值执行。

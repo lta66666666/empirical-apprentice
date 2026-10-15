@@ -47,3 +47,5 @@ next-env.d.ts
 /*.tar.gz
 **/__pycache__/
 /deploy/backups/
+
+/local_stata/.venv/

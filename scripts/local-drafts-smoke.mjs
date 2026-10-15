@@ -6,7 +6,7 @@ const storage=await openStorage('outputs/local-drafts-'+Date.now()),env={DB:stor
 const owner=crypto.randomUUID(),state=newSession(owner),pair=crypto.randomUUID(),id=crypto.randomUUID();
 await saveSession(env,state);
 await env.DB.prepare('INSERT INTO local_pairings(id,code,token_hash,owner,session_id,created_at,expires_at) VALUES(?,?,?,?,?,?,?)').bind(pair,'123456','test-hash',owner,state.session_id,Date.now(),Date.now()+300000).run();
-await env.DB.prepare('INSERT INTO local_stata_tasks VALUES(?,?,?,?,?,?,?,?)').bind(id,pair,state.session_id,owner,'succeeded','{}',Date.now(),Date.now()).run();
+await env.DB.prepare('INSERT INTO local_stata_tasks(id,pairing_id,session_id,owner,status,body,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)').bind(id,pair,state.session_id,owner,'succeeded','{}',Date.now(),Date.now()).run();
 const put=(key,value)=>draftEndpoint(new Request('http://localhost',{method:'PUT',body:JSON.stringify({value,version:0})}),env,state,'drafts/'+key);
 assert.equal((await put('practical-chat',{message:'待发送的研究问题'})).status,200);
 assert.equal((await put('local-reflection:'+id,{answer:'未提交的系数解释',submitted:false})).status,200);

@@ -76,7 +76,7 @@
  const c=scope();try{
  let task,local=false;const selected=window.eaSelectedTask;
  const fromReply=latestReply?.context?.executed_result;
- if((selected?.id===taskId&&selected.engine_id==='stata_local_mcp')||(fromReply?.id===taskId&&fromReply.execution_location==='local_mcp')){local=true;task=(await api('/api/local-stata/pairings?session_id='+c.session)).tasks?.find(t=>t.id===taskId);}
+ if((selected?.id===taskId&&['stata_local_mcp','statspai_local'].includes(selected.engine_id))||(fromReply?.id===taskId&&['local_mcp','local_python'].includes(fromReply.execution_location))){local=true;task=(await api('/api/local-stata/pairings?session_id='+c.session)).tasks?.find(t=>t.id===taskId);}
  else {try{task=await api('/api/research/jobs/'+taskId);}catch(e){if(e.status!==404&&!String(e.message).includes('404'))throw e;local=true;task=(await api('/api/local-stata/pairings?session_id='+c.session)).tasks?.find(t=>t.id===taskId);}}
  if(!same(c))return;if(!task||task.status!=='succeeded'||!task.result)throw Error('尚无已完成结果，不能提交解释。');
  reflection={task,local,session:c.session,answer_version:task.reflections?.length||0,record_version:task.record_version};

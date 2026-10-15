@@ -1,0 +1,22 @@
+[
+  {
+    "case": "missing_drop",
+    "status": "passed",
+    "n_used": 159
+  },
+  {
+    "case": "missing_block",
+    "status": "passed",
+    "rejected": "存在缺失值，需要先核对删除规则"
+  },
+  {
+    "case": "collinear",
+    "status": "passed",
+    "rejected": "Regressors 'v1' and 'v2' are perfectly collinear (|correlation| = 1.0000000000); the design matrix is rank-deficient and their coefficients are not separately identified.\n  -> recovery: Drop one of 'v1' or 'v2'."
+  },
+  {
+    "case": "invalid_vcov",
+    "status": "passed",
+    "rejected": "方差或缺失值处理参数无效"
+  }
+]

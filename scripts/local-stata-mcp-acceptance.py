@@ -1,10 +1,12 @@
 """Real MCP tests, independent task sessions, existing fixtures only."""
-import json, pathlib, sys, csv, io, tempfile, hashlib
+import json, pathlib, sys, csv, io, tempfile, hashlib, time, os
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'local_stata'))
 import assistant as a
 root=pathlib.Path(__file__).resolve().parents[1]
 m=a.MCP();m.initialize()
 results=[]
+acceptance=root/'outputs'/('mcp-acceptance-'+str(time.time_ns()));acceptance.mkdir(parents=True)
+
 for method in ('ols','panel_fe','did'):
     fixture=json.loads((root/'outputs/mcp-fixtures'/f'{method}.json').read_text(encoding='utf-8'))
     rows=list(csv.reader(io.StringIO(fixture['text'])))
@@ -13,7 +15,7 @@ for method in ('ols','panel_fe','did'):
     plan.setdefault('cluster','');plan.setdefault('vcov','hetero' if method=='ols' else 'cluster')
     for key in ('outcome','unit','time','treated','cluster'):plan[key]=aliases.get(plan.get(key),'')
     plan['predictors']=[aliases[n] for n in plan['predictors']];plan['labels']={v:k for k,v in aliases.items()}
-    folder=root/'outputs/mcp-acceptance'/method;folder.mkdir(parents=True,exist_ok=True)
+    folder=acceptance/method;folder.mkdir(parents=True,exist_ok=True)
     with (folder/'normalized.csv').open('w',encoding='utf-8',newline='') as f:
         w=csv.writer(f);w.writerow(list(aliases.values()));w.writerows(rows[1:])
     code,command=a.stata_script(plan);code=code.replace('exit, clear\n','');(folder/'estimate.do').write_text(code,encoding='utf-8')
@@ -23,6 +25,9 @@ for method in ('ols','panel_fe','did'):
         (folder/'mcp-response.json').write_text(json.dumps(response,ensure_ascii=False,indent=2),encoding='utf-8')
         result=a.result_from_files({'dir':folder,'task':{'kind':'template'},'plan':plan});result['method']=method;results.append(result)
         (folder/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
+        assert all(0<=c['p_value']<=1 for c in result['coefficients'])
+        assert all(c['p_value']<0.05 for c in result['coefficients'] if c['ci_low']>0 or c['ci_high']<0), 'P/CI mismatch'
         print(method,result['n_used'],[(c['term'],c['estimate']) for c in result['coefficients']])
     finally:a.stop_session(session)
-(root/'outputs/mcp-acceptance/summary.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')
+print('Evidence:',acceptance)
+(acceptance/'summary.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')

@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {validResult} from '../worker/local-stata.js';
+import {compareLocalResults} from '../worker/local-comparison.js';
+const task={kind:'template',engine_id:'stata_local_mcp',bridge_id:'stata_mcp',profile:{row_count:10},input_sha256:'a'.repeat(64),plan_sha256:'b'.repeat(64),plan:{method:'ols',predictors:['x'],vcov:'hetero',cluster:''}};
+const value={summary:'Actual synthetic result',software_version:'Stata 18',engine_id:'stata_local_mcp',bridge_id:'stata_mcp',statistic_export_version:2,n_used:8,used_indices:[1,2,3,4,5,6,7,8],inference:{df:6},coefficients:[{term:'x',estimate:1,std_error:.1,p_value:.001,ci_low:.75,ci_high:1.25}]};
+const a=validResult(value,task);assert.equal(a.deleted_count,2);assert.equal(a.statistic_export_version,2);
+const py={...value,engine_id:'statspai_local',bridge_id:'statspai_python',software_version:'StatsPAI 1.39.5'};
+const combined=validResult({...value,comparison_result:py,comparison:{status:'passed'}},{...task,comparison_id:'comparison'});
+assert.equal(combined.comparison.status,'passed');
+const mismatch=validResult({...value,comparison_result:{...py,inference:{df:5}},comparison:{status:'passed'}},{...task,comparison_id:'comparison'});
+assert.equal(mismatch.comparison.status,'unable_to_compare','client claims must not override actual prerequisites');
+assert.throws(()=>validResult({...value,engine_id:'statspai_local'},task));
+assert.throws(()=>validResult({...value,comparison_result:py},task));
+assert.throws(()=>validResult({...value,coefficients:[...value.coefficients,...value.coefficients]},task));
+assert.throws(()=>validResult({...value,used_indices:[1,1,2,3,4,5,6,7]},task));
+assert.equal(compareLocalResults({...a,inference:{...a.inference,df:null}},{...a,inference:{...a.inference,df:null}}).status,'unable_to_compare');
+assert.equal(compareLocalResults(a,{...a,coefficients:[{...a.coefficients[0],estimate:2}]}).status,'different');
+console.log('PASS local provenance, duplicate terms/sample rejection, server-calculated comparison, df and authorization prerequisites.');

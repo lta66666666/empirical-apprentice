@@ -86,7 +86,7 @@
  }));
  }materialDialog.showModal();
  }
- const upload=button('＋ 提交材料','coach-attach',()=>{materialBody.replaceChildren(el('h2','','你要提交什么？'),button('数据 CSV / TSV','btn-primary',()=>openMaterials('data')),button('政策原文或链接','btn-secondary',()=>openMaterials('policy')));materialDialog.showModal();});
+ const upload=button('＋ 提交材料','coach-attach',()=>{materialBody.replaceChildren(el('h2','','你要提交什么？'),button('数据 CSV / TSV','btn-primary',()=>openMaterials('data')),button('政策原文或链接','btn-secondary',()=>openMaterials('policy')),button('使用本机 Stata / Python（试验）','btn-secondary',()=>{materialDialog.close();openController('data','本机计算：配对、核对与批准',true);}));materialDialog.showModal();});
  parts.input.before(upload);
  const originalFile=$('researchFile').onchange;$('researchFile').onchange=async e=>{const epoch=++dataEpoch,before=researchData;await originalFile?.(e);if(epoch!==dataEpoch)return;if(researchData&&researchData!==before){materialDialog.close();paintMaterials();await askFromAction('我已提交数据，请结合字段摘要告诉我下一步。');}else{parts.status.textContent='提交失败：'+$('researchNotice').textContent;}};
  async function askFromAction(message){if(queryBusy||parts.submit.disabled){parts.status.textContent='材料已收到，上一条回复结束后请继续提问。';return;}queryBusy=true;try{await parts.send({message});}finally{queryBusy=false;}}

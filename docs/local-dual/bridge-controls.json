@@ -1,0 +1,8 @@
+{
+  "isolation": "passed",
+  "cancel_seconds": 0.01600000000325963,
+  "cancel_other_session_and_rebuild": "passed",
+  "timeout_seconds": 120.01600000000326,
+  "timeout_error": "timeout",
+  "post_timeout_rebuild": "passed"
+}

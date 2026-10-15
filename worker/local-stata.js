@@ -1,3 +1,4 @@
+import {compareLocalResults} from './local-comparison.js';
 import {understandingExecutionGap} from './research-understanding.js';
 import {loadOwnedSession,touchSession,requireSessionVersion} from './sessions.js';
 import {requestIdentity,repeatedTask} from './request-consistency.js';
@@ -14,23 +15,36 @@ export function cleanProfile(value){
   if(!value||!Number.isInteger(value.row_count)||value.row_count<1||value.row_count>20000||!Array.isArray(value.columns)||value.columns.length<1||value.columns.length>60||!value.columns.every(c=>typeof c.name==='string'&&c.name.length>0&&c.name.length<=100&&typeof c.numeric==='boolean'&&Number.isInteger(c.missing)&&c.missing>=0&&c.missing<=value.row_count)||new Set(value.columns.map(c=>c.name)).size!==value.columns.length)throw Error('无效列摘要；最多20000行、60列。');
   return {row_count:value.row_count,columns:value.columns.map(({name,numeric,missing})=>({name,numeric,missing}))};
 }
-function publicPair(pair){const body=JSON.parse(pair.body);return {id:pair.id,session_id:pair.session_id,online:Date.now()-pair.last_seen<45000,last_seen:pair.last_seen,mcp_available:body.mcp_available===true,mcp_version:body.mcp_version||null,input_sha256:body.input_sha256||null,profile:body.profile||null,revoked:!!pair.revoked};}
+function cleanEngines(value){return Object.fromEntries(['stata_mcp','stata_code','statspai_local'].map(id=>[id,{available:value?.[id]?.available===true,version:String(value?.[id]?.version||'').slice(0,100),acceptance:'experimental'}]));}
+function publicPair(pair){const body=JSON.parse(pair.body);return {id:pair.id,session_id:pair.session_id,online:Date.now()-pair.last_seen<45000,last_seen:pair.last_seen,mcp_available:body.mcp_available===true,mcp_version:body.mcp_version||null,engines:cleanEngines(body.engines),input_sha256:body.input_sha256||null,profile:body.profile||null,revoked:!!pair.revoked};}
 async function browserPair(env,owner,session){return env.DB.prepare('SELECT * FROM local_pairings WHERE session_id=? AND owner=? AND revoked=0 ORDER BY created_at DESC LIMIT 1').bind(session,owner).first();}
 async function authenticatedPair(request,env,id){const token=request.headers.get('Authorization')?.replace(/^Bearer /,'')||'';if(!/^[0-9a-f]{64}$/.test(token))return null;const pair=await env.DB.prepare('SELECT * FROM local_pairings WHERE id=? AND token_hash=? AND revoked=0').bind(id,await hash(token)).first();if(!pair||pair.expires_at<=Date.now())return null;if(pair.owner){const session=await loadOwnedSession(env,pair.owner,pair.session_id);if(!session||session==='expired')return null;}return pair;}
 async function updateTask(env,task,status){const previous=task.status;task.status=status;task.updated_at=Date.now();const changed=await env.DB.prepare('UPDATE local_stata_tasks SET status=?,body=?,updated_at=? WHERE id=? AND pairing_id=? AND status=?').bind(status,JSON.stringify(task),task.updated_at,task.id,task.pairing_id,previous).run();if(!changed.meta.changes){const error=Error('任务状态已变化，请重新读取。');error.status=409;throw error;}}
-export async function localTasks(env,owner,session){const rows=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE session_id=? AND owner=? ORDER BY created_at DESC LIMIT 30').bind(session,owner).all();return rows.results.map(r=>{const {owner,...task}=JSON.parse(r.body);return task;});}
-function validResult(value,task){
+export async function localTasks(env,owner,session){const rows=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE session_id=? AND owner=? ORDER BY created_at DESC LIMIT 30').bind(session,owner).all();return rows.results.map(r=>{const {owner,...task}=JSON.parse(r.body);if(task.result&&task.engine_id!=='statspai_local'&&['panel_fe','did'].includes(task.plan?.method)&&task.result.statistic_export_version!==2)task.statistical_validation={status:'requires_revalidation',reason:'旧版标量导出可能受变量缩写影响；原结果保留，p值、区间及自由度需重新执行核对'};return task;});}
+export function validResult(value,task,secondary=false){
   if(!value||typeof value!=='object'||typeof value.summary!=='string'||value.summary.length>6000||typeof value.software_version!=='string'||value.software_version.length>100)throw Error('结果摘要或软件版本无效。');
-  const result={summary:value.summary,software_version:value.software_version,execution_location:'local_mcp',server_recomputed:false,raw_input_included:false};
+  if((value.input_sha256&&value.input_sha256!==task.input_sha256)||(value.plan_sha256&&value.plan_sha256!==task.plan_sha256))throw Error('结果不属于批准的输入或方案。');
+  const result={summary:value.summary,software_version:value.software_version,engine_id:task.engine_id||'stata_local_mcp',bridge_id:task.bridge_id||'stata_mcp',execution_location:task.engine_id==='statspai_local'?'local_python':'local_mcp',input_sha256:task.input_sha256,plan_sha256:task.plan_sha256,server_recomputed:false,raw_input_included:false};
   if(task.kind==='template'){
+    result.statistic_export_version=value.statistic_export_version===2?2:null;
     if(!Number.isInteger(value.n_used)||value.n_used<1||value.n_used>task.profile.row_count||!Array.isArray(value.coefficients)||!value.coefficients.length||value.coefficients.length>15)throw Error('实际样本或系数格式无效。');
     result.n_used=value.n_used;result.coefficients=value.coefficients.map(row=>{if(typeof row.term!=='string'||row.term.length>120||!['estimate','std_error','p_value','ci_low','ci_high'].every(k=>Number.isFinite(row[k]))||row.std_error<0||row.p_value<0||row.p_value>1||row.ci_low>row.ci_high)throw Error('系数、标准误或区间无效。');return Object.fromEntries(['term','estimate','std_error','p_value','ci_low','ci_high'].map(k=>[k,row[k]]));});
+    if(new Set(result.coefficients.map(x=>x.term)).size!==result.coefficients.length)throw Error('系数项重复。');
     const permitted=new Set([...task.plan.predictors,...(task.plan.method==='ols'?['(Intercept)']:[]),...(task.plan.method==='did'?['DID effect']:[])]);if(result.coefficients.some(c=>!permitted.has(c.term)))throw Error('返回了方案以外的系数。');
     if(!Array.isArray(value.used_indices)||value.used_indices.length!==value.n_used||new Set(value.used_indices).size!==value.n_used||!value.used_indices.every(i=>Number.isInteger(i)&&i>0&&i<=task.profile.row_count))throw Error('实际估计样本索引无效。');
     // Row indices only, never row values.
-    result.used_indices=value.used_indices;
-    const inference=value.inference||{};result.inference={vcov:task.plan.vcov,cluster:task.plan.cluster,df:Number.isFinite(inference.df)?inference.df:null,confidence:.95,correction:'Stata finite sample correction'};
+    result.used_indices=value.used_indices;result.deleted_count=task.profile.row_count-value.n_used;
+    result.omitted_terms=Array.isArray(value.omitted_terms)?value.omitted_terms.filter(x=>typeof x==='string'&&x.length<=120).slice(0,100):null;
+    result.package_versions=Object.fromEntries(Object.entries(value.package_versions||{}).filter(([k,v])=>['statspai','stata-code'].includes(k)&&typeof v==='string'&&v.length<30));
+    const inference=value.inference||{};result.inference={vcov:task.plan.vcov,cluster:task.plan.cluster,df:Number.isFinite(inference.df)?inference.df:null,confidence:.95,correction:task.engine_id==='statspai_local'?(task.plan.method==='ols'?'Stata regress/xtreg finite sample correction':'StatsPAI native feols ssc=fixest; t(df_resid)'):'Stata regress/xtreg finite sample correction'};
   }
+  if(value.engine_id&&value.engine_id!==result.engine_id)throw Error('结果引擎与批准任务不一致。');
+  if(value.bridge_id&&value.bridge_id!==result.bridge_id)throw Error('结果桥接器与批准任务不一致。');
+  if(!secondary&&task.comparison_id){
+    result.comparison_id=task.comparison_id;
+    if(value.comparison_result)result.comparison_result=validResult(value.comparison_result,{...task,engine_id:'statspai_local',bridge_id:'statspai_python',comparison_id:null},true);
+    result.comparison=compareLocalResults(result,result.comparison_result);
+  }else if(value.comparison_result)throw Error('没有批准双引擎对照。');
   return result;
 }
 export async function handleLocalStata(request,env,owner,path){
@@ -54,7 +68,7 @@ export async function handleLocalStata(request,env,owner,path){
       if(agent[2]==='heartbeat'){
         const previous=JSON.parse(pair.body),profile=body.profile?cleanProfile(body.profile):previous.profile;
         const inputHash=body.input_sha256||previous.input_sha256;if(inputHash&&!/^[a-f0-9]{64}$/.test(inputHash))return fail('输入哈希无效。');
-        const next={profile:profile||null,input_sha256:inputHash||null,mcp_available:body.mcp_available===true,mcp_version:String(body.mcp_version||'').slice(0,100)};
+        const next={profile:profile||null,input_sha256:inputHash||null,mcp_available:body.mcp_available===true,mcp_version:String(body.mcp_version||'').slice(0,100),engines:cleanEngines(body.engines)};
         if(pair.owner){const state=await loadOwnedSession(env,pair.owner,pair.session_id);pair.expires_at=Math.round((state.last_activity+604800)*1000);}
         await env.DB.prepare('UPDATE local_pairings SET body=?,last_seen=?,expires_at=? WHERE id=? AND revoked=0').bind(JSON.stringify(next),Date.now(),pair.expires_at,pair.id).run();
         return json({paired:!!pair.owner,session_id:pair.session_id,expires_at:pair.expires_at});
@@ -75,6 +89,8 @@ export async function handleLocalStata(request,env,owner,path){
           if(!/^[a-f0-9]{64}$/.test(body.code_sha256||'')||body.input_sha256!==task.input_sha256)return fail('批准的代码或输入哈希无效。',409);
           const state=await loadOwnedSession(env,pair.owner,pair.session_id);if(state.research_revision!==task.research_revision)return fail('资料已变化，需重新提交和批准。',409);
           task.code_sha256=body.code_sha256;task.approved_at=new Date().toISOString();task.mcp_version=String(body.mcp_version||'').slice(0,100);
+          if(body.bridge_id&&body.bridge_id!==(task.bridge_id||'stata_mcp'))return fail('批准桥接器与任务不一致。',409);
+          task.bridge_version=String(body.bridge_version||'').slice(0,100);
         }
         await updateTask(env,task,body.status);return json({task});
       }
@@ -110,7 +126,11 @@ export async function handleLocalStata(request,env,owner,path){
       const identity=await requestIdentity(body),repeated=await repeatedTask(env,'local_stata_tasks',owner,sessionId,identity);
       if(repeated)return json({task:repeated,state_version:session.state_version},202);
       requireSessionVersion(session,body);
-      if(!pair||!publicPair(pair).online||!publicPair(pair).mcp_available)return fail('本机助手或Stata MCP尚未在线。',409);
+      if(!pair||!publicPair(pair).online)return fail('本机助手尚未在线。',409);
+      const engineId=body.engine_id||'stata_local_mcp',bridgeId=engineId==='statspai_local'?'statspai_python':(body.bridge_id||'stata_mcp'),compare=body.compare===true;
+      if(!['stata_local_mcp','statspai_local'].includes(engineId)||!['stata_mcp','stata_code','statspai_python'].includes(bridgeId)||(engineId==='stata_local_mcp'&&bridgeId==='statspai_python')||(compare&&engineId!=='stata_local_mcp'))return fail('引擎组合无效。');
+      const available=cleanEngines(JSON.parse(pair.body).engines);if(!available[engineId==='statspai_local'?'statspai_local':bridgeId].available&&!(bridgeId==='stata_mcp'&&publicPair(pair).mcp_available))return fail('所选本机引擎不可用；请明确切换，不会自动回退。',409);
+      if(compare&&!available.statspai_local.available)return fail('对照需要本机 StatsPAI 可用。',409);
       const info=JSON.parse(pair.body),profile=cleanProfile(info.profile);
       if(body.input_sha256!==info.input_sha256||body.research_revision!==session.research_revision||body.confirmed!==true)return fail('输入、资料或确认已变化，请重新核对。',409);
       const tasks=await localTasks(env,owner,sessionId);if(tasks.some(t=>active.includes(t.status)))return fail('请先完成或取消上一项本机任务。',409);
@@ -123,8 +143,8 @@ export async function handleLocalStata(request,env,owner,path){
         if(plan.method!=='ols'&&(!names.has(plan.unit)||!names.has(plan.time)||plan.unit===plan.time))return fail('需要不同的个体和年份列。');
         if(plan.vcov==='cluster'&&!names.has(plan.cluster))return fail('请选择聚类列。');
         if(plan.method==='did'&&(!plan.same_batch||!names.has(plan.treated)||!Number.isInteger(plan.policy_year)||plan.policy_year<1800||plan.policy_year>2200||didConflict(session)))return fail(didConflict(session)||'同批DID需要核对实施年、组别与批次。');
-      }else{code=String(body.code||'').trim();if(!code||code.length>16000)return fail('代码不能为空且最多16000字。');}
-      const task={id:crypto.randomUUID(),request_id:identity.id,pairing_id:pair.id,owner,session_id:sessionId,kind,code,plan,plan_sha256:await hash(JSON.stringify({kind,code,plan})),profile,input_sha256:info.input_sha256,research_revision:session.research_revision,evidence_snapshot:evidenceSnapshot(session),dictionary:session.variable_dictionary,question:String(body.question||'').slice(0,2000),engine_id:'stata_local_mcp',software:'stata',execution_location:'local_mcp',status:'queued',created_at:Date.now(),record_version:1,result:null,reflections:[]};
+      }else{if(engineId!=='stata_local_mcp'||compare)return fail('通用代码仅支持真实 Stata 单引擎。');code=String(body.code||'').trim();if(!code||code.length>16000)return fail('代码不能为空且最多16000字。');}
+      const task={id:crypto.randomUUID(),request_id:identity.id,pairing_id:pair.id,owner,session_id:sessionId,kind,code,plan,plan_sha256:await hash(JSON.stringify({kind,code,plan,engineId,bridgeId,compare})),profile,input_sha256:info.input_sha256,research_revision:session.research_revision,evidence_snapshot:evidenceSnapshot(session),dictionary:session.variable_dictionary,question:String(body.question||'').slice(0,2000),engine_id:engineId,bridge_id:bridgeId,comparison_id:compare?crypto.randomUUID():null,software:engineId==='statspai_local'?'python':'stata',execution_location:engineId==='statspai_local'?'local_python':'local_mcp',capability_status:'experimental',status:'queued',created_at:Date.now(),record_version:1,result:null,reflections:[]};
       try{const inserted=await env.DB.prepare("INSERT INTO local_stata_tasks(id,pairing_id,session_id,owner,status,body,created_at,updated_at,request_id,request_sha256) SELECT ?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM local_stata_tasks WHERE pairing_id=? AND status IN ('queued','awaiting_approval','running','awaiting_upload','cancel_requested')) AND EXISTS(SELECT 1 FROM sessions WHERE id=? AND owner=? AND state_version=?) AND EXISTS(SELECT 1 FROM local_pairings WHERE id=? AND revoked=0 AND json_extract(body,'$.input_sha256')=?)").bind(task.id,pair.id,sessionId,owner,task.status,JSON.stringify(task),task.created_at,task.created_at,identity.id,identity.sha256,pair.id,sessionId,owner,session.state_version,pair.id,info.input_sha256).run();if(!inserted.meta.changes){const replay=await repeatedTask(env,'local_stata_tasks',owner,sessionId,identity);if(replay)return json({task:replay,state_version:session.state_version},202);return fail('任务、输入或资料在提交期间已变化，请读取最新状态后重新确认。',409);}}
       catch(error){const replay=await repeatedTask(env,'local_stata_tasks',owner,sessionId,identity);if(replay)return json({task:replay,state_version:session.state_version},202);throw error;}
       await touchSession(env,session);return json({task,state_version:session.state_version},202);
