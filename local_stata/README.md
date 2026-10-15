@@ -1,5 +1,23 @@
 # Windows 本机计算助手（试验版）
 
+## 当前电脑快速开始
+
+保持 Trae 与 Stata MCP 扩展运行，命令面板执行 `Stata: Test MCP Server Connection`。Codex 已注册的连接不需重复添加；若出现 `No valid session ID provided`，先重启 Codex 刷新客户端连接，不要重复配置同名连接。
+
+当前电脑已准备好独立 Python 环境，在项目根目录运行：
+
+```powershell
+.\local_stata\start.ps1 -StataHome "D:\Program Files\Stata18"
+```
+
+打开 http://127.0.0.1:8767/ ，网站地址填写 `https://empirical-apprentice-webr-trial.liskyler9.chatgpt.site`。进入网页“边分析边学 → 提交材料 → 使用本机 Stata / Python（试验）”，输入配对码。本机选择文件后，在网页核对方案并提交。
+
+助手准备真实模板后，网页对话区自动显示核心命令。点击命令或语法片段，左侧显示说明；窄屏打开知识阅读窗口。字段别名与衍生变量均可展开核对。代码区只读，完整脚本仍在本机批准，点击讲解不会运行代码。
+
+本机批准运行、再次批准上传结果摘要后，网页显示“实际 Stata 结果整理视图”。点击样本量、系数、标准误或区间可继续学习。阅读记录只表示看过，不计作答或掌握。通用代码和 Python 不冒充本次 Stata 模板教学。
+
+下载 ZIP 的其他用户需先按下文安装；压缩包不包含 Python 运行时、Stata 或许可证。
+
 ## 安装与启动
 
 1. 准备 Python **3.11 64位**。真实 Stata 需要有效安装和许可；当前模板要求 Stata18。

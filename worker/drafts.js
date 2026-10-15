@@ -6,7 +6,7 @@ export async function readDrafts(env, sessionId) {
 export async function draftEndpoint(request,env,state,tail) {
   if(tail==='drafts'&&request.method==='GET') return Response.json({drafts:await readDrafts(env,state.session_id)});
   const key=tail.slice(7);
-  if(!/^drafts\/(workbench|local-workbench|practical-chat|analysis-formula|reflection:[a-z0-9-]{36}|local-reflection:[a-z0-9-]{36})$/.test(tail)||request.method!=='PUT')return null;
+  if(!/^drafts\/(workbench|local-workbench|stata-reading|practical-chat|analysis-formula|reflection:[a-z0-9-]{36}|local-reflection:[a-z0-9-]{36})$/.test(tail)||request.method!=='PUT')return null;
   if(key.startsWith('local-reflection:')){
     const task=await env.DB.prepare('SELECT id FROM local_stata_tasks WHERE id=? AND session_id=? AND owner=?').bind(key.slice('local-reflection:'.length),state.session_id,state.owner_id).first();
     if(!task)return Response.json({detail:'本机解释任务不存在。'},{status:404});
@@ -17,6 +17,12 @@ export async function draftEndpoint(request,env,state,tail) {
   }
   const {value,version}=await request.json();
   if(!Number.isInteger(version)||version<0||!value||typeof value!=='object'||Array.isArray(value))throw Error('草稿版本或内容无效。');
+  if(key==='stata-reading'){
+    if(Object.keys(value).some(k=>!['task_id','preview_hash','command_id','viewed','view_only'].includes(k))||value.view_only!==true||!Array.isArray(value.viewed)||value.viewed.length>100)throw Error('代码阅读记录无效。');
+    const row=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE id=? AND session_id=? AND owner=?').bind(value.task_id,state.session_id,state.owner_id).first();
+    const task=row&&JSON.parse(row.body),preview=task?.teaching_preview;
+    if(!preview||value.preview_hash!==preview.preview_hash||!preview.commands.some(c=>c.id===value.command_id)||!value.viewed.every(id=>preview.commands.some(c=>c.id===id)))return Response.json({detail:'代码预览已变化，请重新选择。'},{status:409});
+  }
   const body=JSON.stringify(value);
   if(body.length>30000)throw Error('草稿内容过长，请精简文字。');
   if(key.startsWith('reflection:')&&(typeof value.answer!=='string'||value.answer.length>2000))throw Error('解释草稿最多 2000 字。');

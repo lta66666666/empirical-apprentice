@@ -1,3 +1,7 @@
+## 2026-10-15：Stata 代码阅读教学
+
+真实模板核心命令、字段映射与批准包绑定；当前轮只读代码卡、点击语法讲解、真实结果表点击学习、独立阅读记录及固定帮助。仅现有三方法，不新增测验或掌握认证。见 [优化与验收](STATA_TEACHING_ACCEPTANCE.md)、[启动说明](local_stata/README.md)；公网试用状态见 [发布后验收](STATA_TEACHING_PUBLIC_ACCEPTANCE.md)。
+
 ## 2026-10-15：本机双引擎候选（尚未替换公网）
 
 修复 Stata 标量 p 值导出；增加旧 MCP、stata-code/PyStata 与 StatsPAI Python 受控适配器。三方法本机真实执行、九条账号协议闭环及一次浏览器 OLS 对照已验证，仍缺公网、第二台 Windows、休眠与断网恢复验收。参见 [验收报告](LOCAL_DUAL_ACCEPTANCE.md) 与 [助手安装说明](local_stata/README.md)。两次本机批准及原始输入留本机规则保留。

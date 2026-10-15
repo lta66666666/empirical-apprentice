@@ -1,3 +1,4 @@
+import {stataLesson,validateStataPreview} from './stata-teaching.js';
 import {compareLocalResults} from './local-comparison.js';
 import {understandingExecutionGap} from './research-understanding.js';
 import {loadOwnedSession,touchSession,requireSessionVersion} from './sessions.js';
@@ -19,7 +20,7 @@ function cleanEngines(value){return Object.fromEntries(['stata_mcp','stata_code'
 function publicPair(pair){const body=JSON.parse(pair.body);return {id:pair.id,session_id:pair.session_id,online:Date.now()-pair.last_seen<45000,last_seen:pair.last_seen,mcp_available:body.mcp_available===true,mcp_version:body.mcp_version||null,engines:cleanEngines(body.engines),input_sha256:body.input_sha256||null,profile:body.profile||null,revoked:!!pair.revoked};}
 async function browserPair(env,owner,session){return env.DB.prepare('SELECT * FROM local_pairings WHERE session_id=? AND owner=? AND revoked=0 ORDER BY created_at DESC LIMIT 1').bind(session,owner).first();}
 async function authenticatedPair(request,env,id){const token=request.headers.get('Authorization')?.replace(/^Bearer /,'')||'';if(!/^[0-9a-f]{64}$/.test(token))return null;const pair=await env.DB.prepare('SELECT * FROM local_pairings WHERE id=? AND token_hash=? AND revoked=0').bind(id,await hash(token)).first();if(!pair||pair.expires_at<=Date.now())return null;if(pair.owner){const session=await loadOwnedSession(env,pair.owner,pair.session_id);if(!session||session==='expired')return null;}return pair;}
-async function updateTask(env,task,status){const previous=task.status;task.status=status;task.updated_at=Date.now();const changed=await env.DB.prepare('UPDATE local_stata_tasks SET status=?,body=?,updated_at=? WHERE id=? AND pairing_id=? AND status=?').bind(status,JSON.stringify(task),task.updated_at,task.id,task.pairing_id,previous).run();if(!changed.meta.changes){const error=Error('任务状态已变化，请重新读取。');error.status=409;throw error;}}
+async function updateTask(env,task,status,expectedBody){const previous=task.status;task.status=status;task.updated_at=Date.now();const changed=await env.DB.prepare('UPDATE local_stata_tasks SET status=?,body=?,updated_at=? WHERE id=? AND pairing_id=? AND status=? AND body=?').bind(status,JSON.stringify(task),task.updated_at,task.id,task.pairing_id,previous,expectedBody).run();if(!changed.meta.changes){const error=Error('任务状态已变化，请重新读取。');error.status=409;throw error;}}
 export async function localTasks(env,owner,session){const rows=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE session_id=? AND owner=? ORDER BY created_at DESC LIMIT 30').bind(session,owner).all();return rows.results.map(r=>{const {owner,...task}=JSON.parse(r.body);if(task.result&&task.engine_id!=='statspai_local'&&['panel_fe','did'].includes(task.plan?.method)&&task.result.statistic_export_version!==2)task.statistical_validation={status:'requires_revalidation',reason:'旧版标量导出可能受变量缩写影响；原结果保留，p值、区间及自由度需重新执行核对'};return task;});}
 export function validResult(value,task,secondary=false){
   if(!value||typeof value!=='object'||typeof value.summary!=='string'||value.summary.length>6000||typeof value.software_version!=='string'||value.software_version.length>100)throw Error('结果摘要或软件版本无效。');
@@ -61,7 +62,7 @@ export async function handleLocalStata(request,env,owner,path){
       try{await env.DB.prepare('INSERT INTO local_pairings(id,code,token_hash,created_at,expires_at) VALUES(?,?,?,?,?)').bind(id,body.code,await hash(body.token),now,now+300000).run();}catch{return fail('配对码冲突，请重新生成。',409);}
       return json({id,code:body.code,expires_at:now+300000});
     }
-    const agent=/^\/api\/local-stata\/agent\/([0-9a-f-]{36})\/(heartbeat|claim|event|publish)$/.exec(path);
+    const agent=/^\/api\/local-stata\/agent\/([0-9a-f-]{36})\/(heartbeat|claim|preview|event|publish)$/.exec(path);
     if(agent){
       if(request.method!=='POST')return fail('方法不支持。',405);
       const pair=await authenticatedPair(request,env,agent[1]);if(!pair)return fail('助手凭据无效、已撤销或练习已到期。',401);
@@ -81,6 +82,12 @@ export async function handleLocalStata(request,env,owner,path){
         const changed=await env.DB.prepare("UPDATE local_stata_tasks SET status='awaiting_approval',body=?,updated_at=? WHERE id=? AND status='queued'").bind(JSON.stringify(task),task.updated_at,task.id).run();return json({task:changed.meta.changes?task:null});
       }
       const row=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE id=? AND pairing_id=?').bind(String(body.task_id||''),pair.id).first();if(!row)return fail('任务不存在。',404);const task=JSON.parse(row.body);
+      if(agent[2]==='preview'){
+        if(task.status!=='awaiting_approval')return fail('任务已变化，不能修改教学预览。',409);
+        const preview=await validateStataPreview(body.preview,task);
+        if(task.teaching_preview){if(preview.preview_hash!==task.teaching_preview.preview_hash)return fail('冻结任务的教学预览不可覆盖。',409);return json({preview_hash:preview.preview_hash});}
+        task.teaching_preview=preview;await updateTask(env,task,task.status,row.body);return json({preview_hash:preview.preview_hash});
+      }
       if(terminal.has(task.status))return json({task});
       if(agent[2]==='event'){
         const transitions={awaiting_approval:['running','cancelled','failed'],running:['awaiting_upload','failed','interrupted','cancelled'],awaiting_upload:['cancelled'],cancel_requested:['cancelled']};
@@ -88,15 +95,16 @@ export async function handleLocalStata(request,env,owner,path){
         if(body.status==='running'){
           if(!/^[a-f0-9]{64}$/.test(body.code_sha256||'')||body.input_sha256!==task.input_sha256)return fail('批准的代码或输入哈希无效。',409);
           const state=await loadOwnedSession(env,pair.owner,pair.session_id);if(state.research_revision!==task.research_revision)return fail('资料已变化，需重新提交和批准。',409);
+          if(task.teaching_preview&&task.teaching_preview.code_sha256!==body.code_sha256)return fail('批准代码与教学预览不一致，请重新提交任务。',409);
           task.code_sha256=body.code_sha256;task.approved_at=new Date().toISOString();task.mcp_version=String(body.mcp_version||'').slice(0,100);
           if(body.bridge_id&&body.bridge_id!==(task.bridge_id||'stata_mcp'))return fail('批准桥接器与任务不一致。',409);
           task.bridge_version=String(body.bridge_version||'').slice(0,100);
         }
-        await updateTask(env,task,body.status);return json({task});
+        await updateTask(env,task,body.status,row.body);return json({task});
       }
       if(task.status!=='awaiting_upload')return fail('先完成本机执行和结果预览。',409);
       if(body.code_sha256!==task.code_sha256||body.input_sha256!==task.input_sha256)return fail('结果不属于已批准输入与代码。',409);
-      task.result=validResult(body.result,task);task.record_version++;task.upload_confirmed_at=new Date().toISOString();await updateTask(env,task,'succeeded');return json({task});
+      task.result=validResult(body.result,task);task.record_version++;task.upload_confirmed_at=new Date().toISOString();await updateTask(env,task,'succeeded',row.body);return json({task});
     }
     if(!owner)return fail('接口不存在。',404);
     const query=new URL(request.url).searchParams,sessionId=String(body?.session_id||query.get('session_id')||'');
@@ -107,6 +115,12 @@ export async function handleLocalStata(request,env,owner,path){
       const row=await env.DB.prepare('SELECT id FROM local_pairings WHERE code=? AND owner IS NULL AND revoked=0 AND expires_at>?').bind(String(body.code||''),Date.now()).first();if(!row)return fail('配对码无效或已过期。',404);
       const changed=await env.DB.prepare('UPDATE local_pairings SET owner=?,session_id=?,expires_at=? WHERE id=? AND owner IS NULL AND expires_at>?').bind(owner,sessionId,Math.round((session.last_activity+604800)*1000),row.id,Date.now()).run();if(!changed.meta.changes)return fail('配对码已被使用。',409);
       await touchSession(env,session);return json({paired:true});
+    }
+    if(path==='/api/local-stata/tasks/lesson'&&request.method==='GET'){
+      const row=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE id=? AND session_id=? AND owner=?').bind(query.get('task_id')||'',sessionId,owner).first();
+      if(!row)return fail('教学任务不存在或不可读取。',404);const task=JSON.parse(row.body);
+      if(task.engine_id!=='stata_local_mcp'||!task.teaching_preview||task.teaching_preview.preview_hash!==query.get('preview_hash'))return fail('教学预览已变化，请选择当前代码。',409);
+      return json({card:stataLesson(task,query.get('command_id'),query.get('focus')||'command',query.get('term'),query.get('part')||'command'),task_id:task.id,preview_hash:task.teaching_preview.preview_hash});
     }
     const pair=await browserPair(env,owner,sessionId);
     if(path==='/api/local-stata/pairings'&&request.method==='GET')return json({pairing:pair?publicPair(pair):null,tasks:await localTasks(env,owner,sessionId)});
@@ -150,7 +164,7 @@ export async function handleLocalStata(request,env,owner,path){
       await touchSession(env,session);return json({task,state_version:session.state_version},202);
     }
     if(path==='/api/local-stata/tasks/cancel'&&request.method==='POST'){
-      const row=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE id=? AND session_id=? AND owner=?').bind(String(body.task_id||''),sessionId,owner).first();if(!row)return fail('任务不存在。',404);const task=JSON.parse(row.body);if(!terminal.has(task.status))await updateTask(env,task,task.status==='queued'?'cancelled':'cancel_requested');return json({task});
+      const row=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE id=? AND session_id=? AND owner=?').bind(String(body.task_id||''),sessionId,owner).first();if(!row)return fail('任务不存在。',404);const task=JSON.parse(row.body);if(!terminal.has(task.status))await updateTask(env,task,task.status==='queued'?'cancelled':'cancel_requested',row.body);return json({task});
     }
     if(path==='/api/local-stata/tasks/reflection'&&request.method==='POST'){
       const row=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE id=? AND session_id=? AND owner=?').bind(String(body.task_id||''),sessionId,owner).first();if(!row)return fail('任务不存在。',404);const task=JSON.parse(row.body);if(task.status!=='succeeded')return fail('请先完成并确认上传结果。',409);

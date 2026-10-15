@@ -6,6 +6,7 @@ files={str(p.relative_to(root)):p for p in (root/'local_stata').glob('*') if p.i
        ('assistant.py','dual_engines.py','process_guard.py','README.md','start.ps1','setup.ps1','requirements.lock')}
 for p in (root/'local_stata/licenses').glob('*'):files[str(p.relative_to(root))]=p
 files['executor/engines.py']=root/'executor/engines.py'
+files['executor/stata_teaching.py']=root/'executor/stata_teaching.py'
 manifest={name.replace('\\','/'):hashlib.sha256(p.read_bytes()).hexdigest() for name,p in files.items()}
 with zipfile.ZipFile(root/'static/local-stata-assistant.zip','w',zipfile.ZIP_DEFLATED) as archive:
     for name,p in sorted(files.items()):

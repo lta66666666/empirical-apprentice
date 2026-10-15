@@ -196,7 +196,7 @@ async function learningMarkdown(env, state) {
     if(task.result)lines.push(`- 实际结果：${JSON.stringify(task.result)}`);
     for(const item of task.reflections||[])lines.push(`- 解释：${item.answer}\n  反馈：${JSON.stringify(item.feedback)}`);
   }
-  for(const [key,draft]of Object.entries(await readDrafts(env,state.session_id)))if(Object.keys(draft.value).length&&!draft.value.submitted)lines.push(`- ${key} · 草稿版本 ${draft.version}：${JSON.stringify(draft.value)}`);
+  for(const [key,draft]of Object.entries(await readDrafts(env,state.session_id)))if(key!=='stata-reading'&&Object.keys(draft.value).length&&!draft.value.submitted)lines.push(`- ${key} · 草稿版本 ${draft.version}：${JSON.stringify(draft.value)}`);
   return lines.join('\n') + '\n'+modelEvidenceMarkdown(await modelInteractions(env,state.session_id,state.owner_id),false);
 }
 

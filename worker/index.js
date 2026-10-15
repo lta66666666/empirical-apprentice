@@ -86,7 +86,7 @@ export default {
       if(path==='/home'||path==='/static/home.html')return staticResponse('/static/home.html');
       const base=staticResponse('/static/index.html'),html=await base.text();
       const boot=`<script>window.EA_ACCOUNT=${JSON.stringify({id:user.id,username:user.username})};window.EA_MODULE=${JSON.stringify(path.slice(1))};</script><link rel="stylesheet" href="/static/module-layout.css">`;
-      return new Response(html.replace('</head>',boot+'</head>').replace('</body>','<script defer src="/static/data-fragment.js"></script><script defer src="/static/module-layout.js"></script><script defer src="/static/analysis-dialogue.js"></script><script defer src="/static/conversation-workspace.js"></script></body>'),{headers:{...headers,'Content-Type':'text/html; charset=utf-8'}});
+      return new Response(html.replace('</head>',boot+'</head>').replace('</body>','<script defer src="/static/data-fragment.js"></script><script defer src="/static/module-layout.js"></script><script defer src="/static/analysis-dialogue.js"></script><script defer src="/static/conversation-workspace.js"></script><script defer src="/static/stata-learning.js"></script></body>'),{headers:{...headers,'Content-Type':'text/html; charset=utf-8'}});
     }
     if(path.startsWith('/api/local-stata/agent/'))return await handleLocalStata(request,env,null,path);
     if (path.startsWith('/api/sessions') || path.startsWith('/api/research') || path.startsWith('/api/tutorial') || path.startsWith('/api/local-stata/') || path==='/api/knowledge') {

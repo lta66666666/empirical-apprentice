@@ -6,6 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / 'executor'))
 from engines import stata_script
+from stata_teaching import teaching_manifest
 from dual_engines import comparison, pinned_versions
 from process_guard import ProcessGuard
 HOME = Path(os.environ.get('EA_LOCAL_STATA_DIR', Path.home() / 'AppData/Local/EmpiricalApprentice'))
@@ -148,6 +149,16 @@ def prepare(task):
     if task['status']!='awaiting_upload':
         (directory/'manifest.json').write_text(json.dumps({'task':task,'code_sha256':CURRENT['hash'],'input_sha256':INPUT['hash'],'approved':False},ensure_ascii=False,indent=2),encoding='utf-8')
     STATE.update(task=task,code=CURRENT['code'],work_directory=str(directory),input_file=INPUT['path'],result=None,error='')
+    if task['kind']=='template' and engine=='stata_local_mcp' and task['status']=='awaiting_approval':
+        preview=teaching_manifest(code,plan,task['profile']['columns'])
+        preview.update(input_sha256=task['input_sha256'],plan_sha256=task['plan_sha256'],code_sha256=CURRENT['hash'],script_sha256=CURRENT['frozen']['estimate.do'])
+        CURRENT['teaching_preview']=preview
+        try:
+            remote('preview',{'task_id':task['id'],'preview':preview})
+            CURRENT['preview_sent']=True
+        except Exception:
+            STATE['error']='教学预览未同步，可稍后重试；本机完整代码及批准流程仍保留。'
+
 
 def result_from_files(current):
     folder=current['dir'];task=current['task']
@@ -263,13 +274,20 @@ def poll():
                         remote('event',{'task_id':task['id'],'status':'cancelled'});CURRENT['task']['status']='cancelled'
                 else: remote('event',{'task_id':task['id'],'status':'cancelled'});STATE['task']=dict(task,status='cancelled')
             elif not CURRENT or CURRENT['task']['id']!=task['id']:
-                if task['status']=='awaiting_approval': prepare(task)
+                if task['status']=='awaiting_approval':
+                    prepare(task)
                 elif task['status']=='running':
                     stop_session('ea_'+task['id'].replace('-',''));remote('event',{'task_id':task['id'],'status':'interrupted'})
                     STATE['error']='助手重启后没有自动重跑；原任务标记为已中断。'
                 elif task['status']=='awaiting_upload':
                     prepare(task);result_path=CURRENT['dir']/'result.json'
                     if result_path.exists(): STATE['result']=json.loads(result_path.read_text(encoding='utf-8'));CURRENT['task']['status']='awaiting_upload'
+            if CURRENT and CURRENT['task']['status']=='awaiting_approval' and CURRENT.get('teaching_preview') and not CURRENT.get('preview_sent'):
+                try:
+                    remote('preview',{'task_id':CURRENT['task']['id'],'preview':CURRENT['teaching_preview']})
+                    CURRENT['preview_sent']=True
+                    STATE['error']=''
+                except Exception: pass
         except Exception as error:
             STATE.update(online=False,error=str(error))
             if isinstance(error,urllib.error.HTTPError) and error.code==401 and CURRENT: stop_current(CURRENT)
