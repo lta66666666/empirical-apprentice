@@ -55,6 +55,11 @@ try{
  const confirmation=[...local.querySelectorAll('label')].find(n=>n.textContent.includes('已核对以上输入摘要')).querySelector('input');confirmation.checked=true;confirmation.dispatchEvent(new w.Event('change'));
  sendLocal.click();assert.equal(sendLocal.disabled,true);assert.equal(sendLocal.getAttribute('aria-busy'),'true');await until(()=>!sendLocal.disabled);assert.equal(posts,1);assert.match(feedback.textContent,/指标单位尚待明确/);
  await w.eaRefreshLocalTasks();assert.match(feedback.textContent,/指标单位尚待明确/);assert.equal(confirmation.checked,true);
+ const recovery=d.querySelector('.pc-local-recovery');assert.equal(recovery.hidden,false);const definition=recovery.querySelector('textarea');assert.equal(definition.value,'');assert.match(recovery.textContent,/列名不等于指标定义/);
+ definition.value='教学模拟收入指标；单位：模拟数值';definition.dispatchEvent(new w.Event('input',{bubbles:true}));const saveDefinition=recovery.querySelector('button');saveDefinition.click();await until(()=>!saveDefinition.disabled);assert.match(recovery.textContent,/资料已保存/);assert.equal(confirmation.checked,false);
+ const savedDefinition=await (await call('/api/sessions/'+sid)).json();assert.equal(savedDefinition.research_summary.fields.outcome.status,'provided');assert.equal(savedDefinition.research_summary.fields.unit.value,'模拟数值');assert.equal(savedDefinition.preparation.cards.outcome.status,'filled');assert.equal(savedDefinition.research_revision,before+1);
+ assert.equal(definition.value,'教学模拟收入指标；单位：模拟数值');confirmation.checked=true;confirmation.dispatchEvent(new w.Event('change'));
+ pass('422资料补充直达、真实保存定义与单位、撤销旧确认且不标为来源已核实');
  intercept=async(url,opts)=>{if(String(url).startsWith('/api/local-stata/pairings?'))return Response.json({pairing:{online:true,input_sha256:task.input_sha256,profile:task.profile,mcp_available:true},tasks:[task]});if(url==='/api/local-stata/tasks')return Response.json({task:{...task,status:'queued'}},{status:202});};
  const review=d.querySelector('.coach-review');review.showModal();sendLocal.click();await until(()=>!sendLocal.disabled);assert.match(feedback.textContent,/任务已提交/);assert.equal(review.open,false);assert.equal(confirmation.checked,false);assert.equal(sendLocal.textContent,'提交到本机，等待本机批准');intercept=null;
  pass('提交缺口与422紧邻按钮保留、刷新不覆盖、忙状态恢复、成功关闭核对窗口且不执行');
