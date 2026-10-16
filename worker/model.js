@@ -111,6 +111,13 @@ export async function proposeCandidate(input,env,audit=null){
     const response=await requestModel(env,messages),raw=response.raw;details={actual_model:response.actual_model,provider_id:response.provider_id,diagnostics:response.diagnostics};
     // Accept only the bounded card representation used by our own context; never trust model verification.
     if(raw.proposed_cards&&typeof raw.proposed_cards==='object'&&!Array.isArray(raw.proposed_cards)){raw.proposed_cards=Object.fromEntries(Object.entries(raw.proposed_cards).flatMap(([k,v])=>{if(v===null)return [];if(v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).every(n=>['value','status'].includes(n))&&typeof v.value==='string'&&(v.status===undefined||['provided','suggested','filled','verified','unknown','awaiting_data','to_find'].includes(v.status))){return ['unknown','awaiting_data','to_find'].includes(v.status)?[]:[[k,v.value]];}return [[k,v]];}));}
+    // Null means absent for role fields; it never supplies a column or unit fact.
+    for(const k of ['outcome','unit','time','treated','cluster'])if(raw[k]===null)raw[k]='';
+    // Optional descriptions have no execution authority. Reject malformed entries
+    // individually, retaining neither their content nor any claimed unit.
+    let ignoredDictionary=0;
+    if(raw.proposed_dictionary===null)raw.proposed_dictionary={};
+    if(raw.proposed_dictionary&&typeof raw.proposed_dictionary==='object'&&!Array.isArray(raw.proposed_dictionary))raw.proposed_dictionary=Object.fromEntries(Object.entries(raw.proposed_dictionary).filter(([,v])=>{if(typeof v==='string')return true;ignoredDictionary++;return false;}));
     const errors=[];for(const k of ['reason','outcome','unit','time','treated','cluster'])if(raw[k]!==undefined&&typeof raw[k]!=='string')errors.push(k);for(const k of ['predictors','questions'])if(raw[k]!==undefined&&(!Array.isArray(raw[k])||raw[k].some(x=>typeof x!=='string')))errors.push(k);for(const k of ['proposed_cards','proposed_dictionary'])if(raw[k]!==undefined&&(!raw[k]||Array.isArray(raw[k])||typeof raw[k]!=='object'||Object.values(raw[k]).some(x=>typeof x!=='string')))errors.push(k);if(errors.length)throw fieldError(response,errors);
     const questions=(Array.isArray(raw.questions)?raw.questions:[]).filter(q=>typeof q==='string').slice(0,4).map(q=>q.slice(0,300));
     const reason=String(raw.reason||'').slice(0,1000),names=new Set(columns.map(c=>c.name)),pick=k=>names.has(raw[k])?raw[k]:'';
@@ -133,8 +140,9 @@ export async function proposeCandidate(input,env,audit=null){
       output={...meta,candidate:p.method?p:null,ready:!missing.length,mode:missing.length?'needs_information':'candidate',reason,questions:[...new Set([...questions,...missing])].slice(0,6),warning:'AI 候选方案；来源、单位与识别条件未自动核实，学生确认后才执行。'};status=missing.length?'needs_information':'response_valid';
     }
     output.proposed_dictionary=Object.fromEntries(Object.entries(raw.proposed_dictionary||{}).filter(([k,v])=>columns.some(c=>c.name===k)&&typeof v==='string').map(([k,v])=>[k,v.slice(0,300)]));
+    if(ignoredDictionary)output.metadata_warning='部分AI变量说明格式未通过校验，未采纳；不影响有效字段的方案核对。';
     if(output.ready&&input.context){const dict={...(input.context?.dictionary||{}),...output.proposed_dictionary};const required=[output.candidate.outcome,...output.candidate.predictors];const absent=required.filter(k=>!String(dict[k]||'').trim());if(absent.length){output.interpretation_warnings=['含义或单位尚未提供：'+absent.join('、')+'。不阻止计算，解释时不猜测单位。'];output.warning+=' '+output.interpretation_warnings[0];}}
-    output.coach=checkedCoach(raw,retrieved.map(x=>x.id));
+    try{output.coach=checkedCoach(raw,retrieved.map(x=>x.id));}catch{throw fieldError(response,['coaching_contract']);}
     output.proposed_cards=Object.fromEntries(Object.entries(raw.proposed_cards||{}).filter(([k,v])=>['question','sample','outcome','predictor','data_source','access','policy_name','policy_doc','effective_date','treated_list','comparison'].includes(k)&&typeof v==='string').map(([k,v])=>[k,v.slice(0,1500)]));output.diagnostics=details.diagnostics;output.actual_model=details.actual_model;
   }catch(error){details=failure(error);output={...meta,detail:details.error_type==='timeout'?'模型接口超时；请手动选择方案。':'模型返回内容无效或连接失败；请手动选择方案。',mode:'manual',ready:false,candidate:null,...details};status='failed';http=502;}
   const id=await evidence(env,audit,'candidate',summary,messages,output,started,status,details);if(id)output.interaction_id=id;return reply(output,http);

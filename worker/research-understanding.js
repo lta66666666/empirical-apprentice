@@ -188,7 +188,8 @@ export function absorbQuotedFacts(state,updates,user){
  if(isResearchHelpQuestion(user.content))return {understanding:u,changed};
  for(const item of updates||[]){if(!Object.hasOwn(labels,item.field)||!user.content.includes(item.source_span)||!item.source_span.includes(item.value)||unknown.test(item.value))continue;
   if(item.field==='outcome'&&u.fields.outcome.value!==item.value&&known(u.fields.unit))changed=setField(u,'unit','','unknown',source(user.id,user.content,'user_extract'))||changed;
-  changed=setField(u,item.field,item.value,'provided',source(user.id,item.source_span,'user_extract'))||changed;
+  const allPeriod=item.field==='period'&&/全部|所有|覆盖|可获得/.test(item.value);
+  changed=setField(u,item.field,allPeriod?'希望使用数据覆盖的全部年份（范围待确认）':item.value,allPeriod?'awaiting_data':'provided',source(user.id,item.source_span,'user_extract'))||changed;
  }
  if(changed)u.revision++;return {understanding:u,changed};
 }
@@ -198,6 +199,8 @@ export function coachingDialogue(state,u,output,context,user,assistantId,intent)
   const c=output.coach,compute=u.compute_requested||isComputeRequest(user.content),fallbackGap=nextGap(state,u,context.profile);
   let follow=c.follow_up;if(!c.follow_up_explicit&&c.legacy_question)follow={field:fallbackGap.field,prompt:c.legacy_question};
   if(compute&&context.profile.row_count&&['unit','period'].includes(follow?.field))follow=null;
+  // A valid candidate goes to the explicit review action, never back to intake.
+  if(output.ready&&output.candidate)follow=null;
   const question=follow?{id:assistantId+':'+follow.field,field:follow.field,prompt:follow.prompt}:null;
   const learning=c.learning_card||preparationCard(follow?{field:follow.field}:fallbackGap,u);
   const refs=(output.retrieval||[]).filter(x=>c.references.includes(x.id));
