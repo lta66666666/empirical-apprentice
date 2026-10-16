@@ -4,15 +4,15 @@ import {loadOwnedSession,requireSessionVersion} from './sessions.js';
 import {requestIdentity} from './request-consistency.js';
 import {proposeCandidate,modelFeedback,modelCapabilities,reserveModelCall,requestModel} from './model.js';
 import {didConflict} from './evidence.js';
-import {knowledgeContext} from './knowledge.js';
+import {knowledgeContext,knowledgeVersion} from './knowledge.js';
 import {readDrafts} from './drafts.js';
 import {handleAnalysisAction,analysisContext,teachingMaterials,messageActions} from './analysis-workspace.js';
-import {understanding,absorbAnswer,validateChoice,intakePreparation,isPolicyRequest,isResearchHelpQuestion,researchSummary,mergeSuggestions,coachingDialogue,understandingExecutionGap} from './research-understanding.js';
+import {understanding,absorbAnswer,validateChoice,intakePreparation,isPolicyRequest,isResearchHelpQuestion,researchSummary,mergeSuggestions,coachingDialogue,absorbQuotedFacts} from './research-understanding.js';
 const RETENTION=7*86400000;
 const fail=(detail,status=422)=>Object.assign(Error(detail),{status});
-const inputHash=state=>state.research_drafts?.workbench?.value?.input_sha256||state.research_drafts?.['local-workbench']?.value?.input_sha256||'';
+const inputHash=state=>state.research_drafts?.workbench?.value?.profile?.row_count?state.research_drafts.workbench.value.input_sha256||'':state._local_input?.input_sha256||state.research_drafts?.['local-workbench']?.value?.input_sha256||'';
 const redact=value=>String(value||'').trim().replace(/\binput\b[\s\S]*?\bend\b/gi,'[逐行数据已省略]').replace(/(?:[A-Za-z]:\\|\/home\/|\/Users\/)[^\s"']+/g,'[本机路径]').slice(0,16000);
-async function hydrate(env,state){Object.defineProperty(state,'research_drafts',{value:await readDrafts(env,state.session_id),enumerable:false,configurable:true,writable:true});return state;}
+async function hydrate(env,state){Object.defineProperty(state,'research_drafts',{value:await readDrafts(env,state.session_id),enumerable:false,configurable:true,writable:true});const row=await env.DB.prepare('SELECT body FROM local_pairings WHERE session_id=? AND owner=? AND revoked=0 ORDER BY created_at DESC LIMIT 1').bind(state.session_id,state.owner_id).first();Object.defineProperty(state,'_local_input',{value:row?JSON.parse(row.body):null,enumerable:false,configurable:true});return state;}
 export async function practicalMessages(env,owner,id){const rows=await env.DB.prepare('SELECT body FROM practical_messages WHERE session_id=? AND owner=? ORDER BY created_at DESC LIMIT 100').bind(id,owner).all();return rows.results.map(row=>JSON.parse(row.body)).reverse();}
 
 // The session update and messages share one conditional transaction. A losing request
@@ -41,7 +41,8 @@ async function retryQuestion(env,state,owner,body,history){
  return original;
 }
 function readProfile(body,state){
- const profile=body.profile||state.research_drafts?.workbench?.value?.profile||{row_count:0,columns:[]};
+ const browser=body.profile||state.research_drafts?.workbench?.value?.profile;
+ const profile=browser?.row_count?browser:state._local_input?.profile||browser||{row_count:0,columns:[]};
  if(!Number.isInteger(profile.row_count)||profile.row_count<0||profile.row_count>20000||!Array.isArray(profile.columns)||profile.columns.length>60||!profile.columns.every(c=>typeof c.name==='string'&&c.name.length<=100&&typeof c.numeric==='boolean'&&Number.isInteger(c.missing)&&c.missing>=0))throw fail('列摘要无效。');
  return {row_count:profile.row_count,columns:profile.columns.map(c=>({name:c.name,numeric:c.numeric,missing:c.missing})),...(profile.time_range&&typeof profile.time_range==='object'?{time_range:profile.time_range}:{})};
 }
@@ -57,7 +58,7 @@ function chooseIntent(body,question,u){
 export async function handlePractical(request,env,owner,path){
  try{
  const actionReply=await handleAnalysisAction(request,env,owner,path);if(actionReply)return actionReply;
- if(path==='/api/knowledge'&&request.method==='GET'){const query=new URL(request.url).searchParams.get('q')||'';return Response.json({knowledge_version:'ea-kb-20261009-1',materials:await knowledgeContext(query.slice(0,2000))});}
+ if(path==='/api/knowledge'&&request.method==='GET'){const query=new URL(request.url).searchParams.get('q')||'';return Response.json({knowledge_version:knowledgeVersion,materials:await knowledgeContext(query.slice(0,2000))});}
  if(path!=='/api/research/chat')return null;
  const body=request.method==='GET'?{session_id:new URL(request.url).searchParams.get('session_id')}:await request.json();
  let state=await loadOwnedSession(env,owner,String(body.session_id||''));if(state==='expired')throw fail('练习已到期。',410);if(!state)throw fail('练习不存在或不可读取。',404);await hydrate(env,state);
@@ -120,7 +121,6 @@ export async function handlePractical(request,env,owner,path){
  else if(limitError)output={mode:'checklist',error_type:'rate_limit',failure_reason:'今日模型调用额度已用完，回答仍可保存。',ready:false};
  else if(intent==='analysis'||intent==='guided'){
   const response=await proposeCandidate({question,profile:clean,preparation:intake,context,blocker:didConflict({...state,preparation:intake}),history:history.filter(x=>x.id!==user.id).slice(-10).map(x=>({role:x.role,content:x.content}))},env,{session_id:state.session_id,owner});output=await response.json();
-  const blocker=understandingExecutionGap(state,u);if(output.ready&&blocker){output.ready=false;output.mode='needs_information';output.reason=blocker;output.candidate=null;}
  }else{
   const retrieval=await teachingMaterials(question,context),materials=retrieval.map(c=>({id:c.id,content:c.content}));let related_task=null;
   if(intent==='reflection'&&context.executed_result){related_task=context.executed_result.id;materials.push({id:'executed_result',content:context.executed_result});}
@@ -132,6 +132,7 @@ export async function handlePractical(request,env,owner,path){
   if(!originalRetry){user.request_status='stale';user.lease_until=0;await env.DB.prepare('UPDATE practical_messages SET body=? WHERE id=? AND session_id=? AND owner=?').bind(JSON.stringify(user),user.id,state.session_id,owner).run();}
   throw Object.assign(fail('资料在回复期间已变化，回答已保留。请同步后继续。',409),{state_version:current?.state_version});
  }
+ if(!stata&&['analysis','guided'].includes(intent)&&output.coach?.fact_updates?.length){const facts=absorbQuotedFacts(current,output.coach.fact_updates,user);current.research_understanding=facts.understanding;if(facts.changed){current.research_revision++;current.pending_confirmation=null;}}
  const now=Date.now(),assistant={id:replyId||crypto.randomUUID(),request_id:identity.id,request_sha256:identity.sha256,retry_of_message_id:originalRetry?.id||null,role:'assistant',intent,display_mode,candidate:output.ready?output.candidate:null,allowed_next_steps:output.ready?['review_plan']:['ask','review_materials'],related_task:output.related_task||null,output,retrieval:output.retrieval||[],created_at:Math.max(now+1,user.created_at+1,(history.at(-1)?.created_at||0)+1)};
  const updated=stata?understanding(current,history):mergeSuggestions(understanding(current,history),output,assistant.id),dialogue=stata?{summary:output.failure_reason?output.failure_reason+'\n'+stata.card.summary:output.answer,learning_card:{...stata.card,content:output.answer,review_status:output.mode==='model'?'AI讲解；代码与结果来自已保存任务，结论仍需核对':stata.card.review_status},choices:[],current_question:null,recovery:{can_retry:!!output.failure_reason,retry_of_message_id:user.id,label:'重试在线讲解'}}:coachingDialogue(current,updated,output,context,user,assistant.id,intent);
  if(stata){assistant.stata_reference=stata.reference;assistant.related_task=stata.task.id;}

@@ -113,6 +113,8 @@ export async function sessionPayload(env, state, {syncJobs=false}={}) {
     return { id: job.id, record_version:job.record_version||1, status: job.status, created: job.created, plan: job.plan, description: job.description,execution_location:job.execution_location||'browser_webr',engine_id:job.engine_id||'browser_webr' };
   }));
   const messages=await practicalMessages(env,state.owner_id,state.session_id);
+  const draftRecords=await readDrafts(env,state.session_id),pairRow=await env.DB.prepare('SELECT body FROM local_pairings WHERE session_id=? AND owner=? AND revoked=0 ORDER BY created_at DESC LIMIT 1').bind(state.session_id,state.owner_id).first();
+  Object.defineProperty(state,'research_drafts',{value:draftRecords,enumerable:false,configurable:true});Object.defineProperty(state,'_local_input',{value:pairRow?JSON.parse(pairRow.body):null,enumerable:false,configurable:true});
   return {
     session_id: state.session_id, state_version:state.state_version, analysis_workspace:state.analysis_workspace||null,research_summary:researchSummary(state,messages),learning_context:state.learning_context,course:coursePayload(state), stage: state.stage, entry_path: state.entry_path,
     blueprint: state.project, conversation: state.conversation, case_answers: state.case_answers,
@@ -124,7 +126,7 @@ export async function sessionPayload(env, state, {syncJobs=false}={}) {
     model_interactions: await modelInteractions(env,state.session_id,state.owner_id),
     practical_messages: messages,
     local_stata_tasks: await localTasks(env,state.owner_id,state.session_id),
-    research_drafts: await readDrafts(env,state.session_id),
+    research_drafts: draftRecords,
     expires_at: state.last_activity + 7 * 86400, analysis: state.analysis,
     research_jobs: jobs, analysis_stale: !!state.analysis?.blueprint_snapshot && state.analysis.blueprint_snapshot !== JSON.stringify(state.project), tutorial: state.tutorial,
     artifact_reviews: state.artifact_reviews, lesson_ui: lessonUi(state),

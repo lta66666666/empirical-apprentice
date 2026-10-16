@@ -4,6 +4,7 @@
   const toolbar=el('header','module-toolbar');const home=el('a','','返回首页');home.href='/home';home.onclick=e=>{e.preventDefault();leave(()=>location.assign(home.href));};const title=el('strong','',mode==='learn'?'定向导学':'边分析边学');toolbar.append(home,title);
   let shell,top,dock,recordsPanel,returnTask=mode==='analysis'?'research':'learn',courseScreen='directory';
   const returnButton=button('返回当前任务','btn-secondary',()=>eaSetTask(returnTask));returnButton.hidden=true;
+  window.eaOpenRecords=()=>showRecords();
   const reportButton=button('记录与报告','btn-secondary',()=>showRecords());
   toolbar.append(button('新练习','btn-secondary',()=>leave(()=>newSessionDialog())),reportButton,returnButton,button('历史练习','btn-secondary',()=>leave(()=>pastDialog())),button('资料与手册','btn-secondary',()=>selectTab('materials')));
   const moduleLink=el('a','',mode==='learn'?'边分析边学':'定向导学');moduleLink.href=mode==='learn'?'/analysis':'/learn';moduleLink.onclick=e=>{e.preventDefault();leave(()=>location.assign(moduleLink.href));};toolbar.append(moduleLink);

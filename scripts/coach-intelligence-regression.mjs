@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {checkedCoach} from '../worker/coach-response.js';
+import {understanding,coachingDialogue,absorbQuotedFacts,validateChoice} from '../worker/research-understanding.js';
+const state={preparation:{cards:{}},research_revision:1},u=understanding(state),context={profile:{row_count:160,columns:[]}},user={id:'u1',content:'我想比较医院的服务效率'};
+const raw={coaching:{answer:'可以从就诊等待时间或每名医生接诊人数入手；它们分别衡量速度和服务量。',follow_up:{field:'outcome',prompt:'你更关心哪一种？'},choices:[{label:'就诊等待时间',answer:'我更关心就诊等待时间'},{label:'接诊人数',answer:'我更关心接诊人数'}],references:['allowed','invented']}};
+const coach=checkedCoach(raw,['allowed']);assert.deepEqual(coach.references,['allowed']);let d=coachingDialogue(state,u,{mode:'candidate',coach},context,user,'a1','analysis');assert.match(d.summary,/服务量/);assert.equal(d.choices.length,2);assert.equal(d.schema_version,2);
+const nested=checkedCoach({coaching:{answer:'先看等待时间。你想看哪项？',follow_up:{field:'outcome',prompt:'想选哪个结果指标？'}},fact_updates:[{field:'object',value:'医院',source_span:'研究医院'}]});assert.equal(nested.fact_updates[0].value,'医院');const single=coachingDialogue(state,u,{mode:'candidate',coach:nested},context,user,'a0','analysis');assert.equal((single.summary.match(/[？?]/g)||[]).length,1);assert.match(single.summary,/先看等待时间/);
+state.research_understanding={...u,active_question:d.current_question};const messages=[{role:'assistant',research_revision:1,dialogue:d}];const choice=validateChoice(state,messages,{question_id:d.current_question.id,choice_id:d.choices[0].id});assert.equal(choice.field,'outcome');assert.match(choice.value,/等待时间/);
+assert.throws(()=>validateChoice(state,messages,{question_id:'old',choice_id:d.choices[0].id}),/更新/);
+const compute={...u,compute_requested:true};d=coachingDialogue(state,compute,{mode:'candidate',coach:checkedCoach({answer:'可以先按原始数值尺度计算，单位后补。',follow_up:{field:'unit',prompt:'单位是什么？'}})},context,{id:'u2',content:'只跑回归'},'a2','analysis');assert.equal(d.current_question,null);assert.match(d.summary,/可以先/);
+const facts=absorbQuotedFacts(state,[{field:'object',value:'医院',source_span:'研究医院'},{field:'unit',value:'万元',source_span:'研究医院'}],{id:'u3',content:'研究医院的服务'});assert.equal(facts.understanding.fields.object.value,'医院');assert.notEqual(facts.understanding.fields.unit.value,'万元');
+const inquiry=absorbQuotedFacts(state,[{field:'outcome',value:'效率',source_span:'效率'}],{id:'u4',content:'效率是什么？'});assert.equal(inquiry.changed,false);
+d=coachingDialogue(state,u,{mode:'checklist',error_type:'timeout',coach},context,user,'a3','analysis');assert.match(d.summary,/固定教学/);assert.notEqual(d.response_origin,'model');
+assert.throws(()=>checkedCoach({answer:'x',follow_up:{field:'run_anything',prompt:'run'}}));
+console.log('PASS model-first cross-topic reply/options, stale choices, optional-unit compute, quoted-fact provenance, inquiry separation, labelled fallback and action-field whitelist');

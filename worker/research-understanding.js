@@ -1,8 +1,9 @@
+import {isComputeRequest} from './coach-response.js';
 import {knowledgeChunks,knowledgeVersion} from './knowledge.js';
 
 const labels={goal:'研究目标',policy:'政策名称',object:'研究对象',period:'观察时期',outcome:'结果指标',unit:'指标单位',predictor:'解释变量',data_source:'数据来源',access:'使用条件',policy_doc:'政策原文',effective_date:'实际实施时间',adoption_mode:'实施批次',treated_list:'政策对象',comparison:'比较对象'};
 const cardFields={question:'goal',policy_name:'policy',sample:'object',outcome:'outcome',predictor:'predictor',data_source:'data_source',access:'access',policy_doc:'policy_doc',effective_date:'effective_date',treated_list:'treated_list',comparison:'comparison'};
-export function isResearchHelpQuestion(text){return /为什么|有什么区别|怎么做|怎么办|能举例|可以吗|有哪些|有什么(?:指标|选择|区别)|还有(?:别的|其他)|怎么(?:选|选择|衡量|理解|确定)|如何(?:选|衡量|理解|确定)|什么意思|能举例|举个例|推荐.*(?:指标|变量)|(?:具体指标|指标).*是什么|什么是/.test(String(text||''));}
+export function isResearchHelpQuestion(text){return /是什么|为啥|为什么|有什么区别|怎么做|怎么办|能举例|可以吗|有哪些|有什么(?:指标|选择|区别)|还有(?:别的|其他)|怎么(?:选|选择|衡量|理解|确定)|如何(?:选|衡量|理解|确定)|什么意思|能举例|举个例|推荐.*(?:指标|变量)|(?:具体指标|指标).*是什么|什么是/.test(String(text||''));}
 const unknown=/未知|等[^，。；;]*确认|需[^，。；;]*确认|不知道|不清楚|不确定|不了解|还没|尚未|待查|待明确|待确认|待核实|未提供|没有数据|什么(?:意思|单位)/;
 const allPeriod=/全部(?:的)?(?:时期|时间|年份|年度)|所有(?:的)?(?:时期|年份)|全(?:部)?(?:样本|期间)|数据覆盖/;
 const invalid=k=>['goal','policy','object','period','outcome','unit','predictor','data_source','access','policy_doc','effective_date','adoption_mode','treated_list','comparison'].includes(k);
@@ -68,7 +69,7 @@ export function understanding(state,messages=[]){
  return u;
 }
 export function absorbAnswer(state,messages,text,userId,choice=null){
- const u=understanding(state,messages),before=JSON.stringify(u.fields),field=choice?.field||u.active_question?.field||null;
+ const u=understanding(state,messages),before=JSON.stringify(u.fields);if(isComputeRequest(text))u.compute_requested=true;const field=choice?.field||u.active_question?.field||null;
  const changed=explicitFacts(u,text,userId,field);
  if(choice?.status)setField(u,choice.field,choice.value,choice.status,source(userId,text,'choice'));
  u.active_question=null;u.revision++;u.last_user_message_id=userId;
@@ -77,13 +78,14 @@ export function absorbAnswer(state,messages,text,userId,choice=null){
 export function isPolicyRequest(state,u){return !!u.fields.policy.value||/政策|时政/.test(u.fields.goal.value)||state.preparation?.question_type==='policy_evaluation';}
 export function nextGap(state,u,profile={row_count:0,columns:[]}){
  const fields=u.fields,needs=k=>!known(fields[k])&&fields[k]?.status!=='awaiting_data';
+ if(profile.row_count&&u.compute_requested)return {field:'mapping',label:'变量与方案核对',prompt:'已有数据，可以直接核对结果列、解释列和方法；单位等说明可后补。'};
  let field,prompt;
  if(needs('goal')&&!fields.policy.value){field='goal';prompt='你想研究什么现象，或者评估哪项政策的影响？';}
  else if(isPolicyRequest(state,u)&&needs('policy')){field='policy';prompt='你想评估哪项政策？先告诉我政策名称就可以。';}
  else if(needs('object')){field='object';prompt='你想研究城市、企业，还是个人？';}
  else if(needs('outcome')||/^(?:城市|个人)?(?:年度|年)?(?:碳排放(?:量)?|收入|工资|就业|污染)$/.test(fields.outcome.value)){field='outcome';prompt=/碳排放/.test(fields.outcome.value+' '+fields.goal.value)?'你想看年度碳排放总量，还是单位GDP的碳排放强度？':fields.outcome.value?'你希望怎样衡量'+fields.outcome.value+'？可以先说你关心的具体指标。':'你希望观察哪个结果？例如收入、就业或产出。';}
- else if(needs('unit')){field='unit';prompt='数据说明用什么单位记录这个指标？不清楚也可以先留待核对。';}
- else if(needs('period')){field='period';prompt='你想观察哪些年份？也可以先选择数据覆盖的全部年份。';}
+ else if(needs('unit')&&!profile.row_count){field='unit';prompt='数据说明用什么单位记录这个指标？不清楚也可以先留待核对。';}
+ else if(needs('period')&&!profile.row_count){field='period';prompt='你想观察哪些年份？也可以先选择数据覆盖的全部年份。';}
  else if(isPolicyRequest(state,u)&&needs('effective_date')){field='effective_date';prompt='政策实际从什么时候实施？可以先查政策原文再确认。';}
  else if(isPolicyRequest(state,u)&&needs('adoption_mode')){field='adoption_mode';prompt='政策是同一批、同一时间实施，还是分批实施？';}
  else if(isPolicyRequest(state,u)&&needs('policy_doc')){field='policy_doc';prompt='请提交政策原文或链接，方便核对实施时间和对象。';}
@@ -91,7 +93,7 @@ export function nextGap(state,u,profile={row_count:0,columns:[]}){
  else {field='mapping';prompt='数据已收到。请核对结果指标对应的列、含义和单位，然后再讨论方法。';}
  return {field,label:labels[field]||{data:'数据材料',mapping:'变量核对'}[field],prompt};
 }
-export function researchSummary(state,messages=[]){const u=understanding(state,messages);return {schema_version:1,revision:u.revision,fields:u.fields,next_gap:nextGap(state,u,state.research_drafts?.workbench?.value?.profile||{row_count:0,columns:[]})};}
+export function researchSummary(state,messages=[]){const u=understanding(state,messages),work=state.research_drafts?.workbench?.value,local=state._local_input,profile=work?.profile?.row_count?work.profile:local?.profile||state.research_drafts?.['local-workbench']?.value?.profile||{row_count:0,columns:[]};return {schema_version:2,revision:u.revision,fields:u.fields,data:{profile,dictionary:work?.profile?.row_count?work.dictionary||{}:local?.metadata?.dictionary||{},source:work?.profile?.row_count?'browser_input':local?.profile?'local_input':'none'},next_gap:nextGap(state,u,profile)};}
 export function intakePreparation(state,u){
  const cards={...state.preparation.cards};
  for(const [card,field]of Object.entries(cardFields)){const item=u.fields[field];if(known(item)||item.status==='suggested'&&item.value)cards[card]={value:item.value,status:'suggested'};}
@@ -140,17 +142,20 @@ const choiceDefinitions={
  period:[{id:'all_period',label:'数据覆盖的全部年份',answer:'希望使用数据覆盖的全部年份，具体范围待确认。',status:'awaiting_data',value:'希望使用数据覆盖的全部年份（范围待确认）'}],
  adoption_mode:[{id:'same_batch',label:'同一批、同一时间',answer:'政策是在同一批对象、同一时间实施。',value:'single_batch',status:'provided'},{id:'staggered',label:'分批实施',answer:'政策是分批实施。',value:'staggered',status:'provided'},{id:'read_batch',label:'还需要核对',answer:'政策实施批次还需要核对。',value:'待政策原文核对',status:'awaiting_data'}],
 };
+const fieldsForChoice=k=>Object.hasOwn(labels,k)||['data','mapping'].includes(k);
 export function validateChoice(state,messages,body){
  if(!body.choice_id&&!body.question_id)return null;
  if(typeof body.choice_id!=='string'||typeof body.question_id!=='string')throw Object.assign(Error('回答选项不完整，请重新读取当前问题。'),{status:422});
  const latest=messages.filter(x=>x.role==='assistant').at(-1),q=latest?.dialogue?.current_question;
  if(!q||q.id!==body.question_id||state.research_understanding?.active_question?.id!==q.id||latest.research_revision!==state.research_revision)throw Object.assign(Error('这个问题已更新，请使用当前一轮的选项。'),{status:409});
+ const dynamic=latest.dialogue.schema_version===2&&body.choice_id.startsWith('reply_')?latest.dialogue.choices?.find(c=>c.id===body.choice_id):null;
+ if(dynamic){if(!fieldsForChoice(q.field)||typeof dynamic.answer!=='string'||dynamic.answer.length>240)throw Object.assign(Error('回答选项无效。'),{status:422});return {...dynamic,field:q.field,value:dynamic.answer,status:q.field==='unit'?'awaiting_data':'provided'};}
  const publicChoice=latest.dialogue.choices?.find(x=>x.id===body.choice_id),definition=choiceDefinitions[q.field]?.find(x=>x.id===body.choice_id);
  if(!publicChoice||!definition||publicChoice.answer!==definition.answer)throw Object.assign(Error('回答选项无效。'),{status:422});
  return {...definition,field:q.field};
 }
 function preparationCard(gap,u){
- const field=gap.field,lookup={goal:'lesson_1',policy:'lesson_1',object:'lesson_2',outcome:'lesson_3',unit:'lesson_3',period:'lesson_2',effective_date:'lesson_2',adoption_mode:'lesson_2',data:'lesson_3',mapping:'lesson_3',policy_doc:'lesson_2'},material=knowledgeChunks.find(x=>x.id===(lookup[field]||'lesson_1'))||knowledgeChunks[0];
+ const field=gap.field,lookup={goal:'textbook_question',policy:'textbook_question',object:'lesson_2',outcome:'textbook_variables',unit:'textbook_units',period:'lesson_2',effective_date:'lesson_2',adoption_mode:'textbook_did',data:'textbook_variables',mapping:'textbook_variables',policy_doc:'lesson_2'},material=knowledgeChunks.find(x=>x.id===(lookup[field]||'textbook_question'))||knowledgeChunks[0];
  const cards={
  goal:['先说清楚想了解什么','研究目标说明你希望回答的问题，可以先从一个现象或一项政策说起。','例如：一项城市政策实施后，碳排放总量发生了怎样的变化？','先明确对象和指标，方法可以稍后讨论。'],
  object:['研究对象是什么','研究对象是每条观测代表谁，例如城市、企业或个人。','一行对应某个城市某一年时，研究对象是城市。','对象和指标需要分别记录。'],
@@ -165,7 +170,7 @@ function preparationCard(gap,u){
  };
  const [title,summary,example,reminder]=cards[field]||cards.goal;
  const contextualExample=field==='outcome'&&!/碳排放/.test(u.fields.outcome.value+' '+u.fields.goal.value)?'例如：就业人数与就业率是不同指标，定义不同，解释也不同。':example;
- return {id:'research_'+field,title,summary,example:contextualExample,reminder,content:[summary,contextualExample,reminder,material.content].join('\n\n'),source:material.source,version:material.version,review_status:material.review_status,knowledge_version:knowledgeVersion,material_id:material.id};
+ return {id:'research_'+field,title,summary,example:contextualExample,reminder,content:[summary,contextualExample,reminder,material.content].join('\n\n'),source:material.source,references:material.references||[],version:material.version,review_status:material.review_status,knowledge_version:knowledgeVersion,material_id:material.id};
 }
 function humanReply(value){return clean(value).replace(/\s*[（(](?:lesson_\d+|analysis_context|research_preparation)[）)]/g,'').replace(/\b(?:lesson_\d+|analysis_context|research_preparation)\b/g,'').replace(/method\s*(?:为|[:：=])\s*null|row_count\s*(?:为|[:：=])\s*\d+/gi,'').trim();}
 function indicatorHelp(u,text){
@@ -178,7 +183,28 @@ function indicatorHelp(u,text){
  else return null;
  return {choices:choiceDefinitions.outcome.filter(x=>ids.includes(x.id)).map(({id,label,answer})=>({id,label,answer})),explanation,prompt:'你更想研究哪一个？也可以说说你的研究目的。'};
 }
+export function absorbQuotedFacts(state,updates,user){
+ const u=understanding(state);let changed=false;
+ if(isResearchHelpQuestion(user.content))return {understanding:u,changed};
+ for(const item of updates||[]){if(!Object.hasOwn(labels,item.field)||!user.content.includes(item.source_span)||!item.source_span.includes(item.value)||unknown.test(item.value))continue;
+  if(item.field==='outcome'&&u.fields.outcome.value!==item.value&&known(u.fields.unit))changed=setField(u,'unit','','unknown',source(user.id,user.content,'user_extract'))||changed;
+  changed=setField(u,item.field,item.value,'provided',source(user.id,item.source_span,'user_extract'))||changed;
+ }
+ if(changed)u.revision++;return {understanding:u,changed};
+}
 export function coachingDialogue(state,u,output,context,user,assistantId,intent){
+ const modelOk=!output.error_type&&!['manual','rules','checklist'].includes(output.mode);
+ if(modelOk&&output.coach?.answer){
+  const c=output.coach,compute=u.compute_requested||isComputeRequest(user.content),fallbackGap=nextGap(state,u,context.profile);
+  let follow=c.follow_up;if(!c.follow_up_explicit&&c.legacy_question)follow={field:fallbackGap.field,prompt:c.legacy_question};
+  if(compute&&context.profile.row_count&&['unit','period'].includes(follow?.field))follow=null;
+  const question=follow?{id:assistantId+':'+follow.field,field:follow.field,prompt:follow.prompt}:null;
+  const learning=c.learning_card||preparationCard(follow?{field:follow.field}:fallbackGap,u);
+  const refs=(output.retrieval||[]).filter(x=>c.references.includes(x.id));
+  if(refs.length){learning.source=refs.map(x=>({url:typeof x.source==='string'?x.source:x.source?.url,title:x.title}));learning.references=refs.flatMap(x=>x.references||[]);learning.version=refs[0].version;learning.review_status=refs[0].review_status;}
+  const answer=humanReply(c.answer),body=question&&c.follow_up_explicit?answer.replace(/[^。！？!?\n]*[？?]/g,'').trim():answer;
+  return {schema_version:2,summary:body+(question&&!body.includes(question.prompt)?'\n'+question.prompt:''),current_question:question,choices:question?c.choices:[],learning_card:learning,next_gap:question?{field:question.field,label:labels[question.field]||'当前操作',prompt:question.prompt}:fallbackGap,recovery:{can_retry:false},response_origin:'model'};
+ }
  const help=indicatorHelp(u,user.content);
  const gap=help?{field:'outcome',label:labels.outcome,prompt:help.prompt}:/不知道.*单位|不清楚.*单位|单位.*(?:不知道|不清楚|待查)/.test(user.content)?{field:'unit',label:labels.unit,prompt:'你可以先查看数据说明，也可以拿到数据后再确认单位。'}:nextGap(state,u,context.profile),failure=!!output.error_type||['manual','rules','checklist'].includes(output.mode),q={id:assistantId+':'+gap.field,field:gap.field,prompt:gap.prompt};
  let choices=(choiceDefinitions[gap.field]||[]).filter(x=>!['wage_monthly','wage_annual','wage_hourly','employment_count','employment_rate'].includes(x.id)).map(({id,label,answer})=>({id,label,answer}));

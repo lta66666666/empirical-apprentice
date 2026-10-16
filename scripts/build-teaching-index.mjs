@@ -1,0 +1,9 @@
+import {writeFile} from 'node:fs/promises';
+import {textbookCards} from '../worker/textbook-cards.js';
+const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ref=r=>`${r.author}《${r.title}》；${r.edition}；${r.chapter}${r.page_verified?`；PDF第${r.pdf_page}页；印刷页${r.printed_page??'未核对（不推算）'}`:''}`;
+const intro='本页发布自编学习卡及书目索引，不提供原书、扫描页或全文检索。页码来自本机所提供文件逐页核对，其他版本的PDF页码可能不同。教学表述仍待队友审校；数据定义必须另查数据资料。';
+const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>教学材料与来源索引 · 实证学徒</title><style>body{max-width:780px;margin:32px auto;padding:0 20px;font:16px/1.75 system-ui;color:#173e42;background:#fafdfc}h1{font-size:26px}section{margin:32px 0;border-top:1px solid #cee1df}small{color:#53716e}a{color:#087d77}</style><main><h1>教学材料与来源索引</h1><p>${intro}</p>${textbookCards.map(c=>`<section id="${escape(c.id.replace('textbook_',''))}"><h2>${escape(c.title)}</h2><p>${escape(c.summary)}</p><p>${escape(c.reminder)}</p><ul>${c.references.map(r=>`<li>${escape(ref(r))}</li>`).join('')}</ul><small>${escape(c.version)} · ${escape(c.review_status)}</small></section>`).join('')}</main></html>`;
+await writeFile(new URL('../static/teaching/source-index.html',import.meta.url),html);
+await writeFile(new URL('../docs/TEACHING_SOURCE_INDEX.md',import.meta.url),'# 教学材料选编与来源索引\n\n'+intro+'\n\n'+textbookCards.map(c=>`## ${c.title}\n\n- ID：${c.id}\n- 适用步骤：${c.task_stages.join('、')}\n- ${c.review_status}\n${c.references.map(r=>'- '+ref(r)).join('\n')}\n`).join('\n')+'\n## 尚未纳入的材料\n\n两份高级计量第二版按同书候选处理，仅检查目录和抽样页，未作为正文教学依据；未将其计入两个独立来源。勘误仅适用于对应的基础教材，不能套用于高级计量第二版。王天夫等教材尚未完成相关正文核对，暂不引用。原书与页面图像均不进入代码库。\n');
+console.log(`Generated ${textbookCards.length} original card source entries.`);

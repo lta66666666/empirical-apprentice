@@ -39,9 +39,10 @@
  if(r.action_result?.plan&&configuration!==researchConfigEpoch){info('建议已保存，但等待期间参数有变化；未覆盖本页参数，请重新核对。');return r;}
  if(r.action_result?.plan){if(researchProfileCache){researchSetFields(researchProfileCache,{...researchCandidate(),...r.action_result.plan});eaSaveWorkbenchDraft();await eaFlushDraft('workbench');}else if(window.eaLocalSummary?.profile){window.eaApplyLocalCandidate?.(r.action_result.plan);}else throw Error('建议已保存，请载入原数据后应用字段。');}
  if(r.action_result?.requires_reconfirmation){if(researchData)researchData.dictionary={...(researchData.dictionary||{}),...r.variable_dictionary};researchInvalidate();}
- info('操作已保存。'+(r.action_result?.requires_reconfirmation?'资料已变化，原执行确认失效。':''));return r;
+ window.dispatchEvent(new CustomEvent('ea-analysis-action'));info('操作已保存。'+(r.action_result?.requires_reconfirmation?'资料已变化，原执行确认失效。':''));return r;
  }catch(e){if(e.status&&e.status!==408)pendingAction=null;info(e.message+(e.uncertain?'；原操作编号已保留，请读取最新状态或重试同一操作。':''));return null;}finally{busy=false;if(buttonNode)buttonNode.disabled=false;}
  }
+ window.eaPerformAnalysisAction=action;
  async function navigate(view,mode='analysis'){return action({action_id:'view',view,mode});}
  function renderOverview(){
  overview.replaceChildren(el('span','eyebrow','边分析边学'),el('h1','','从你的问题开始'),el('p','','在下方提出研究问题、指定操作或询问知识点；需要分步指导时，请说“带我一步步做”。'),

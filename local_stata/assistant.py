@@ -11,6 +11,8 @@ from dual_engines import comparison, pinned_versions
 from process_guard import ProcessGuard
 HOME = Path(os.environ.get('EA_LOCAL_STATA_DIR', Path.home() / 'AppData/Local/EmpiricalApprentice'))
 HOME.mkdir(parents=True, exist_ok=True)
+PORT = int(os.environ.get('EA_LOCAL_PORT', '8767'))
+if not 1024 <= PORT <= 65535: raise ValueError('Invalid local port')
 CSRF = secrets.token_hex(32)
 LOCK = threading.RLock()
 STATE = {'paired':False,'online':False,'mcp_available':False,'task':None,'error':'','code':'','result':None,'network_error':'','last_contact':None}
@@ -134,7 +136,20 @@ def read_input(path):
         try: numeric=bool(values) and all(math.isfinite(float(x)) for x in values)
         except ValueError: numeric=False
         columns.append({'name':name,'numeric':numeric,'missing':len(rows)-1-len(values)})
-    return {'path':str(path),'data':data,'rows':rows,'hash':digest(data),'profile':{'row_count':len(rows)-1,'columns':columns}}
+    dictionary={};metadata_warning=''
+    sidecar=path.with_suffix('.dictionary.json')
+    if sidecar.is_file():
+        try:
+            if sidecar.stat().st_size>32000: raise ValueError('字典文件超过32KB')
+            attached=json.loads(sidecar.read_text(encoding='utf-8-sig'))
+            if not isinstance(attached,dict): raise ValueError('字典须为JSON对象')
+            attached=attached.get('dictionary',attached)
+            if not isinstance(attached,dict) or len(attached)>60: raise ValueError('字典格式无效')
+            if any(k not in names or not isinstance(v,str) or len(v)>300 for k,v in attached.items()): raise ValueError('字典只能包含现有列及每列不超过300字的说明')
+            dictionary={k:v.strip() for k,v in attached.items() if v.strip()}
+        except (OSError,ValueError) as error:
+            metadata_warning='随附字典未载入：'+str(error)+'；仍可计算，不猜测单位。'
+    return {'path':str(path),'data':data,'rows':rows,'hash':digest(data),'dictionary':dictionary,'metadata_warning':metadata_warning,'profile':{'row_count':len(rows)-1,'columns':columns}}
 
 def prepare(task):
     global CURRENT
@@ -242,6 +257,47 @@ def run_leg(current, adapter):
                   execution_location='local_python' if adapter=='statspai_local' else 'local_mcp',input_sha256=current['task']['input_sha256'],plan_sha256=current['task']['plan_sha256'])
     return result
 
+def atomic_json(path,value):
+    temporary=path.with_suffix(path.suffix+'.tmp')
+    with temporary.open('w',encoding='utf-8') as stream:
+        json.dump(value,stream,ensure_ascii=False,indent=2);stream.flush();os.fsync(stream.fileno())
+    os.replace(temporary,path)
+
+def save_completed(current,result):
+    result_path=current['dir']/'result.json';atomic_json(result_path,result)
+    checkpoint={'task_id':current['task']['id'],'pairing_id':CONFIG.get('id'),'input_sha256':current['task']['input_sha256'],
+                'plan_sha256':current['task'].get('plan_sha256'),'code_sha256':current['hash'],'frozen':current['frozen'],
+                'result_sha256':digest(result_path.read_bytes()),'execution_approved':True,'upload_approved':False}
+    atomic_json(current['dir']/'completed.json',checkpoint)
+    current.update(sync_pending=True);current['task']['status']='awaiting_upload'
+    STATE.update(task=current['task'],result=result,sync_pending=True,error='')
+
+def recover_completed(task):
+    directory=HOME/'tasks'/task['id'];path=directory/'completed.json'
+    if not path.exists(): return None
+    checkpoint=json.loads(path.read_text(encoding='utf-8'))
+    if checkpoint.get('pairing_id')!=CONFIG.get('id') or checkpoint.get('task_id')!=task['id'] or not checkpoint.get('execution_approved'): raise ValueError('本地完成记录不属于当前配对任务。')
+    for key in ('input_sha256','plan_sha256','code_sha256'):
+        if checkpoint.get(key)!=task.get(key): raise ValueError('本地完成记录与网站冻结任务不一致。')
+    frozen=checkpoint.get('frozen',{})
+    if not frozen or any(Path(name).name!=name or digest((directory/name).read_bytes())!=sha for name,sha in frozen.items()): raise ValueError('本地冻结文件校验失败；不会自动重跑或上传。')
+    if digest(json.dumps(frozen,sort_keys=True).encode())!=checkpoint['code_sha256']: raise ValueError('冻结包哈希不一致。')
+    result_path=directory/'result.json'
+    if digest(result_path.read_bytes())!=checkpoint['result_sha256']: raise ValueError('本地结果文件校验失败。')
+    current={'task':dict(task,status='awaiting_upload'),'dir':directory,'hash':checkpoint['code_sha256'],'frozen':frozen,'session':'ea_'+task['id'].replace('-',''),'code':(directory/'estimate.do').read_text(encoding='utf-8'),'sync_pending':task['status']!='awaiting_upload'}
+    STATE.update(task=current['task'],result=json.loads(result_path.read_text(encoding='utf-8')),code=current['code'],work_directory=str(directory),sync_pending=current['sync_pending'],error='')
+    return current
+
+def sync_completed(current,cloud_task):
+    if cloud_task['id']!=current['task']['id']: raise ValueError('网站返回了不同任务，本地结果已保留。')
+    if cloud_task['status']=='running':
+        try: cloud_task=remote('event',{'task_id':cloud_task['id'],'status':'awaiting_upload'})['task']
+        except Exception:
+            current['sync_pending']=True;STATE['sync_pending']=True;return
+    if cloud_task['status']=='awaiting_upload':
+        current['sync_pending']=False;STATE['sync_pending']=False;current['task']['status']='awaiting_upload'
+    else: raise ValueError('网站任务已变化，本地结果保留，不自动重跑或上传。')
+
 def run_current(current):
     try:
         if current['task']['status']!='approving': return
@@ -263,13 +319,15 @@ def run_current(current):
         if current['task']['status']=='cancelled': return
         if current['task']['status']=='cancel_requested':
             remote('event',{'task_id':current['task']['id'],'status':'cancelled'});current['task']['status']='cancelled';return
-        remote('event',{'task_id':current['task']['id'],'status':'awaiting_upload'})
-        current['task']['status']='awaiting_upload';STATE['result']=result
-        (current['dir']/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
+        cloud_task=dict(current['task'])
+        save_completed(current,result)
+        sync_completed(current,cloud_task)
         with zipfile.ZipFile(current['dir']/'reproduction.zip','w',zipfile.ZIP_DEFLATED) as archive:
             for file in current['dir'].rglob('*'):
                 if file.is_file() and file.name!='reproduction.zip': archive.write(file,str(file.relative_to(current['dir'])))
     except Exception as error:
+        if (current['dir']/'completed.json').exists():
+            STATE['error']='计算结果已保留在本机，等待恢复或核对：'+str(error);return
         if current['task']['status']=='cancelled': return
         if CURRENT is current: STATE['error']=str(error)
         status='cancelled' if current['task']['status']=='cancel_requested' else 'failed'
@@ -278,6 +336,7 @@ def run_current(current):
         current['task']['status']=status;stop_current(current)
 
 def poll():
+    global CURRENT
     while not STOP.wait(3):
         try:
             try:
@@ -287,11 +346,15 @@ def poll():
             if not CONFIG: continue
             STATE['engines']=engine_capabilities()
             payload={'mcp_available':STATE['mcp_available'],'mcp_version':STATE.get('mcp_version',''),'engines':STATE['engines']}
-            if INPUT: payload.update(profile=INPUT['profile'],input_sha256=INPUT['hash'])
+            if INPUT: payload.update(profile=INPUT['profile'],input_sha256=INPUT['hash'],dictionary=INPUT.get('dictionary',{}))
             paired=remote('heartbeat',payload);STATE.update(paired=paired['paired'],online=True)
             if not paired['paired']: continue
             task=remote('claim',{})['task']
             if not task: continue
+            if task['status'] in ('running','awaiting_upload') and (HOME/'tasks'/task['id']/'completed.json').exists():
+                if not CURRENT or CURRENT['task']['id']!=task['id']: CURRENT=recover_completed(task)
+                if CURRENT: sync_completed(CURRENT,task)
+                continue
             if task['status']=='cancel_requested':
                 if CURRENT and CURRENT['task']['id']==task['id'] and CURRENT['task']['status']=='running':
                     CURRENT['task']['status']='cancel_requested'
@@ -318,16 +381,16 @@ def poll():
             if not isinstance(error,(urllib.error.URLError,OSError)): STATE['error']=str(error)
             if isinstance(error,urllib.error.HTTPError) and error.code==401 and CURRENT: stop_current(CURRENT)
 
-PAGE='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>实证学徒 · 本机计算助手</title><style>body{font:16px/1.6 system-ui;max-width:1000px;margin:30px auto;padding:20px;color:#19383b;background:#f6faf9}button,input,textarea{font:inherit;padding:12px;margin:8px 0;box-sizing:border-box}button{background:#087e76;color:white;border:0;border-radius:8px;cursor:pointer}input,textarea{width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px}section{margin:20px 0}h1{font-size:26px}</style><h1>本机计算助手（试验）</h1><p>4000端口只在本机使用。代码以你的系统账号权限执行，工作目录不是权限沙箱。原始输入和完整日志保存在本机。</p><section><label>网站HTTPS地址</label><input id="site" placeholder="https://你的站点"><button onclick="act('pair',{site:site.value})">生成五分钟配对码</button><p id="pair"></p></section><section><label>本机CSV/TSV路径（不发送到网站）</label><input id="path"><button onclick="act('input',{path:path.value})">读取字段摘要</button></section><section><h2>执行前核对</h2><p id="state"></p><pre id="paths"></pre><textarea id="code" rows="18" readonly></textarea><p>本次最终代码与输入已经冻结。修改输入后须重新提交任务。仅在理解代码时批准。</p><button id="approve" onclick="act('approve',{})">批准本次完整代码并运行</button><button onclick="act('cancel',{})">取消当前任务</button></section><section><h2>拟上传内容预览</h2><pre id="result"></pre><button id="upload" onclick="act('upload',{})">确认上传以上结果摘要</button><a href="/reproduction.zip">下载本机完整复现包</a><p>不上传原始输入或完整日志。摘要可能含你的研究信息，请逐项检查。</p></section><script>const token='__TOKEN__';async function act(action,data){try{let r=await fetch('/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-Local-CSRF':token},body:JSON.stringify(data)});let x=await r.json();if(!r.ok)throw Error(x.error);if(x.code)pair.textContent='配对码：'+x.code+'（五分钟内在网站输入）';await refresh()}catch(e){alert(e.message)}}async function refresh(){let r=await fetch('/state',{headers:{'X-Local-CSRF':token}});let s=await r.json();state.textContent=[s.paired?'已配对':'待配对',s.online?'网站在线':'网站未连接','引擎：'+Object.entries(s.engines||{}).map(([k,v])=>k+':'+(v.available?'已发现':'不可用')).join(' / '),s.task?.status||'',s.network_error,s.error].join(' · ');paths.textContent='软件：'+(s.task?.engine_id||'待选择')+'；桥接器：'+(s.task?.bridge_id||'待选择')+'；双引擎对照：'+(s.task?.comparison_id?'已明确要求':'未要求')+'\\n输入：'+(s.input_file||'未选择')+'\\n工作目录：'+(s.work_directory||'未创建');code.value=s.code||'';result.textContent=s.result?JSON.stringify(s.result,null,2):'尚无结果';approve.disabled=s.task?.status!=='awaiting_approval';upload.disabled=s.task?.status!=='awaiting_upload'||!s.result}setInterval(refresh,3000);refresh();</script></html>'''
+PAGE='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>实证学徒 · 本机计算助手</title><style>body{font:16px/1.6 system-ui;max-width:1000px;margin:30px auto;padding:20px;color:#19383b;background:#f6faf9}button,input,textarea{font:inherit;padding:12px;margin:8px 0;box-sizing:border-box}button{background:#087e76;color:white;border:0;border-radius:8px;cursor:pointer}input,textarea{width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px}section{margin:20px 0}h1{font-size:26px}</style><h1>本机计算助手（试验）</h1><p>4000端口只在本机使用。代码以你的系统账号权限执行，工作目录不是权限沙箱。原始输入和完整日志保存在本机。</p><section><label>网站HTTPS地址</label><input id="site" placeholder="https://你的站点"><button onclick="act('pair',{site:site.value})">生成五分钟配对码</button><p id="pair"></p></section><section><label>本机CSV/TSV路径（不发送到网站；自动读取同名 .dictionary.json）</label><input id="path"><button onclick="act('input',{path:path.value})">读取字段摘要</button></section><p>可选：与 ols.csv 放在一起的 ols.dictionary.json 可填写列名到含义及单位的映射。只发送字段说明，不发送原始观测；没有字典也能回归。</p><section><h2>执行前核对</h2><p id="state"></p><pre id="paths"></pre><textarea id="code" rows="18" readonly></textarea><p>本次最终代码与输入已经冻结。修改输入后须重新提交任务。仅在理解代码时批准。</p><button id="approve" onclick="act('approve',{})">批准本次完整代码并运行</button><button onclick="act('cancel',{})">取消当前任务</button></section><section><h2>拟上传内容预览</h2><pre id="result"></pre><button id="upload" onclick="act('upload',{})">确认上传以上结果摘要</button><a href="/reproduction.zip">下载本机完整复现包</a><p>不上传原始输入或完整日志。摘要可能含你的研究信息，请逐项检查。</p></section><script>const token='__TOKEN__';async function act(action,data){try{let r=await fetch('/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-Local-CSRF':token},body:JSON.stringify(data)});let x=await r.json();if(!r.ok)throw Error(x.error);if(x.code)pair.textContent='配对码：'+x.code+'（五分钟内在网站输入）';await refresh()}catch(e){alert(e.message)}}async function refresh(){let r=await fetch('/state',{headers:{'X-Local-CSRF':token}});let s=await r.json();state.textContent=[s.paired?'已配对':'待配对',s.online?'网站在线':'网站未连接','引擎：'+Object.entries(s.engines||{}).map(([k,v])=>k+':'+(v.available?'已发现':'不可用')).join(' / '),s.sync_pending?'计算完成，待同步':s.task?.status||'',s.metadata_warning,s.network_error,s.error].join(' · ');paths.textContent='软件：'+(s.task?.engine_id||'待选择')+'；桥接器：'+(s.task?.bridge_id||'待选择')+'；双引擎对照：'+(s.task?.comparison_id?'已明确要求':'未要求')+'\\n输入：'+(s.input_file||'未选择')+'\\n工作目录：'+(s.work_directory||'未创建');code.value=s.code||'';result.textContent=s.result?JSON.stringify(s.result,null,2):'尚无结果';approve.disabled=s.task?.status!=='awaiting_approval';upload.disabled=s.task?.status!=='awaiting_upload'||!s.result||s.sync_pending}setInterval(refresh,3000);refresh();</script></html>'''
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self,*args): pass
     def send(self,value,status=200,content='application/json'):
         data=value if isinstance(value,bytes) else json.dumps(value,ensure_ascii=False).encode()
         self.send_response(status);self.send_header('Content-Type',content);self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('X-Frame-Options','DENY');self.send_header('Content-Security-Policy',"frame-ancestors 'none'; default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");self.send_header('Referrer-Policy','no-referrer');self.end_headers();self.wfile.write(data)
-    def allowed(self): return self.headers.get('Host') in ('127.0.0.1:8767','localhost:8767') and self.headers.get('X-Local-CSRF')==CSRF and self.headers.get('Origin','http://127.0.0.1:8767') in ('http://127.0.0.1:8767','http://localhost:8767')
+    def allowed(self): return self.headers.get('Host') in (f'127.0.0.1:{PORT}',f'localhost:{PORT}') and self.headers.get('X-Local-CSRF')==CSRF and self.headers.get('Origin',f'http://127.0.0.1:{PORT}') in (f'http://127.0.0.1:{PORT}',f'http://localhost:{PORT}')
     def do_GET(self):
-        if self.headers.get('Host') not in ('127.0.0.1:8767','localhost:8767'): return self.send({'error':'Host rejected'},403)
+        if self.headers.get('Host') not in (f'127.0.0.1:{PORT}',f'localhost:{PORT}'): return self.send({'error':'Host rejected'},403)
         if self.path=='/': return self.send(PAGE.replace('__TOKEN__',CSRF).encode(),content='text/html; charset=utf-8')
         if self.path=='/state' and self.allowed(): return self.send(STATE)
         if self.path=='/reproduction.zip' and CURRENT and (CURRENT['dir']/'reproduction.zip').exists() and self.headers.get('Sec-Fetch-Site') in ('same-origin','none'):
@@ -355,7 +418,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send({'code':code})
                 if self.path=='/input':
                     if CURRENT and CURRENT['task']['status'] in ('running','awaiting_upload','awaiting_approval'): raise ValueError('任务已冻结输入，请先取消。')
-                    INPUT=read_input(body['path']);STATE['input_file']=INPUT['path'];return self.send({'profile':INPUT['profile']})
+                    INPUT=read_input(body['path']);STATE['input_file']=INPUT['path'];STATE['metadata_warning']=INPUT.get('metadata_warning','');return self.send({'profile':INPUT['profile']})
                 if self.path=='/approve':
                     if not CURRENT or CURRENT['task']['status']!='awaiting_approval': raise ValueError('没有等待批准的任务。')
                     if digest(Path(INPUT['path']).read_bytes())!=CURRENT['task']['input_sha256']: raise ValueError('输入文件已经变化，不能沿用批准。')
@@ -372,6 +435,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send({'cancel_requested':True})
                 if self.path=='/upload':
                     if not CURRENT or CURRENT['task']['status']!='awaiting_upload' or not STATE['result']: raise ValueError('先完成本机执行并查看摘要。')
+                    if CURRENT.get('sync_pending'): raise ValueError('计算已完成，等待网站同步；结果仍保存在本机，请稍后再批准上传。')
                     remote('publish',{'task_id':CURRENT['task']['id'],'code_sha256':CURRENT['hash'],'input_sha256':CURRENT['task']['input_sha256'],'result':STATE['result']})
                     CURRENT['task']['status']='succeeded';return self.send({'uploaded':True})
                 self.send({'error':'Not found'},404)
@@ -380,8 +444,8 @@ class Handler(BaseHTTPRequestHandler):
 if __name__=='__main__':
     if (HOME/'connection.json').exists(): CONFIG=json.loads((HOME/'connection.json').read_text(encoding='utf-8'))
     threading.Thread(target=poll,daemon=True).start()
-    print('Local assistant: http://127.0.0.1:8767 ; original inputs remain local.')
-    try: ThreadingHTTPServer(('127.0.0.1',8767),Handler).serve_forever()
+    print(f'Local assistant: http://127.0.0.1:{PORT} ; original inputs remain local.')
+    try: ThreadingHTTPServer(('127.0.0.1',PORT),Handler).serve_forever()
     finally:
         STOP.set()
         if CURRENT: stop_current(CURRENT)

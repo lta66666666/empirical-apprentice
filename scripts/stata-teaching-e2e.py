@@ -5,7 +5,7 @@ import http.cookiejar,json,os,re,socket,subprocess,sys,time,urllib.request,uuid,
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 TEST_PASSWORD=secrets.token_urlsafe(32)+'aA1!'
-SITE=os.getenv('EA_TEST_URL','http://127.0.0.1:8795');LOCAL='http://127.0.0.1:8767'
+SITE=os.getenv('EA_TEST_URL','http://127.0.0.1:8795');LOCAL_PORT=int(os.getenv('EA_TEST_LOCAL_PORT','8767'));LOCAL=f'http://127.0.0.1:{LOCAL_PORT}'
 out=ROOT/'outputs'/('stata-teaching-e2e-'+str(time.time_ns()));out.mkdir(parents=True)
 jar=http.cookiejar.CookieJar();browser=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 def site(path,payload=None):
@@ -29,8 +29,8 @@ def wait(predicate,timeout=150):
         time.sleep(.5)
     raise RuntimeError('Deadline: '+str(value.get('error')))
 with socket.socket() as probe:
-    if probe.connect_ex(('127.0.0.1',8767))==0:raise RuntimeError('8767已有助手，拒绝接管或停止它')
-env=dict(os.environ,EA_LOCAL_TEST='1',EA_LOCAL_STATA_DIR=str(out/'assistant'))
+    if probe.connect_ex(('127.0.0.1',LOCAL_PORT))==0:raise RuntimeError('8767已有助手，拒绝接管或停止它')
+env=dict(os.environ,EA_LOCAL_PORT=str(LOCAL_PORT),EA_LOCAL_TEST='1',EA_LOCAL_STATA_DIR=str(out/'assistant'))
 log=(out/'assistant.log').open('w',encoding='utf-8')
 process=subprocess.Popen([sys.executable,str(ROOT/'local_stata/assistant.py')],env=env,stdout=log,stderr=log)
 evidence=[]
@@ -45,6 +45,7 @@ try:
     state=site('/api/sessions',{});sid=state['session_id']
     pair=local('/pair',{'site':SITE});site('/api/local-stata/pairings/claim',{'session_id':sid,'code':pair['code']})
     for engine,bridge,compare in [('stata_local_mcp','stata_mcp',False),('stata_local_mcp','stata_code',True),('statspai_local','statspai_python',False)]:
+        if os.getenv('EA_TEST_BRIDGES') and bridge not in os.environ['EA_TEST_BRIDGES'].split(','):continue
         for method in ('ols','panel_fe','did'):
             fixture=json.loads((ROOT/'outputs/mcp-fixtures'/f'{method}.json').read_text(encoding='utf-8'))
             file=out/(method+'.csv');file.write_text(fixture['text'],encoding='utf-8')
@@ -101,6 +102,7 @@ try:
             (out/'evidence.json').write_text(json.dumps(evidence,ensure_ascii=False,indent=2),encoding='utf-8')
             print(evidence[-1],flush=True)
     for bridge in ('stata_mcp','stata_code'):
+        if os.getenv('EA_TEST_BRIDGES') and bridge not in os.environ['EA_TEST_BRIDGES'].split(','):continue
         state=site('/api/sessions/'+sid);info=site('/api/local-stata/pairings?session_id='+sid)['pairing']
         task=site('/api/local-stata/tasks',{'session_id':sid,'kind':'code','request_id':str(uuid.uuid4()),'engine_id':'stata_local_mcp','bridge_id':bridge,
             'code':'sleep 30000\ndisplay 9','research_revision':state['research_revision'],'input_sha256':info['input_sha256'],'confirmed':True})['task']

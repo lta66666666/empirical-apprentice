@@ -1,4 +1,4 @@
-import {understandingExecutionGap} from './research-understanding.js';
+import {datasetMetadata,interpretationWarnings} from './dataset-metadata.js';
 import { engineMetadata, engineCapabilities, nodeRequest, digest } from './executor.js';
 import { fixtures } from './fixtures.js';
 import { loadOwnedSession, saveSession, touchSession, requireSessionVersion } from './sessions.js';
@@ -252,7 +252,6 @@ export async function handleResearch(request, env, owner, path) {
         if(repeated)return resultJson({...publicJob(repeated),execution_nonce:repeated.nonce,state_version:session.state_version},202);
       }
       if(action!=='inspect')requireSessionVersion(session,body);
-      if(action==='plan'||action==='jobs'){const gap=understandingExecutionGap(session);if(gap)return fault(gap,422);}
       const data = parseCsv(body?.text, body?.filename || 'data.csv');
       if (action === 'inspect') return resultJson(data.profile);
       if (action === 'plan') {
@@ -264,7 +263,6 @@ export async function handleResearch(request, env, owner, path) {
       }
       if (action === 'jobs') {
         if (body?.confirmed !== true) throw new Error('执行前必须确认方案。');
-        if (!String(body?.source || '').trim()) throw new Error('请填写数据来源与变量单位；暂不明确时请注明待核实。');
         const { plan, missingLines } = validatePlan(body.plan, data, session.project, session);
         const confirmation = session.pending_confirmation;
         if (!confirmation || body.confirmation_token !== confirmation.token || confirmation.research_revision !== session.research_revision || confirmation.input_sha256 !== await sha256(body.text) || confirmation.plan_sha256 !== await sha256(JSON.stringify(plan))) return fault('资料、输入或方案已变化，请重新整理并确认方案。',409);
@@ -274,15 +272,16 @@ export async function handleResearch(request, env, owner, path) {
         const id = crypto.randomUUID(), key = `jobs/${owner}/${id}/input.csv`;
         const inputHash = await sha256(body.text), planHash = await sha256(JSON.stringify(plan));
         const submittedDictionary = body.dictionary && typeof body.dictionary === 'object' && !Array.isArray(body.dictionary) ? body.dictionary : {};
-        const dictionary = Object.fromEntries(Object.entries(submittedDictionary)
+        const metadata=await datasetMetadata(inputHash,data.profile);
+        const dictionary = {...metadata.dictionary,...Object.fromEntries(Object.entries(submittedDictionary)
           .filter(([name, value]) => data.headers.includes(name) && typeof value === 'string')
-          .slice(0, 60).map(([name, value]) => [name, value.slice(0, 300)]));
+          .slice(0, 60).map(([name, value]) => [name, value.slice(0, 300)]))};
         const job = { id, owner, session_id: session.session_id, request_id:identity.id,status: 'running', created: Date.now() / 1000,
           last_activity: Date.now(), execution_location: plan.execution_location, software:plan.software, engine_id:plan.engine_id, nonce: crypto.randomUUID(),
           input_key: key, input_sha256: inputHash, plan_sha256: planHash, n_rows: data.rows.length,
           filename: String(body.filename || 'data.csv').slice(0, 200), plan, description: description(plan),
-          dictionary, csv_lines:data.lines, research_revision:session.research_revision, evidence_snapshot:{...evidenceSnapshot(session),dictionary}, record_version:1,
-          source: String(body.source || '').slice(0, 1000), question: String(body.question || '').slice(0, 1000),
+          dictionary, metadata, interpretation_warnings:interpretationWarnings(plan,dictionary), csv_lines:data.lines, research_revision:session.research_revision, evidence_snapshot:{...evidenceSnapshot(session),dictionary}, record_version:1,
+          source: String(body.source || '用户提供的数据；来源未核实').slice(0, 1000), question: String(body.question || '').slice(0, 1000),
           simulated: body.simulated === true, missing_lines: missingLines, result: null, reflections: [],
           tool_trace: [{ transport: plan.execution_location, tool: plan.software==='stata'?'Stata regress/xtreg':'fixest::feols' }],
         };

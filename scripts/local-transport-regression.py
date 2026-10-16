@@ -10,6 +10,12 @@ with tempfile.TemporaryDirectory(dir=root/'outputs') as home:
     spec = importlib.util.spec_from_file_location('assistant_transport', root/'local_stata/assistant.py')
     a = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(a)
+    datafile=Path(home)/'example.csv';datafile.write_text('income,education\n10,12\n11,13\n',encoding='utf-8')
+    assert a.read_input(datafile)['dictionary']=={}
+    datafile.with_suffix('.dictionary.json').write_text('{"income":"收入，千元","education":"教育年限，年"}',encoding='utf-8')
+    assert a.read_input(datafile)['dictionary']['income']=='收入，千元'
+    datafile.with_suffix('.dictionary.json').write_text('{"raw_rows":[[10,12]]}',encoding='utf-8')
+    invalid=a.read_input(datafile);assert invalid['dictionary']=={} and invalid['metadata_warning'] and invalid['profile']['row_count']==2
     class Response(io.BytesIO):
         headers = {}
     def success(): return Response(b'{"ok":true}')
@@ -35,4 +41,25 @@ with tempfile.TemporaryDirectory(dir=root/'outputs') as home:
         a.remote('heartbeat',{})
     assert a.STATE['online'] and not a.STATE['network_error']
     assert a.STATE['error'] == 'calculation error retained'
+    # A completed estimate survives a lost event response and an assistant restart.
+    task={'id':'12345678-1234-1234-1234-123456789012','status':'running','input_sha256':'a'*64,'plan_sha256':'b'*64,'bridge_id':'stata_mcp'}
+    directory=Path(home)/'tasks'/task['id'];directory.mkdir(parents=True)
+    (directory/'estimate.do').write_text('display 4',encoding='utf-8')
+    frozen={'estimate.do':a.digest((directory/'estimate.do').read_bytes())};bundle=a.digest(a.json.dumps(frozen,sort_keys=True).encode());task['code_sha256']=bundle
+    current={'task':dict(task),'dir':directory,'hash':bundle,'frozen':frozen}
+    result={'n_used':10,'coefficients':[]};a.save_completed(current,result)
+    with patch.object(a,'remote',side_effect=eof) as remote:
+        a.sync_completed(current,task)
+        assert current['sync_pending'] and a.STATE['result']==result and remote.call_count==1
+    a.STATE['result']=None
+    recovered=a.recover_completed(task);assert recovered['sync_pending'] and a.STATE['result']==result
+    with patch.object(a,'remote') as remote:
+        a.sync_completed(recovered,dict(task,status='awaiting_upload'))
+        remote.assert_not_called()
+    assert not recovered['sync_pending'] and recovered['task']['status']=='awaiting_upload'
+    (directory/'result.json').write_text('{}',encoding='utf-8')
+    try: a.recover_completed(task)
+    except ValueError: pass
+    else: raise AssertionError('tampered result recovered')
+    print('PASS: result persisted before network event; loss/restart restores awaiting-upload without re-execution or publish; tampering rejected')
     print('PASS: one bounded safe retry; HTTP/certificate/non-idempotent failures not retried; recovered connection clears only network error')

@@ -1,0 +1,18 @@
+// Original teaching notes; bibliography only. No book text or page images are distributed.
+const chen=(chapter,pdf_page,printed_page)=>({title:'计量经济学及Stata应用',author:'陈强',edition:'所提供360页PDF；版次未核实',chapter,pdf_page,printed_page,page_verified:true,access:'local_reference'});
+const yang=(chapter,pdf_page)=>({title:'Stata统计分析从入门到精通',author:'杨维忠、张甜',edition:'2022年第一版；书中软件为Stata16',chapter,pdf_page,printed_page:null,page_verified:true,access:'local_reference'});
+const qiu={title:'因果推断实用计量方法',author:'邱嘉平',edition:'所提供343页PDF；版次未核实',chapter:'第9章第2节：双重差分的直观理解',pdf_page:242,printed_page:233,page_verified:true,access:'local_reference'};
+const official={title:'Stata18 本机帮助：regress、xtset、xtreg',author:'StataCorp',edition:'Stata18',chapter:'命令帮助与方差估计选项',access:'official_help'};
+const note=(id,title,stages,summary,example,reminder,content,references,methods=[])=>({id:'textbook_'+id,title,section:'自编学习卡',task_stages:stages,methods,summary,example,reminder,content:[summary,example,reminder,content].join('\n\n'),references,source:'/static/teaching/source-index.html#'+id,version:'自编选编 2026-10-16',review_status:'所列页已逐页核对；自编表述，尚待教学审校'});
+export const textbookCards=[
+ note('question','把研究方向变成一个问题',['prepare'],'先说研究对象和想观察的结果，再考虑用什么方法。','例如：研究某项政策与城市年度排放的关系。','“有什么关系”和“是否产生影响”需要不同的证据。','可以先写一句话：我想了解【对象】的【结果】与【因素】之间的关系。数据范围和变量定义拿到材料后再核对；暂时不知道不等于回答错误。',[yang('研究设计',736)]),
+ note('variables','结果变量与解释变量',['prepare','data','plan'],'结果变量是想解释的指标；解释变量是想研究的因素。','研究教育与收入时，可以把收入列作为结果、教育年数作为解释变量。','变量在模型中的角色来自研究问题，不能只由列名决定。','先选择实际存在且类型合适的列。控制变量应有研究依据，不以“让结果显著”为标准。',[chen('4.1：一元线性回归模型',70,59),yang('线性回归与regress',239)],['ols','panel_fe','did']),
+ note('units','未知单位也能先核对回归',['prepare','data','plan','explain'],'数值回归需要有效数据和变量；物理单位可以暂时未知。','收入列若单位未知，可先计算，但不能把系数解释成“增加多少元”。','单位只从数据说明、有效字典或用户确认取得，不从列名猜测。','改变尺度会改变系数的数值和解释。先保留“单位待核对”，报告中限制实质解释；面板编号、年份和DID实施条件仍需完整校验。',[chen('9.11：变量量级与单位选择',202,191)]),
+ note('regress','读懂 regress 主命令',['plan','execute'],'regress 后先写结果变量，再写解释变量；逗号后是选项。','示意：regress y x1 x2, vce(robust)。实际命令以本次冻结脚本为准。','robust 改变标准误估计，不会自动解决遗漏变量或内生性。','不要将示意变量名当作真实数据列。点击本次代码卡可核对实际别名、字段映射及标准误设置。书中Stata16语法需以Stata18帮助再次核对。',[yang('线性回归与regress',239),official],['ols']),
+ note('panel','为什么面板要有对象与时间',['data','health','plan'],'面板数据需要识别同一对象在不同时间的观测。','城市编号与年份分别说明“谁”和“何时”。','同一对象同一年重复出现时，先查原因，不能随意删除。','xtset 声明面板结构，不会替你证明数据有效。先核对编号、时间类型、重复组合和缺失情况。',[yang('面板数据声明',653),yang('面板数据声明',654),official],['panel_fe','did']),
+ note('within','固定效应在比较什么',['plan','explain'],'个体固定效应主要利用同一对象随时间的变化。','比较同一城市政策实施前后的变化，同时纳入共同年份变化。','固定效应不能自动排除随时间变化的遗漏因素。','组内变换会消去不随时间变化的个体项；相应变量的独立效应可能无法识别。项目的双向固定效应还加入年份项，实际省略和估计样本应读取结果。',[chen('12.4：组内固定效应估计',247,236),yang('固定效应xtreg, fe',663)],['panel_fe','did']),
+ note('did','DID：比较变化的差异',['prepare','plan','explain'],'DID 的直观想法，是比较处理组和对照组在政策前后变化的差。','若两组都受共同年度因素影响，可以比较两组变化，而非只看处理组前后。','平行趋势等识别条件不能由显著系数替代。','所引教材页用于两组前后的直觉。本产品现有同批多时期DID使用 treated×post 与个体、年份固定效应；不是把所有多期或错位实施情形都当作同一个2×2模型。',[qiu],['did']),
+ note('variance','标准误要与估计器一起读',['plan','execute','explain'],'系数之外，还要核对方差估计、聚类层级和自由度。','面板中同一城市多年的误差可能相关，聚类设置需要研究依据。','regress 与 xtreg, fe 的 robust 语义不能一概而论。','Stata18帮助指出，xtreg, fe 的 vce(robust) 等同于按面板变量聚类。比较软件结果前，应先对齐实际样本、估计项、聚类及有限样本调整。',[official],['ols','panel_fe','did']),
+ note('sample','输入行数不等于估计样本',['health','execute','explain'],'实际样本来自本次估计，可能少于文件行数。','有缺失值的观测可能未进入估计；共线项也可能被省略。','不从上传行数补造样本量，也不把省略项写成零效应。','读取本次 e(sample)、样本量和省略信息。不同软件的剔除规则可能不同；缺少结果字段时应明确标为不可用。',[official],['ols','panel_fe','did']),
+ note('interpret','从真实结果开始解释',['explain','reports'],'先核对变量、系数、标准误和区间，再讨论经济含义。','单位未知时，可以说明系数方向及模型条件，暂不换算货币或排放数量。','相关性、统计显著性和因果效应是不同的判断。','报告必须关联当前已完成任务与已确认模型。未执行检验不能写成已通过，AI讲解也不是学生正式作答。',[chen('4.1：模型及误差项',70,59),official],['ols','panel_fe','did']),
+];

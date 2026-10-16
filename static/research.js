@@ -363,7 +363,7 @@ function setupResearch(){
   grid.append(form,output);pane.append(grid);document.querySelector('.workspace-body').append(pane);
   api('/api/research/status').then(s=>{
     researchRuntime=s;runtime.replaceChildren(el('summary','','执行环境 · 查看或更换执行方式'),el('strong','',s.engines.r_native.ready?'云端原生 R 可执行':'当前可用：浏览器 R / fixest；云端软件尚未就绪'));
-    const engineSelect=$('researchEngine');
+    const engineSelect=$('researchEngine');if(!engineSelect.value)engineSelect.value='browser_webr';
     for(const option of engineSelect.options){if(['r_native','stata_native'].includes(option.value)){const capability=s.engines[option.value];option.disabled=!capability?.ready;option.textContent=`${option.value==='r_native'?'云端原生 R':'云端 Stata'}（${capability?.status||'未配置'}）`;}}
     runtime.append(el('p','workspace-note','无需在电脑安装 R，也无需配置模型才能计算。先选择浏览器执行，再载入模拟数据、整理并确认方案。首次运行需下载 R 和 fixest，请保持网页打开。'));
     const browserChoice=button('使用浏览器 R / fixest','btn-primary',()=>{if(researchRunning){researchNotice('请等待或中断当前任务后切换执行方式。',true);return;}engineSelect.value='browser_webr';researchInvalidate();researchNotice('已选择浏览器 R / fixest。请载入数据、整理方案并重新确认；这不是云端执行。');});runtime.append(browserChoice);

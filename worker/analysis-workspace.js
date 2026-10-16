@@ -26,15 +26,18 @@ export async function analysisContext(env,owner,state,body){
  const draft=safeDraft(body.draft_plan||state.research_drafts?.workbench?.value?.candidate,profile);
  const selected=await selectedResult(env,owner,state,body.task_id);
  if(body.task_id&&!selected)throw fail('所选任务尚未完成或不可读取，不能讲解该任务的结果。',404);
+ let dictionary={...(state.research_drafts?.workbench?.value?.dictionary||{}),...(state.variable_dictionary||{})};
+ if(!state.research_drafts?.workbench?.value?.profile?.row_count&&state._local_input?.profile?.row_count)dictionary={...(state._local_input.metadata?.dictionary||{}),...dictionary};
+ if(body.input_sha256){const row=await env.DB.prepare('SELECT body FROM local_pairings WHERE session_id=? AND owner=? AND revoked=0 ORDER BY created_at DESC LIMIT 1').bind(state.session_id,owner).first();const pair=row?JSON.parse(row.body):null;if(pair?.input_sha256===body.input_sha256)dictionary=pair.metadata?.dictionary||{};}
  const step=steps.includes(body.step)?body.step:'data';
- return {step,profile,draft_plan:draft,draft_status:'未确认草稿，不能当作执行结果',dictionary:{...(state.research_drafts?.workbench?.value?.dictionary||{}),...(state.variable_dictionary||{})},
+ return {step,profile,draft_plan:draft,draft_status:'未确认草稿，不能当作执行结果',dictionary,
  preparation:state.preparation,gaps:suitability(state),
  executed_result:selected?{id:selected.id,record_version:selected.record_version,plan:selected.plan,dictionary:selected.dictionary,n_used:selected.result?.n_used,coefficients:selected.result?.coefficients,warnings:selected.result?.warnings,execution_location:selected.execution_location,server_recomputed:false}:null};
 }
 export async function teachingMaterials(question,context){
  const name={ols:'OLS 线性回归',panel_fe:'固定效应 面板',did:'DID 政策'}[context.focus_method]||'研究准备';
  const materials=await knowledgeContext(question+' '+name+' '+(context.focus_method?labels[context.step]||'':'研究对象、结果与单位'));
- return context.focus_method||/\b(?:stata|fixest|feols|vcov|ssc)\b|软件命令|剔除样本|实际样本/i.test(question)?materials:materials.filter(x=>x.id.startsWith('lesson_'));
+ return context.focus_method||/\b(?:stata|fixest|feols|vcov|ssc)\b|软件命令|剔除样本|实际样本/i.test(question)?materials:materials.filter(x=>x.id.startsWith('lesson_')||x.id.startsWith('textbook_')&&x.task_stages?.includes('prepare'));
 }
 export function messageActions(state,context,output,intent){
  const pendingCards=output.ready?Object.fromEntries(Object.entries(context.unconfirmed_preparation?.cards||{}).filter(([,v])=>v.status==='suggested').map(([k,v])=>[k,v.value])):{};
@@ -51,12 +54,12 @@ export function messageActions(state,context,output,intent){
 async function guideCondition(env,owner,state,index){
  const pairRow=await env.DB.prepare('SELECT body FROM local_pairings WHERE session_id=? AND owner=? AND revoked=0').bind(state.session_id,owner).first();const pair=pairRow?JSON.parse(pairRow.body):null;
  const draft=state.research_drafts?.workbench?.value||{},result=await selectedResult(env,owner,state,workspace(state).guide?.task_id);
- if(index===0)return !suitability(state).missing.length;
+ if(index===0)return !!state.preparation.cards.question?.value||!!state.research_understanding?.fields?.goal?.value||!!state.research_understanding?.fields?.outcome?.value||!!pair?.profile?.row_count||!!draft.profile?.row_count;
  if(index===1)return !!(draft.input_sha256&&draft.profile?.columns?.length>0)||!!pair?.profile?.columns?.length;
- if(index===2)return (!!draft.input_sha256&&draft.profile?.columns?.length>0&&Object.values(draft.dictionary||{}).some(v=>String(v).trim()))||!!(pair?.profile?.columns?.length&&Object.values(state.variable_dictionary||{}).some(v=>String(v).trim()));
+ if(index===2)return !!(draft.input_sha256&&draft.profile?.columns?.length>0)||!!pair?.profile?.columns?.length;
  if(index===3){if(state.pending_confirmation?.token&&state.pending_confirmation.input_sha256===draft.input_sha256&&state.pending_confirmation.research_revision===state.research_revision)return true;const row=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE session_id=? AND owner=? ORDER BY created_at DESC LIMIT 1').bind(state.session_id,owner).first();const t=row?JSON.parse(row.body):null;return !!t&&t.research_revision===state.research_revision&&t.input_sha256===pair?.input_sha256;}
  if(index===4)return !!result&&result.research_revision===state.research_revision&&!!result.input_sha256&&[draft.input_sha256,pair?.input_sha256].includes(result.input_sha256);
- if(index===5)return !!result?.reflections?.length&&result.research_revision===state.research_revision&&result.input_sha256===draft.input_sha256;
+ if(index===5)return !!result?.reflections?.length&&result.research_revision===state.research_revision&&[draft.input_sha256,pair?.input_sha256].includes(result.input_sha256);
  return true;
 }
 export async function handleAnalysisAction(request,env,owner,path){
