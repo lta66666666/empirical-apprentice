@@ -9,6 +9,7 @@
  left.append(el('h2','','当前知识'),knowledgeBody);right.append(el('h2','','本次研究'),rightBody);center.append(feed,dock);shell.replaceChildren(left,center,right);
  const review=el('dialog','coach-review'),reviewTitle=el('h2','','核对资料与分析建议'),reviewBody=el('div'),reviewClose=button('关闭','text-btn',()=>review.close());
  reviewTitle.id='coach-review-title';review.setAttribute('aria-labelledby',reviewTitle.id);review.append(reviewTitle,reviewClose,reviewBody,top);document.body.append(review);top.classList.add('coach-controller');
+ window.addEventListener('ea-local-submitted',event=>{if(event.detail?.session!==sessionId)return;review.close();parts.status.textContent='任务已提交到本机。等待代码卡出现后，可点击命令学习；运行仍需在本机批准。';});
  // Legacy resources stay mounted for compatibility, but never select the visible learning card.
  parts.lesson.hidden=true;review.append(parts.lesson);
  const reading=el('dialog','coach-reading'),readingTitle=el('h2'),readingBody=el('div','prose');readingTitle.id='coach-reading-title';reading.setAttribute('aria-labelledby',readingTitle.id);

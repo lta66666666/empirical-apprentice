@@ -47,5 +47,16 @@ try{
  const params=new URLSearchParams({session_id:sid,task_id:task.id,command_id:main.id,preview_hash:'f'.repeat(64)});assert.equal((await call('/api/local-stata/tasks/lesson?'+params)).status,409);
  const previousAuth=auth;const another=await call('/api/auth/register',{method:'POST',body:JSON.stringify({username:'another_stata',password:testPassword,password_confirmation:testPassword})});auth=another.headers.get('set-cookie').split(';')[0];assert.equal((await call('/api/local-stata/tasks/lesson?'+params)).status,404);auth=previousAuth;
  pass('过期预览拒绝、其他账号不可读取');
+ const local=d.querySelector('#pcLocalStata'),sendLocal=[...local.querySelectorAll('button')].find(n=>n.textContent==='提交到本机，等待本机批准'),feedback=d.querySelector('#localSubmitFeedback');
+ sendLocal.click();await until(()=>!sendLocal.disabled);assert.match(feedback.textContent,/尚未读取本机数据/);assert.equal(feedback.getAttribute('role'),'alert');
+ let posts=0;intercept=async(url,opts)=>{if(String(url).startsWith('/api/local-stata/pairings?'))return Response.json({pairing:{online:true,input_sha256:task.input_sha256,profile:task.profile,mcp_available:true},tasks:[task]});if(url==='/api/local-stata/tasks'){posts++;return Response.json({detail:'指标单位尚待明确，不能作为已确认执行条件。'},{status:422});}};
+ await w.eaRefreshLocalTasks();sendLocal.click();await until(()=>!sendLocal.disabled);assert.match(feedback.textContent,/请先勾选/);assert.equal(posts,0);
+ const checked=local.querySelector('label.research-check input') /* comparison isn't confirmation */;
+ const confirmation=[...local.querySelectorAll('label')].find(n=>n.textContent.includes('已核对以上输入摘要')).querySelector('input');confirmation.checked=true;confirmation.dispatchEvent(new w.Event('change'));
+ sendLocal.click();assert.equal(sendLocal.disabled,true);assert.equal(sendLocal.getAttribute('aria-busy'),'true');await until(()=>!sendLocal.disabled);assert.equal(posts,1);assert.match(feedback.textContent,/指标单位尚待明确/);
+ await w.eaRefreshLocalTasks();assert.match(feedback.textContent,/指标单位尚待明确/);assert.equal(confirmation.checked,true);
+ intercept=async(url,opts)=>{if(String(url).startsWith('/api/local-stata/pairings?'))return Response.json({pairing:{online:true,input_sha256:task.input_sha256,profile:task.profile,mcp_available:true},tasks:[task]});if(url==='/api/local-stata/tasks')return Response.json({task:{...task,status:'queued'}},{status:202});};
+ const review=d.querySelector('.coach-review');review.showModal();sendLocal.click();await until(()=>!sendLocal.disabled);assert.match(feedback.textContent,/任务已提交/);assert.equal(review.open,false);assert.equal(confirmation.checked,false);assert.equal(sendLocal.textContent,'提交到本机，等待本机批准');intercept=null;
+ pass('提交缺口与422紧邻按钮保留、刷新不覆盖、忙状态恢复、成功关闭核对窗口且不执行');
  assert.equal(errors.length,0,errors.join('\n'));console.log(JSON.stringify(checks));
 }finally{for(const dom of windows)dom.window.close();store.close();}

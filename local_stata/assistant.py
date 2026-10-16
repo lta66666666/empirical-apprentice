@@ -1,5 +1,5 @@
 """Outbound paired Stata assistant. No cloud request executes without local approval."""
-import csv, hashlib, io, json, math, os, secrets, sys, threading, time, urllib.request, urllib.error, zipfile, subprocess, importlib.util
+import csv, hashlib, io, json, math, os, secrets, sys, threading, time, urllib.request, urllib.error, zipfile, subprocess, importlib.util, ssl
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -13,23 +13,48 @@ HOME = Path(os.environ.get('EA_LOCAL_STATA_DIR', Path.home() / 'AppData/Local/Em
 HOME.mkdir(parents=True, exist_ok=True)
 CSRF = secrets.token_hex(32)
 LOCK = threading.RLock()
-STATE = {'paired':False,'online':False,'mcp_available':False,'task':None,'error':'','code':'','result':None}
+STATE = {'paired':False,'online':False,'mcp_available':False,'task':None,'error':'','code':'','result':None,'network_error':'','last_contact':None}
 CONFIG = {}
 INPUT = None
 CURRENT = None
 STOP = threading.Event()
 
 def digest(data): return hashlib.sha256(data).hexdigest()
-def http(url, payload=None, headers=None, timeout=15, method=None):
+def http(url, payload=None, headers=None, timeout=15, method=None, safe_retry=False):
     data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode()
-    req = urllib.request.Request(url, data=data, headers={'Content-Type':'application/json','User-Agent':'EmpiricalApprenticeLocal/0.1 (Windows; Stata MCP client)', **(headers or {})}, method=method)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        text = r.read().decode()
-        return json.loads(text) if text else {}, dict(r.headers)
+    deadline=time.monotonic()+timeout
+    attempts=2 if safe_retry else 1
+    for attempt in range(attempts):
+        req = urllib.request.Request(url, data=data, headers={'Content-Type':'application/json','User-Agent':'EmpiricalApprenticeLocal/0.1 (Windows; Stata MCP client)', **(headers or {})}, method=method)
+        remaining=deadline-time.monotonic()
+        if remaining<=0: raise TimeoutError('HTTPS request deadline exceeded')
+        try:
+            with urllib.request.urlopen(req, timeout=max(.1,remaining/(attempts-attempt))) as r:
+                text = r.read().decode()
+                return json.loads(text) if text else {}, dict(r.headers)
+        except urllib.error.HTTPError:
+            # Access denials are not transport failures. Never change headers or bypass them.
+            raise
+        except (urllib.error.URLError,OSError) as error:
+            reason=getattr(error,'reason',error)
+            if isinstance(reason,ssl.SSLCertVerificationError) or attempt+1>=attempts: raise
+            time.sleep(min(.25,max(0,deadline-time.monotonic())))
+
+def network_message(action,error):
+    if isinstance(error,urllib.error.HTTPError):
+        return '网站接口 '+action+' 返回 HTTP '+str(error.code)+'；请核对连接或配对状态。'
+    return '网站连接暂时中断（'+action+'）；已保留本机状态，等待重新连接。'+(' HTTPS连接被提前关闭。' if 'EOF' in str(error) else '')
 
 def remote(action, payload):
-    return http(CONFIG['site'] + '/api/local-stata/agent/' + CONFIG['id'] + '/' + action, payload,
-                {'Authorization':'Bearer ' + CONFIG['token']})[0]
+    try:
+        result=http(CONFIG['site'] + '/api/local-stata/agent/' + CONFIG['id'] + '/' + action, payload,
+                    {'Authorization':'Bearer ' + CONFIG['token']},safe_retry=action in ('heartbeat','claim','preview'))[0]
+    except Exception as error:
+        STATE.update(online=False,network_error=network_message(action,error))
+        if isinstance(error,urllib.error.HTTPError) and error.code==401: STATE['paired']=False
+        raise
+    STATE.update(online=True,network_error='',last_contact=time.time())
+    return result
 
 class MCP:
     def __init__(self): self.id=0; self.session=None
@@ -289,10 +314,11 @@ def poll():
                     STATE['error']=''
                 except Exception: pass
         except Exception as error:
-            STATE.update(online=False,error=str(error))
+            STATE['online']=False
+            if not isinstance(error,(urllib.error.URLError,OSError)): STATE['error']=str(error)
             if isinstance(error,urllib.error.HTTPError) and error.code==401 and CURRENT: stop_current(CURRENT)
 
-PAGE='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>实证学徒 · 本机计算助手</title><style>body{font:16px/1.6 system-ui;max-width:1000px;margin:30px auto;padding:20px;color:#19383b;background:#f6faf9}button,input,textarea{font:inherit;padding:12px;margin:8px 0;box-sizing:border-box}button{background:#087e76;color:white;border:0;border-radius:8px;cursor:pointer}input,textarea{width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px}section{margin:20px 0}h1{font-size:26px}</style><h1>本机计算助手（试验）</h1><p>4000端口只在本机使用。代码以你的系统账号权限执行，工作目录不是权限沙箱。原始输入和完整日志保存在本机。</p><section><label>网站HTTPS地址</label><input id="site" placeholder="https://你的站点"><button onclick="act('pair',{site:site.value})">生成五分钟配对码</button><p id="pair"></p></section><section><label>本机CSV/TSV路径（不发送到网站）</label><input id="path"><button onclick="act('input',{path:path.value})">读取字段摘要</button></section><section><h2>执行前核对</h2><p id="state"></p><pre id="paths"></pre><textarea id="code" rows="18" readonly></textarea><p>本次最终代码与输入已经冻结。修改输入后须重新提交任务。仅在理解代码时批准。</p><button id="approve" onclick="act('approve',{})">批准本次完整代码并运行</button><button onclick="act('cancel',{})">取消当前任务</button></section><section><h2>拟上传内容预览</h2><pre id="result"></pre><button id="upload" onclick="act('upload',{})">确认上传以上结果摘要</button><a href="/reproduction.zip">下载本机完整复现包</a><p>不上传原始输入或完整日志。摘要可能含你的研究信息，请逐项检查。</p></section><script>const token='__TOKEN__';async function act(action,data){try{let r=await fetch('/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-Local-CSRF':token},body:JSON.stringify(data)});let x=await r.json();if(!r.ok)throw Error(x.error);if(x.code)pair.textContent='配对码：'+x.code+'（五分钟内在网站输入）';await refresh()}catch(e){alert(e.message)}}async function refresh(){let r=await fetch('/state',{headers:{'X-Local-CSRF':token}});let s=await r.json();state.textContent=[s.paired?'已配对':'待配对',s.online?'网站在线':'网站未连接','引擎：'+Object.entries(s.engines||{}).map(([k,v])=>k+':'+(v.available?'已发现':'不可用')).join(' / '),s.task?.status||'',s.error].join(' · ');paths.textContent='软件：'+(s.task?.engine_id||'待选择')+'；桥接器：'+(s.task?.bridge_id||'待选择')+'；双引擎对照：'+(s.task?.comparison_id?'已明确要求':'未要求')+'\\n输入：'+(s.input_file||'未选择')+'\\n工作目录：'+(s.work_directory||'未创建');code.value=s.code||'';result.textContent=s.result?JSON.stringify(s.result,null,2):'尚无结果';approve.disabled=s.task?.status!=='awaiting_approval';upload.disabled=s.task?.status!=='awaiting_upload'||!s.result}setInterval(refresh,3000);refresh();</script></html>'''
+PAGE='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>实证学徒 · 本机计算助手</title><style>body{font:16px/1.6 system-ui;max-width:1000px;margin:30px auto;padding:20px;color:#19383b;background:#f6faf9}button,input,textarea{font:inherit;padding:12px;margin:8px 0;box-sizing:border-box}button{background:#087e76;color:white;border:0;border-radius:8px;cursor:pointer}input,textarea{width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px}section{margin:20px 0}h1{font-size:26px}</style><h1>本机计算助手（试验）</h1><p>4000端口只在本机使用。代码以你的系统账号权限执行，工作目录不是权限沙箱。原始输入和完整日志保存在本机。</p><section><label>网站HTTPS地址</label><input id="site" placeholder="https://你的站点"><button onclick="act('pair',{site:site.value})">生成五分钟配对码</button><p id="pair"></p></section><section><label>本机CSV/TSV路径（不发送到网站）</label><input id="path"><button onclick="act('input',{path:path.value})">读取字段摘要</button></section><section><h2>执行前核对</h2><p id="state"></p><pre id="paths"></pre><textarea id="code" rows="18" readonly></textarea><p>本次最终代码与输入已经冻结。修改输入后须重新提交任务。仅在理解代码时批准。</p><button id="approve" onclick="act('approve',{})">批准本次完整代码并运行</button><button onclick="act('cancel',{})">取消当前任务</button></section><section><h2>拟上传内容预览</h2><pre id="result"></pre><button id="upload" onclick="act('upload',{})">确认上传以上结果摘要</button><a href="/reproduction.zip">下载本机完整复现包</a><p>不上传原始输入或完整日志。摘要可能含你的研究信息，请逐项检查。</p></section><script>const token='__TOKEN__';async function act(action,data){try{let r=await fetch('/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-Local-CSRF':token},body:JSON.stringify(data)});let x=await r.json();if(!r.ok)throw Error(x.error);if(x.code)pair.textContent='配对码：'+x.code+'（五分钟内在网站输入）';await refresh()}catch(e){alert(e.message)}}async function refresh(){let r=await fetch('/state',{headers:{'X-Local-CSRF':token}});let s=await r.json();state.textContent=[s.paired?'已配对':'待配对',s.online?'网站在线':'网站未连接','引擎：'+Object.entries(s.engines||{}).map(([k,v])=>k+':'+(v.available?'已发现':'不可用')).join(' / '),s.task?.status||'',s.network_error,s.error].join(' · ');paths.textContent='软件：'+(s.task?.engine_id||'待选择')+'；桥接器：'+(s.task?.bridge_id||'待选择')+'；双引擎对照：'+(s.task?.comparison_id?'已明确要求':'未要求')+'\\n输入：'+(s.input_file||'未选择')+'\\n工作目录：'+(s.work_directory||'未创建');code.value=s.code||'';result.textContent=s.result?JSON.stringify(s.result,null,2):'尚无结果';approve.disabled=s.task?.status!=='awaiting_approval';upload.disabled=s.task?.status!=='awaiting_upload'||!s.result}setInterval(refresh,3000);refresh();</script></html>'''
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self,*args): pass
