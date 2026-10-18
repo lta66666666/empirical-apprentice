@@ -44,6 +44,8 @@ function eaRenderPdfPages(markdown) {
     context.strokeStyle='#d8e4e2';context.beginPath();context.moveTo(margin,cursor+rowHeight);context.lineTo(width-margin,cursor+rowHeight);context.stroke();cursor+=rowHeight;
   }
   for (const item of eaPdfLines(markdown)) {
+    // Blank separators may consume space, but must never create an empty page.
+    if(!item.text.trim()){cursor=Math.min(height-58,cursor+21);continue;}
     if(item.table){const cells=item.text.split('|').slice(1,-1).map(x=>x.trim());if(cells.every(x=>/^[:\- ]+$/.test(x)))continue;const header=!tableHeader;if(header)tableHeader=cells;drawTableRow(cells,header);continue;}
     tableHeader=null;
     if(item.level&&cursor>70)cursor+=12;

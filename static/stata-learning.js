@@ -23,6 +23,7 @@
   const next=JSON.stringify([t.id,t.status,t.teaching_preview?.preview_hash,t.result,t.record_version]);if(next===signature)return;
   const top=feed.scrollTop,atEnd=feed.scrollHeight-feed.scrollTop-feed.clientHeight<80;signature=next;card.hidden=false;card.replaceChildren(el('h3','','本次 Stata 代码'),el('p','muted',statusNames[t.status]||t.status));
   const preview=t.teaching_preview;
+  if(t.status==='failed')card.append(button('查看排错提示','text-btn',()=>window.eaOpenStataGuide?.('files','error')));
   if(!preview){card.append(el('p','','助手准备代码后，这里会显示真实核心命令。旧版助手不支持讲解时，请下载新版；本机完整批准仍可使用。'));return;}
   card.append(el('p','','点击命令看左侧说明。这里只展示核心片段，完整脚本仍须在本机核对批准。'));
   const main=preview.commands.find(c=>c.topic==='estimate'),context=preview.commands.filter(c=>['xtset','post','interaction'].includes(c.topic));
@@ -38,7 +39,7 @@
   if(main&&t.status==='succeeded'&&t.result&&t.code_sha256===preview.code_sha256){
    const results=el('section','stata-results');results.append(el('h4','','实际 Stata 结果整理视图'),focusButton(t,main,'实际样本 '+t.result.n_used,'sample'));
    const scroll=el('div','stata-table-scroll'),table=el('table'),head=el('thead'),hr=el('tr');for(const title of ['估计项','系数','标准误','95%区间'])hr.append(el('th','',title));head.append(hr);table.append(head);const body=el('tbody');
-   for(const c of t.result.coefficients||[]){const row=el('tr');row.append(el('th','',c.term==='(Intercept)'?'截距':c.term));for(const [label,focus]of [[Number(c.estimate).toPrecision(5),'estimate'],[Number(c.std_error).toPrecision(5),'std_error'],['['+Number(c.ci_low).toPrecision(5)+', '+Number(c.ci_high).toPrecision(5)+']','interval']]){const td=el('td');td.append(focusButton(t,main,label,focus,c.term));row.append(td);}body.append(row);}table.append(body);scroll.append(table);results.append(scroll,el('small','muted','点击数值查看含义；这是已批准上传的摘要，完整原生日志留在本机。'));card.append(results);
+   for(const c of t.result.coefficients||[]){const row=el('tr');row.append(el('th','',c.term==='(Intercept)'?'截距':c.term));for(const [label,focus]of [[Number(c.estimate).toPrecision(5),'estimate'],[Number(c.std_error).toPrecision(5),'std_error'],['['+Number(c.ci_low).toPrecision(5)+', '+Number(c.ci_high).toPrecision(5)+']','interval']]){const td=el('td');td.append(focusButton(t,main,label,focus,c.term));row.append(td);}body.append(row);}table.append(body);scroll.append(table);results.append(scroll,el('small','muted','点击数值查看含义；这是已批准上传的摘要，完整原生日志留在本机。'));results.append(window.eaSampleEvidencePanel(t));card.append(results);
   }
   const record=eaDraftEntry('stata-reading').value;if(record?.task_id===t.id&&record.preview_hash===preview.preview_hash){const c=preview.commands.find(c=>c.id===record.command_id);if(c&&!reference)explain(t,c,'command',null,false);}
   if(atEnd)feed.scrollTop=feed.scrollHeight;else feed.scrollTop=top;

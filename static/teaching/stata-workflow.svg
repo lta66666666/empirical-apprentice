@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="700" viewBox="0 0 1120 700" role="img" aria-labelledby="title desc">
+ <title id="title">网页与本机Stata的两次批准流程示意</title>
+ <desc id="desc">原创流程示意，非截图。网页核对方案，本机批准执行，然后本机预览并另行批准上传，网页最后显示已批准摘要。数据与完整日志默认留在本机。</desc>
+ <defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0 0L9 4.5L0 9Z" fill="#568b82"/></marker></defs>
+ <style>text{font-family:system-ui,"Microsoft YaHei",sans-serif;fill:#183d40}.heading{font-size:27px;font-weight:700}.label{font-size:21px;font-weight:700}.body{font-size:18px}.small{font-size:15px;fill:#4c696a}.box{fill:#fff;stroke:#bad5ce;stroke-width:2}.arrow{fill:none;stroke:#568b82;stroke-width:3;marker-end:url(#arrow)}</style>
+ <rect width="1120" height="700" rx="20" fill="#f1f8f6"/>
+ <text x="32" y="46" class="heading">从方案到结果：两次本机批准</text>
+ <text x="32" y="77" class="small">原创示意 · 非软件截图 · 不含真实数据和执行数值 · 阅读此图不会触发计算</text>
+ <rect x="32" y="102" width="1056" height="55" rx="10" fill="#e3f1eb"/>
+ <text x="53" y="137" class="body">先准备：启动助手 → 五分钟配对码 → 当前练习配对 → 本机选择 CSV/TSV</text>
+ <rect x="32" y="183" width="310" height="167" rx="12" class="box"/>
+ <text x="53" y="219" class="label">① 网页核对方案</text>
+ <text x="53" y="255" class="body">字段、方法、缺失策略</text>
+ <text x="53" y="286" class="body">实际软件与执行位置</text>
+ <text x="53" y="320" class="small">提交任务 ≠ 批准本机运行</text>
+ <path d="M350 266H388" class="arrow"/>
+ <rect x="402" y="183" width="310" height="167" rx="12" fill="#e6f4ef" stroke="#087e76" stroke-width="3"/>
+ <text x="423" y="219" class="label">② 本机批准执行</text>
+ <text x="423" y="255" class="body">完整冻结代码与输入</text>
+ <text x="423" y="286" class="body">核对后批准，才开始计算</text>
+ <text x="423" y="320" class="small">点击网页讲解不算批准</text>
+ <path d="M720 266H758" class="arrow"/>
+ <rect x="772" y="183" width="316" height="167" rx="12" class="box"/>
+ <text x="793" y="219" class="label">③ 本机 Stata 执行</text>
+ <text x="793" y="255" class="body">原始数据、脚本与日志</text>
+ <text x="793" y="286" class="body">结果先可靠保存到本机</text>
+ <text x="793" y="320" class="small">断网不等于计算已停止</text>
+ <path d="M929 360V394" class="arrow"/>
+ <rect x="772" y="410" width="316" height="167" rx="12" fill="#e6f4ef" stroke="#087e76" stroke-width="3"/>
+ <text x="793" y="446" class="label">④ 本机批准上传</text>
+ <text x="793" y="482" class="body">先查看拟上传结果摘要</text>
+ <text x="793" y="513" class="body">另行确认后才发送</text>
+ <text x="793" y="547" class="small">执行批准不代替上传批准</text>
+ <path d="M758 493H721" class="arrow"/>
+ <rect x="402" y="410" width="310" height="167" rx="12" class="box"/>
+ <text x="423" y="446" class="label">⑤ 网页阅读真实结果</text>
+ <text x="423" y="482" class="body">实际样本、系数与区间</text>
+ <text x="423" y="513" class="body">关联本次命令和报告</text>
+ <text x="423" y="547" class="small">网站没有独立复算本机结果</text>
+ <rect x="32" y="410" width="310" height="167" rx="12" fill="#f8fbfa" stroke="#bad5ce" stroke-width="2"/>
+ <text x="53" y="446" class="label">完整材料仍在本机</text>
+ <text x="53" y="482" class="body">原始输入、完整日志</text>
+ <text x="53" y="513" class="body">以及本机复现 ZIP</text>
+ <text x="53" y="547" class="small">分享前检查是否含敏感内容</text>
+ <rect x="32" y="603" width="1056" height="64" rx="10" fill="#e3f1eb"/>
+ <text x="53" y="629" class="body">本机端口不开放公网；修改输入、代码、参数或引擎后须重新核对批准。</text>
+ <text x="53" y="654" class="small">“计算完成，待同步”保留本地结果；恢复连接不自动重跑，也不自动上传。</text>
+</svg>

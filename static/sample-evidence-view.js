@@ -1,0 +1,1 @@
+(()=>{window.eaSampleEvidencePanel=task=>{const e=window.eaSampleEvidence?.(task);if(!e?.available)return document.createDocumentFragment();const d=el('details','sample-evidence');d.append(el('summary','','样本：'+(e.input??'未记录')+' 行输入 → '+e.used+' 行估计'));const p=el('p');p.style.whiteSpace='pre-line';p.textContent=window.eaSampleEvidenceText(task);d.append(p);return d;};})();

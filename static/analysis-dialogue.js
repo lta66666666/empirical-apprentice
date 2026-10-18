@@ -124,7 +124,7 @@
  mode.task=updated;mode.answer_version=updated.reflections.length;mode.record_version=updated.record_version;
  if(parts.input.value===text){parts.input.value='';parts.input.dispatchEvent(new Event('input'));}
  const feedback=updated.reflections.at(-1);current.replaceChildren(el('h3','','我的解释已提交'),el('p','',text));const prose=el('div','prose');markdown(prose,typeof feedback.feedback==='string'?feedback.feedback:feedback.feedback?.answer||'已保存，请查看报告。');current.append(prose,el('p','muted','第 '+mode.answer_version+' 次解释 · 任务 '+mode.task.id));
- modeLabel.textContent='正式修订作答 · 任务 '+mode.task.id+' · 发送即保存成果';info('解释与反馈已保存，可继续修订或查看报告。');
+ modeLabel.textContent='正式修订作答 · 任务 '+mode.task.id+' · 发送即保存成果';parts.input.placeholder='修订作答：请说明系数、单位及尚未验证的条件。发送即提交。';info('解释与反馈已保存，可继续修订或查看报告。');
  }catch(e){info('未确认提交成功，文字保留：'+e.message);}finally{send.disabled=false;}
  };
  // The execution entry opens and builds the complete confirmation card.

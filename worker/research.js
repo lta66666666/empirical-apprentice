@@ -1,3 +1,4 @@
+import {sampleEvidence,sampleEvidenceText} from './sample-evidence.js';
 import {datasetMetadata,interpretationWarnings} from './dataset-metadata.js';
 import { engineMetadata, engineCapabilities, nodeRequest, digest } from './executor.js';
 import { fixtures } from './fixtures.js';
@@ -187,7 +188,7 @@ async function saveJob(env, job, touchOwner = false) {
 
 function publicJob(job) {
   const { owner, nonce, input_key, node_artifacts, ...visible } = job;
-  return {software:job.software||'r',engine_id:job.engine_id||'browser_webr',execution_location:job.execution_location||'browser_webr',...visible};
+  return {software:job.software||'r',engine_id:job.engine_id||'browser_webr',execution_location:job.execution_location||'browser_webr',...visible,sample_evidence:sampleEvidence(job)};
 }
 
 function validateSubmittedResult(result, job) {
@@ -259,7 +260,7 @@ export async function handleResearch(request, env, owner, path) {
         session.pending_confirmation = { token: crypto.randomUUID(), input_sha256: await sha256(body.text), plan_sha256: await sha256(JSON.stringify(plan)), research_revision: session.research_revision };
         await saveSession(env, session);
         return resultJson({ plan, state_version:session.state_version, confirmation: session.pending_confirmation, description: description(plan), profile: data.profile,
-          note: `基于当前手选字段整理；未连接在线模型。原始 ${data.rows.length} 行，选定变量缺失 ${missingLines.length} 行。来源、单位和方法假设仍需学生核对。` });
+          note: `本核对卡按当前字段与参数整理，不代表模型已核实方案。原始 ${data.rows.length} 行，选定变量缺失 ${missingLines.length} 行。来源、单位和方法假设仍需学生核对。` });
       }
       if (action === 'jobs') {
         if (body?.confirmed !== true) throw new Error('执行前必须确认方案。');
@@ -442,8 +443,8 @@ export function reportMarkdown(job) {
   if (job.result) {
     lines.push(`- 软件：${job.result.software_version||job.result.r_version}`, `- 包：${JSON.stringify(job.result.package_versions)}`,`- 推断口径：${JSON.stringify(job.result.inference||{vcov:job.plan.vcov})}`, `- 估计样本：${job.result.n_used}`, '', '| 变量 | 系数 | 标准误 | p 值 | 95% 区间 |', '|---|---:|---:|---:|---:|');
     for (const row of job.result.coefficients) lines.push(`| ${row.term} | ${row.estimate} | ${row.std_error} | ${row.p_value} | [${row.ci_low}, ${row.ci_high}] |`);
-    lines.push('', `- 选定变量缺失删除 ${job.missing_lines.length} 行；模型另排除 ${job.result.audit.model_removed_count} 行。`,
-      `- R 模型排除原始 CSV 行：${job.result.audit.model_removed_csv_lines?.join(', ') || (job.result.audit.used_indices ? '无' : '历史执行未记录')}`,
+    lines.push('', sampleEvidenceText(job),
+      `- R 模型排除原始 CSV 行：${job.result.audit?.model_removed_csv_lines?.join(', ') || (job.result.audit?.used_indices ? '无' : '历史执行未记录')}`,
       '## 警告与局限', ...job.result.warnings.map((item) => `- ${item}`), `- ${job.description.checks}`);
   } else lines.push(`状态：${job.status}；${job.error || '尚无执行结果。'}`);
   lines.push('', '## 学生解释与修订');

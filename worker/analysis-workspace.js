@@ -35,13 +35,13 @@ export async function analysisContext(env,owner,state,body){
  executed_result:selected?{id:selected.id,record_version:selected.record_version,plan:selected.plan,dictionary:selected.dictionary,n_used:selected.result?.n_used,coefficients:selected.result?.coefficients,warnings:selected.result?.warnings,execution_location:selected.execution_location,server_recomputed:false}:null};
 }
 export async function teachingMaterials(question,context){
- const name={ols:'OLS 线性回归',panel_fe:'固定效应 面板',did:'DID 政策'}[context.focus_method]||'研究准备';
- const materials=await knowledgeContext(question+' '+name+' '+(context.focus_method?labels[context.step]||'':'研究对象、结果与单位'));
- return context.focus_method||/\b(?:stata|fixest|feols|vcov|ssc)\b|软件命令|剔除样本|实际样本/i.test(question)?materials:materials.filter(x=>x.id.startsWith('lesson_')||x.id.startsWith('textbook_')&&x.task_stages?.includes('prepare'));
+ const materials=await knowledgeContext(question,{method:context.focus_method||undefined,stage:steps.includes(context.step)?context.step:undefined,engine:context.engine});
+ return materials;
 }
 export function messageActions(state,context,output,intent){
  const pendingCards=output.ready?Object.fromEntries(Object.entries(context.unconfirmed_preparation?.cards||{}).filter(([,v])=>v.status==='suggested').map(([k,v])=>[k,v.value])):{};
  const actions=[],proposal={cards:Object.fromEntries(Object.entries({...pendingCards,...output.proposed_cards}).filter(([k,v])=>cards.includes(k)&&typeof v==='string'&&v.trim()).map(([k,v])=>[k,v.slice(0,2000)])),plan:output.ready?output.candidate:null,dictionary:output.proposed_dictionary||{},design:{question_type:context.policy_request?'policy_evaluation':'association',adoption_mode:context.policy_request?context.unconfirmed_preparation?.adoption_mode||'unknown':'unknown'}};
+ if(intent==='knowledge'||intent==='stata_guide')return {actions:[],proposal:{cards:{},plan:null,dictionary:{},design:proposal.design}};
  if(Object.keys(proposal.cards).length||proposal.plan||Object.keys(proposal.dictionary).length)actions.push({id:'apply',kind:'apply',label:'预览建议并应用到草稿',reason:output.reason||'核对对话整理的信息；不自动核实来源。',proposal});
  actions.push({id:'prepare',kind:'navigate',target:'prepare',label:'补充研究资料',reason:context.gaps.next});
  if(!context.profile.row_count)actions.push({id:'data',kind:'navigate',target:'data',label:'载入数据或模拟案例',reason:'真实计算前需要可检查的输入。'});

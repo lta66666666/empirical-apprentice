@@ -81,7 +81,7 @@ async function evidence(env,audit,kind,input,messages,output,started,status,extr
   return storeModelInteraction(env,audit,{kind,prompt_version:kind==='candidate'?'ea-candidate-v6-coaching':`ea-${kind}-v4-coaching`,model:env.MODEL_NAME||null,input_summary:input,messages,output,mode:output.mode||'candidate',status,duration_ms:Date.now()-started,...extra});
 }
 export async function modelFeedback(kind,context,env,audit=null){
-  const retrieved=await knowledgeContext(String(context.question||context.answer||'').slice(0,2000));
+  const retrieved=await knowledgeContext(String(context.question||context.answer||'').slice(0,2000),context.knowledge_context||{});
   context={...bounded(context),question:String(context.question||'').slice(0,2000),answer:String(context.answer||'').slice(0,6000),knowledge_version:knowledgeVersion,materials:compactMaterials([...(context.materials||[]),...retrieved])};
   const started=Date.now(),meta={prompt_version:`ea-${kind}-v4-coaching`,model:env.MODEL_NAME||null,retrieval:retrieved.map(({id,title,source,content_hash,review_status,version,references})=>({id,title,source,content_hash,review_status,version,references}))};
   const fallback=kind==='tutor'?'课程自查：先明确研究问题、对象、变量单位，再核对资料与方法条件。可回到当前图解和参考要点。':'解释自查：指出系数及其单位、模型控制了什么、哪些识别条件仍未验证；显著性不能单独证明因果。';
@@ -102,7 +102,7 @@ export async function proposeCandidate(input,env,audit=null){
   const question=String(input?.question||'').trim().slice(0,2000),profile=input?.profile;
   if(!question||!profile||!Array.isArray(profile.columns)||profile.columns.length>60||!profile.columns.every(c=>typeof c.name==='string'&&c.name.length<=100&&typeof c.numeric==='boolean'&&Number.isInteger(c.missing)&&c.missing>=0))return reply({detail:'请提供研究问题和有效的列摘要。'},422);
   const columns=profile.columns.map(({name,numeric,missing})=>({name,numeric,missing}));
-  const retrieved=await knowledgeContext(question);
+  const retrieved=await knowledgeContext(question,{method:input.context?.focus_method||undefined,stage:input.context?.step,engine:input.context?.engine});
   const summary={question,columns,row_count:profile.row_count,preparation:compactPreparation(input.preparation),analysis_context:compactContext(input.context),previous_dialogue:(input.history||[]).slice(-6).map(x=>({role:x.role,content:String(x.content||'').slice(0,700)})),retrieved_materials:compactMaterials(retrieved)};
   meta.retrieval= retrieved.map(({id,title,source,content_hash,review_status,version,references})=>({id,title,source,content_hash,review_status,version,references}));
   const messages=[{role:'system',content:candidatePrompt},{role:'user',content:JSON.stringify(summary)}];let output,status,http=200,details={};

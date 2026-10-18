@@ -1,14 +1,29 @@
-## 2026-10-15：Stata 代码阅读教学
+# 实证学徒：当前能力与交接入口
+
+状态核对：2026-10-19。当前公开基准为 **V41 受限试用**；本轮新增的 Stata 操作导览与课程资料一致性修复，须以本轮验收与实际发布记录为准。
+
+- 先注册或登录，首页只有“定向导学”和“边分析边学”两个入口。课程为八阶段；目录、图文手册和实验包说明统一读取 `worker/content.js`，生成命令为 `node scripts/build-course-materials.mjs`。
+- 无已选执行方式时默认浏览器 R / webR。现有计算范围为 OLS、个体＋年份固定效应、同批 DID；参数与输入核对确认后才计算。当前版本真实浏览器、设备与导出验收仍有未完成项。
+- 本机 Stata 需要有效安装与许可、本机助手及配对；执行批准与结果上传批准分别保留。实际模板代码可只读讲解。V39 已取得公网三方法协议闭环证据，不等同于真实浏览器点击、第二台 Windows 或休眠恢复验收。StatsPAI 结果明确标为 Python，不冒充 Stata。
+- 八阶段第6阶段保留原有 Python 复现小实验，并提供 [Stata do-file 与运行记录导览](https://empirical-apprentice-webr-trial.liskyler9.chatgpt.site/analysis?stata_guide=do-files)；阅读导览不会执行代码，也不标为“已掌握”。
+- 教材仅发布自编短卡和已核对来源索引；原书、扫描页、私有输入及运行凭据不进入源码包。自编教学表述仍待审校。
+- 云端 R、大陆／JoyCode 部署、云端 Stata、EViews、第二台 Windows、真实休眠、长期清理与生产恢复继续按各自证据列为未完成或待验收。
+
+本轮交付见 [Stata操作教学与验收](docs/STATA_OPERATION_ACCEPTANCE.md) 及 [操作来源索引](docs/STATA_OPERATION_SOURCES.md)；其余目标沿用 [统一优化与验收台账](docs/TEACHING_INTELLIGENCE_ACCEPTANCE.md)。材料出处见 [教学材料索引](docs/TEACHING_SOURCE_INDEX.md)，助手启动见 [本机助手说明](local_stata/README.md)，参赛记录见 [参赛证据台账](docs/COMPETITION_EVIDENCE.md)。历史版本记录用于追溯，不能覆盖本节的当前能力状态。
+
+---
+
+## 历史记录：2026-10-15 · Stata 代码阅读教学
 
 真实模板核心命令、字段映射与批准包绑定；当前轮只读代码卡、点击语法讲解、真实结果表点击学习、独立阅读记录及固定帮助。仅现有三方法，不新增测验或掌握认证。见 [优化与验收](STATA_TEACHING_ACCEPTANCE.md)、[启动说明](local_stata/README.md)；公网试用状态见 [发布后验收](STATA_TEACHING_PUBLIC_ACCEPTANCE.md)。
 
-## 2026-10-15：本机双引擎候选（尚未替换公网）
+## 历史记录：2026-10-15 · 本机双引擎候选（当时尚未替换公网）
 
 修复 Stata 标量 p 值导出；增加旧 MCP、stata-code/PyStata 与 StatsPAI Python 受控适配器。三方法本机真实执行、九条账号协议闭环及一次浏览器 OLS 对照已验证，仍缺公网、第二台 Windows、休眠与断网恢复验收。参见 [验收报告](LOCAL_DUAL_ACCEPTANCE.md) 与 [助手安装说明](local_stata/README.md)。两次本机批准及原始输入留本机规则保留。
 
 重现实测前运行 node scripts/export-local-fixtures.mjs。依赖锁定 Python3.11 和两套审计源码提交；下载助手不含 Stata、输入、凭据或运行时。
 
-## 2026-10-13：对话驱动分析重构
+## 历史记录：2026-10-13 · 对话驱动分析重构
 
 底部当前轮持久行动、预览后应用、上下文教学、请求式引导与正式解释模式。验收范围见 [优化说明](DIALOGUE_OPTIMIZATION.md) 和 [测试报告](DIALOGUE_TEST_REPORT.md)，不将受控模型或结果夹具记为真实数值执行。
 
@@ -22,7 +37,7 @@
 
 # 实证学徒 Sites 试用版
 
-该工程独立于原 `agent1` V9。教学文本、模拟数据和五张进阶案例从 V9 导入；案例事实仍待队友审校。按用户 2026-10-05 的新要求，站点已允许所有人访问，供队友和老师试用。参赛验收闸门记录在相邻的 `SITES_FEASIBILITY_LEDGER.md`，开放试用不代表这些闸门已经通过。
+该工程独立于原 `agent1` V9。教学文本、模拟数据和五张进阶案例从 V9 导入；案例事实仍待队友审校。按用户 2026-10-05 的新要求，站点已允许所有人访问，供队友和老师试用。当前参赛验收闸门见 [统一验收台账](docs/TEACHING_INTELLIGENCE_ACCEPTANCE.md) 和 [参赛证据台账](docs/COMPETITION_EVIDENCE.md)，开放试用不代表这些闸门已经通过。
 
 ## 执行与数据边界
 
@@ -55,11 +70,11 @@ node scripts/model-unit.mjs
 
 用实际 Sites 网址验证手机 webR、两个独立浏览器的所有资源隔离、PDF 中文排版、真实模型正常与失败场景、无人访问时长期清理时限。当前每小时 Sites 调度尚不能保证计划中严格的“一小时内物理删除”；该标准不变，未通过前不得在参赛材料中写为已验收。原 V9 回退方案继续保留。
 
-## V12 学习闭环与任务工作台
+## 历史记录：V12 学习闭环与任务工作台
 
 - 四项主导航与五步 R 实操，资料与证据以抽屉展开；基础变量与高级参数分开，支持系统和用户减少动画设置。
 
-## 原生 R / Stata 执行节点
+## 历史记录：原生 R / Stata 执行节点（验收台账日期：2026-10-05）
 
 本轮新增 `executor/`：持久队列、HMAC 网关、原生 R 与 Stata 固定模板。页面默认云端 R，尚未配置节点时明确不可执行；webR 保留为主动选择的回退。软件/位置变更须重新确认，原有浏览器任务兼容。Stata 本机三方法和取消已实测，公网入口等待网站授权和 Linux 验收；EViews 未接入。
 

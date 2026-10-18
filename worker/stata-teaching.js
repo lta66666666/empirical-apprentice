@@ -1,6 +1,7 @@
 // Only controlled Stata18 templates. No arbitrary local script or log is accepted.
 export const stataTemplateVersion='stata18-core-v1';
 const sha=async value=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))].map(x=>x.toString(16).padStart(2,'0')).join('');
+import {sampleEvidenceText} from './sample-evidence.js';
 const topic=line=>[['import delimited ','import'],['destring ','numeric'],['drop if ea_missing','missing'],['assert _N','sample'],['egen long ea_cluster','cluster'],['egen long ea_panel','panel'],['xtset ','xtset'],['generate byte policy_post','post'],['generate byte policy_effect','interaction'],['regress ','estimate'],['xtreg ','estimate']].find(([prefix])=>line.startsWith(prefix))?.[1];
 export function expectedStataTeaching(task){
  const aliases=Object.fromEntries(task.profile.columns.map((c,i)=>[c.name,'v'+i])),p={...task.plan};
@@ -62,7 +63,7 @@ export function stataLesson(task,commandId,focus='command',term=null,part='comma
  if(focus!=='command'){
   if(task.status!=='succeeded'||!task.result||task.code_sha256!==task.teaching_preview.code_sha256)throw Error('尚无与这份代码对应且已批准上传的真实结果。');
   const c=task.result.coefficients?.find(c=>c.term===term);
-  if(focus==='sample')detail.push(`本次 e(sample) 对应的实际样本为 ${task.result.n_used}，输入 ${task.profile.row_count} 行；不把删除的行计入估计样本。`);
+  if(focus==='sample')detail.push(sampleEvidenceText(task));
   else if(!c)throw Error('本次结果没有这个估计项。');
   else {
    const metric={estimate:`系数为 ${c.estimate}，表示当前模型和控制条件下的关系，单位取决于结果与解释变量的计量口径。`,std_error:`标准误为 ${c.std_error}，衡量估计不确定性；当前方差设置为 ${p.vcov}。`,interval:`95%区间为 [${c.ci_low}, ${c.ci_high}]，需要与自由度及推断设置一起理解。`}[focus];

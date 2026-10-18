@@ -1,3 +1,4 @@
+import {sampleEvidenceText} from './sample-evidence.js';
 import { syncSessionNodes, deleteSessionNodes } from './executor.js';
 import { curriculum, practiceCases } from './content.js';
 import { analyzeTwoPeriod } from './analysis.js';
@@ -185,6 +186,7 @@ async function learningMarkdown(env, state) {
   for (const row of jobs.results) {
     const job = JSON.parse(row.body);
     lines.push(`### ${job.description.label} · ${job.status}`, `- ${job.execution_location==='cloud_native'?'云端原生 '+(job.software==='stata'?'Stata':'R'):'浏览器 webR'}；输入 SHA-256：${job.input_sha256}；执行资料版本：${job.research_revision ?? '历史未记录'}；导出版本：${job.record_version || 1}`);
+    if(job.status==='succeeded')lines.push(sampleEvidenceText(job));
     if (job.result) lines.push(`- 实际估计 ${job.result.n_used} 行；${job.result.software_version||job.result.r_version}；包版本 ${JSON.stringify(job.result.package_versions)}；${job.result_origin}`);
     if(!job.reflections.length)lines.push('- 解释练习待完成；执行完成不代表学习完成。');
     for (const [index, item] of job.reflections.entries()) lines.push(`- 第 ${index + 1} 次解释：${item.answer}\n  反馈：${item.feedback}`);
@@ -195,10 +197,10 @@ async function learningMarkdown(env, state) {
   lines.push('', '## 本机计算（Stata / StatsPAI） · 本机批准执行，云端未独立复算');
   for(const task of await localTasks(env,state.owner_id,state.session_id)){
     lines.push(`### ${task.id} · ${task.status}`,`- 导出版本 ${task.record_version}；输入哈希 ${task.input_sha256}；代码哈希 ${task.code_sha256||'待批准'}；执行资料版本 ${task.research_revision}`,`- 方案与来源快照：${JSON.stringify(task.evidence_snapshot)}；变量字典：${JSON.stringify(task.dictionary)}`,`- 原始输入及完整日志保存在本机，不包含在网站导出中。`);
-    if(task.result)lines.push(`- 实际结果：${JSON.stringify(task.result)}`);
+    if(task.result)lines.push(sampleEvidenceText(task),`- 实际结果：${JSON.stringify(task.result)}`);
     for(const item of task.reflections||[])lines.push(`- 解释：${item.answer}\n  反馈：${JSON.stringify(item.feedback)}`);
   }
-  for(const [key,draft]of Object.entries(await readDrafts(env,state.session_id)))if(key!=='stata-reading'&&Object.keys(draft.value).length&&!draft.value.submitted)lines.push(`- ${key} · 草稿版本 ${draft.version}：${JSON.stringify(draft.value)}`);
+  for(const [key,draft]of Object.entries(await readDrafts(env,state.session_id)))if(!['stata-reading','stata-guide','stata-guide-intro'].includes(key)&&Object.keys(draft.value).length&&!draft.value.submitted)lines.push(`- ${key} · 草稿版本 ${draft.version}：${JSON.stringify(draft.value)}`);
   return lines.join('\n') + '\n'+modelEvidenceMarkdown(await modelInteractions(env,state.session_id,state.owner_id),false);
 }
 

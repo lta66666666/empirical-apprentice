@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="680" viewBox="0 0 1120 680" role="img" aria-labelledby="title desc">
+ <title id="title">Stata界面区域示意</title>
+ <desc id="desc">原创教学示意，非软件截图。左为历史，中间为结果和命令输入，右为变量和属性；下方另列Do-file Editor。没有真实数据或执行结果。</desc>
+ <style>text{font-family:system-ui,"Microsoft YaHei",sans-serif;fill:#183d40}.heading{font-size:27px;font-weight:700}.label{font-size:20px;font-weight:700}.body{font-size:17px}.small{font-size:15px;fill:#4c696a}.box{fill:#fff;stroke:#b9d6d1;stroke-width:2}.accent{fill:#087e76}.line{stroke:#d7e6e2;stroke-width:2}</style>
+ <rect width="1120" height="680" rx="20" fill="#f1f8f6"/>
+ <text x="32" y="46" class="heading">认识 Stata 的几个区域</text>
+ <text x="32" y="77" class="small">原创示意 · 不是软件截图 · Windows / Stata18 · 窗口排列可由使用者调整</text>
+ <rect x="32" y="101" width="1056" height="400" rx="12" class="box"/>
+ <path d="M32 145H1088M256 145V501M834 145V501" class="line"/>
+ <text x="51" y="129" class="body">Stata 主窗口（示意）</text>
+ <rect x="47" y="166" width="194" height="313" rx="8" fill="#eef7f4"/>
+ <text x="61" y="199" class="label">Review / History</text>
+ <text x="61" y="232" class="body">回看已输入的命令</text>
+ <path d="M63 260H222M63 285H204M63 310H218" class="line"/>
+ <text x="61" y="368" class="small">回看记录 ≠</text>
+ <text x="61" y="394" class="small">本次已完成分析</text>
+ <rect x="272" y="166" width="545" height="201" rx="8" fill="#f7faf9"/>
+ <text x="291" y="199" class="label">Results · 输出</text>
+ <text x="291" y="235" class="body">这里显示实际命令、输出与报错。</text>
+ <text x="291" y="268" class="small">本图没有估计系数或模拟执行数值。</text>
+ <path d="M293 300H743M293 326H690" class="line"/>
+ <rect x="272" y="383" width="545" height="96" rx="8" fill="#e6f4ef" stroke="#087e76" stroke-width="2"/>
+ <text x="291" y="414" class="label">Command · 输入命令</text>
+ <text x="291" y="447" class="body">输入位置；不是网页对话输入框。</text>
+ <rect x="851" y="166" width="220" height="161" rx="8" fill="#eef7f4"/>
+ <text x="869" y="199" class="label">Variables · 变量</text>
+ <text x="869" y="232" class="body">当前内存数据的字段</text>
+ <text x="869" y="266" class="small">列名不能证明单位</text>
+ <rect x="851" y="343" width="220" height="136" rx="8" fill="#f7faf9"/>
+ <text x="869" y="377" class="label">Properties · 属性</text>
+ <text x="869" y="411" class="body">选中变量的属性</text>
+ <text x="869" y="444" class="small">类型、标签等</text>
+ <rect x="32" y="520" width="1056" height="111" rx="12" fill="#e4f1ed" stroke="#b9d6d1" stroke-width="2"/>
+ <text x="52" y="556" class="label">Do-file Editor · 脚本编辑器（独立窗口）</text>
+ <text x="52" y="590" class="body">打开 do-file 是阅读；执行选中内容和执行全文的范围不同。</text>
+ <text x="52" y="616" class="small">本产品代码只读：完整冻结脚本仍需在本机批准后才运行。</text>
+ <text x="32" y="660" class="small">依据：Stata18 Getting Started with Stata for Windows、help doedit；非远程桌面操作界面。</text>
+</svg>

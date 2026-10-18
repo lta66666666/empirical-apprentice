@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {writeFile} from 'node:fs/promises';
+import {sampleEvidence,sampleEvidenceText} from '../worker/sample-evidence.js';
+import {getStataGuide,guideCard,guideKnowledgeChunks} from '../worker/stata-guide.js';
+import {retrieveKnowledge} from '../worker/knowledge.js';
+const checks=[];const pass=name=>{checks.push({name,status:'passed'});console.log('PASS',name);};
+const base={id:'owned-result',status:'succeeded',engine_id:'stata_local_mcp',profile:{row_count:10},result:{n_used:8,used_indices:[1,2,3,4,5,6,7,8],omitted_terms:['x']}};
+const before=JSON.stringify(base),e=sampleEvidence(base);assert.equal(e.excluded,2);assert.equal(e.missing_excluded,null);assert.match(sampleEvidenceText(base),/原因未分项记录/);assert.match(sampleEvidenceText(base),/不代表排除观测/);assert.equal(JSON.stringify(base),before);pass('样本投影只读；未知原因不归为缺失；省略项与观测分开');
+const r={...base,engine_id:'browser_webr',result:{...base.result,audit:{missing_removed_csv_lines:[2,5],model_removed_count:0,used_indices:base.result.used_indices}}};assert.equal(sampleEvidence(r).missing_excluded,2);assert.equal(sampleEvidence({...r,result:{...r.result,audit:{missing_removed_csv_lines:[2,2],model_removed_count:0}}}).missing_excluded,null);assert.equal(sampleEvidence({...base,status:'awaiting_upload'}).available,false);assert.equal(sampleEvidence({status:'succeeded',result:{n_used:8}}).input,null);assert.equal(sampleEvidence({...base,profile:{row_count:8},result:{n_used:8}}).excluded,0);pass('重叠缺失不求和、历史未记录不补零、等待批准上传不显示结果');
+assert.equal(getStataGuide().outline.length,7);assert.equal(guideKnowledgeChunks.length,22);assert.throws(()=>getStataGuide('not-a-guide'),e=>e.status===422);assert.throws(()=>getStataGuide('interface','sample'),e=>e.status===422);assert.match(guideCard('results','sample').content,/不能把所有|不能把每|不能把/);pass('七章22步指南、白名单与版本边界');
+for(const [q,id]of [['缺失值该怎么看','textbook_sample'],['不知道单位','textbook_units']])assert.equal(retrieveKnowledge(q)[0].id,id);
+for(const [q,topic]of [['Stata界面有哪些窗口','software_operation'],['Stata xtreg命令语法','command_syntax'],['Stata系数区间怎么解释','result_reading']])assert.equal(retrieveKnowledge(q)[0].topic,topic,q);
+assert.equal(retrieveKnowledge('缺失值',{engine:'r'}).some(c=>c.engine==='stata'),false);assert.throws(()=>retrieveKnowledge('test',{method:'iv'}),e=>e.status===422);pass('缺失、单位、界面、命令、结果按主题匹配；软件隔离与受约束方法');
+await writeFile('outputs/operation-guide-unit.json',JSON.stringify({at:new Date().toISOString(),checks},null,2));
