@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import signal
+import sys
 from pathlib import Path
 
 TEMPLATES=Path(__file__).parent/'templates'
@@ -32,6 +33,12 @@ async def process(args,cwd=None,timeout=120,on_start=None):
     return proc.returncode,(out+err).decode('utf-8',errors='replace')
 
 async def capabilities():
+    from .statspai_runner import pinned_versions
+    try:
+        versions=pinned_versions()
+        stats={'ready':True,'status':'可执行','reason':'StatsPAI 受控云端计算','versions':versions,'methods':['ols','panel_fe','did']}
+    except Exception:
+        stats={'ready':False,'status':'依赖待验收','reason':'锁定的 StatsPAI 及科学计算依赖尚未安装'}
     r={'ready':False,'status':'未配置','reason':'尚未安装原生 R'}
     executable=os.getenv('EA_RSCRIPT') or shutil.which('Rscript')
     if executable:
@@ -47,7 +54,7 @@ async def capabilities():
     accepted=os.getenv('EA_STATA_RUNTIME_ACCEPTED')=='true'
     stata={'ready':licensed and accepted and Path(stata_path).is_file(),'status':'授权待确认' if not licensed else '环境待验收','reason':'需确认网站用途授权、Linux 安装与真实运行验收'}
     if stata['ready']: stata.update(status='可执行',reason='已配置授权声明与运行验收声明；每次任务仍检查实际版本')
-    return {'r_native':r,'stata_native':stata,'eviews_native':{'ready':False,'status':'未接入','reason':'尚无适用的网站集成方案'}}
+    return {'statspai_cloud':stats,'r_native':r,'stata_native':stata,'eviews_native':{'ready':False,'status':'未接入','reason':'尚无适用的网站集成方案'}}
 
 def stata_script(p):
     rhs=' '.join((['policy_effect'] if p['method']=='did' else [])+p['predictors'])
@@ -76,7 +83,21 @@ def stata_script(p):
 
 async def execute(payload,directory,development=False):
     engine=payload['engine_id'];p=payload['plan']
-    if engine=='r_native':
+    if engine=='statspai_cloud':
+        from .cloud_artifacts import artifacts as cloud_artifacts
+        script=(Path(__file__).parent/'statspai_runner.py').read_text(encoding='utf-8')
+        (directory/'estimate.py').write_text(script,encoding='utf-8')
+        try:code,log=await process([sys.executable,directory/'estimate.py',directory],cwd=directory)
+        except asyncio.TimeoutError:raise TimeoutError('StatsPAI exceeded 120 seconds; process tree terminated')
+        (directory/'execution.log').write_text(log,encoding='utf-8')
+        if code or not (directory/'result.json').exists():raise ValueError('StatsPAI calculation failed; '+log[-500:])
+        result=json.loads((directory/'result.json').read_text(encoding='utf-8'))
+        result['warnings']=['显著性不自动证明因果；来源和研究设计仍需核对。']
+        if p['vcov']=='cluster':
+            result['clusters']=int(result['inference']['df'])+1
+            if result['clusters']<30:result['warnings'].append('聚类数少于30，常规聚类稳健推断可能不稳定；30只是教学提醒阈值。')
+        artifacts=cloud_artifacts(p,script,result,log)
+    elif engine=='r_native':
         cap=(await capabilities())[engine]
         if not cap['ready']:raise ValueError(cap['reason'])
         script=(TEMPLATES/'estimate.R').read_text(encoding='utf-8')

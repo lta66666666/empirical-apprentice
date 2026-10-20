@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {isIP} from 'node:net';
 import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +19,12 @@ const server=http.createServer(async(req,res)=>{
     if(!req.url?.startsWith('/')){res.writeHead(400);res.end();return;}
     const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>4_500_000){res.writeHead(413);res.end('Request too large');return;}chunks.push(chunk);}
     const headers=new Headers();for(const [key,value]of Object.entries(req.headers)){if(value!==undefined)headers.set(key,Array.isArray(value)?value.join(','):value);}
-    headers.delete('CF-Connecting-IP');headers.set('X-EA-Client-IP',req.socket.remoteAddress||'unknown');
+    headers.delete('CF-Connecting-IP');
+    // Forwarded identities are accepted only from explicitly verified proxy peers.
+    const peer=req.socket.remoteAddress||'unknown',trusted=(process.env.EA_TRUSTED_PROXY_ADDRESSES||'').split(',').map(x=>x.trim());
+    const ipHeader=process.env.EA_CLIENT_IP_HEADER?.toLowerCase(),forwarded=ipHeader?req.headers[ipHeader]:null;
+    const client=trusted.includes(peer)&&typeof forwarded==='string'&&isIP(forwarded.trim())?forwarded.trim():peer;
+    headers.set('X-EA-Client-IP',client);
     const request=new Request(new URL(req.url,origin),{method:req.method,headers,...(!['GET','HEAD'].includes(req.method)?{body:Buffer.concat(chunks)}:{})});
     const response=await worker.fetch(request,env);
     for(const [key,value]of response.headers)if(key!=='set-cookie')res.setHeader(key,value);

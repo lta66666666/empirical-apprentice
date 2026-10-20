@@ -71,9 +71,9 @@ async def authenticate(request):
 def validate(body):
     # Normalize aliases only; arbitrary formulas, scripts and paths never enter templates.
     p = body.get('plan', {})
-    if body.get('engine_id') not in ('r_native', 'stata_native') or p.get('method') not in ('ols', 'panel_fe', 'did'):
+    if body.get('engine_id') not in ('statspai_cloud', 'r_native', 'stata_native') or p.get('method') not in ('ols', 'panel_fe', 'did'):
         raise ValueError('Unsupported engine or method')
-    if body.get('software') != ('r' if body['engine_id']=='r_native' else 'stata') or body.get('execution_location') != 'cloud_native':
+    if body.get('software') != {'r_native':'r','stata_native':'stata','statspai_cloud':'python'}[body['engine_id']] or body.get('execution_location') != 'cloud_native':
         raise ValueError('Engine metadata mismatch')
     text = body.get('csv', '')
     if not isinstance(text, str) or len(text.encode()) > 2_000_000:

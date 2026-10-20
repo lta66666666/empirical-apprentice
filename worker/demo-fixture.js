@@ -16,5 +16,5 @@ export function seedFixture(state,f){
  for(const [key,item]of Object.entries(state.research_understanding.fields))item.label=({goal:'研究目标',object:'研究对象',period:'观察时期',outcome:'结果指标',data_source:'数据来源',adoption_mode:'实施批次',effective_date:'实施时间'})[key]||'研究资料';
  state.demo_fixture={fixture_id:f.fixture_id,fixture_version:f.fixture_version,input_sha256:f.input_sha256};
  state.analysis_workspace={view:'plan',display_mode:'analysis',applied:[]};
- return {ui_view:'plan',filename:f.filename,input_sha256:f.input_sha256,simulated:true,fixture_method:f.fixture_id,fixture_id:f.fixture_id,fixture_version:f.fixture_version,profile:f.profile,dictionary:f.dictionary,question:f.question,source:f.source,candidate:{...f.plan,engine_id:'browser_webr',missing:'block'}};
+ return {ui_view:'plan',filename:f.filename,input_sha256:f.input_sha256,simulated:true,fixture_method:f.fixture_id,fixture_id:f.fixture_id,fixture_version:f.fixture_version,profile:f.profile,dictionary:f.dictionary,question:f.question,source:f.source,candidate:{...f.plan,engine_id:'statspai_cloud',missing:'block'}};
 }

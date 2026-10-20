@@ -1,4 +1,5 @@
 import {getStataGuide,stataGuideVersion} from './stata-guide.js';
+import {engineMetadata} from './executor.js';
 export async function readDrafts(env, sessionId) {
   const rows = await env.DB.prepare('SELECT draft_key,body,version,updated_at FROM research_drafts WHERE session_id=?').bind(sessionId).all();
   return Object.fromEntries(rows.results.map(row => [row.draft_key, {value:JSON.parse(row.body),version:row.version,updated_at:row.updated_at}]));
@@ -18,7 +19,7 @@ export async function draftEndpoint(request,env,state,tail) {
   }
   const {value,version}=await request.json();
   if(!Number.isInteger(version)||version<0||!value||typeof value!=='object'||Array.isArray(value))throw Error('草稿版本或内容无效。');
-  if(key==='analysis-context'&&(Object.keys(value).some(k=>!['engine_id'].includes(k))||!['browser_webr','stata_local_mcp','statspai_local'].includes(value.engine_id)))throw Error('执行方式无效');
+  if(key==='analysis-context'&&(Object.keys(value).some(k=>!['engine_id'].includes(k))||![...Object.keys(engineMetadata),'stata_local_mcp','statspai_local'].includes(value.engine_id)))throw Error('执行方式无效');
   if(key==='stata-guide'){
     if(Object.keys(value).some(k=>!['lesson_id','step_id','guide_version','view_only'].includes(k))||value.view_only!==true||value.guide_version!==stataGuideVersion)throw Error('操作指南阅读记录无效，请重新打开指南。');
     getStataGuide(value.lesson_id,value.step_id);

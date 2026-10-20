@@ -1,4 +1,5 @@
 import {normalizeMethodPlan} from './plan-normalization.js';
+import {methodRegistry,enabledMethods} from './method-registry.js';
 import {sampleEvidence,sampleEvidenceText} from './sample-evidence.js';
 import {datasetMetadata,interpretationWarnings} from './dataset-metadata.js';
 import { engineMetadata, engineCapabilities, nodeRequest, digest } from './executor.js';
@@ -88,12 +89,12 @@ function validatePlan(input, data, blueprint, session) {
     predictors: Array.isArray(input.predictors) ? input.predictors : [], unit: input.unit || '',
     time: input.time || '', treated: input.treated || '', policy_year: input.policy_year ?? null,
     vcov: input.vcov || 'hetero', cluster: input.cluster || '', missing: input.missing || 'block',
-    same_batch: input.same_batch === true, engine_id: input.engine_id || 'r_native',
+    same_batch: input.same_batch === true, engine_id: input.engine_id || 'statspai_cloud',
   };
   if (!engineMetadata[plan.engine_id]) throw new Error('执行引擎未接入。');
   for(const key of ['software','execution_location'])if(input[key]!==undefined && input[key]!==engineMetadata[plan.engine_id][key])throw new Error('软件、位置与引擎不一致，请重新整理方案。');
   Object.assign(plan,engineMetadata[plan.engine_id]); delete plan.label;
-  if (!['ols', 'panel_fe', 'did'].includes(plan.method)) throw new Error('仅支持 OLS、固定效应和同批 DID。');
+  if (!enabledMethods.includes(plan.method)) throw new Error(methodRegistry[plan.method]?.reason||'该方法尚未接入。');
   if (!['iid', 'hetero', 'cluster'].includes(plan.vcov) || !['block', 'drop'].includes(plan.missing)) throw new Error('标准误或缺失处理设置无效。');
   if (!data.headers.includes(plan.outcome)) throw new Error('请选择数据中的结果变量。');
   if (plan.predictors.length > 12 || new Set(plan.predictors).size !== plan.predictors.length || plan.predictors.includes(plan.outcome)) throw new Error('解释变量不能重复或包含结果变量，最多 12 列。');
@@ -216,7 +217,7 @@ function validateSubmittedResult(result, job) {
 export async function handleResearch(request, env, owner, path) {
   if (path === '/api/research/status' && request.method === 'GET') {
     const engines=await engineCapabilities(env,owner);
-    return resultJson({r:engines.browser_webr,engines,default_engine:'r_native',software:[{id:'r',label:'云端原生 R',...engines.r_native},{id:'browser_webr',label:'浏览器 webR',...engines.browser_webr},{id:'stata',label:'Stata',...engines.stata_native},{id:'eviews',label:'EViews',...engines.eviews_native}],methods:['ols','panel_fe','did'],unsupported:['分批 DID','IV','RDD','事件研究回归'],planner_mode:env.MODEL_API_KEY&&env.MODEL_NAME&&env.MODEL_BASE_URL?'online':'rules',model_capabilities:modelCapabilities(env)});
+    return resultJson({r:engines.browser_webr,engines,default_engine:'statspai_cloud',software:[{id:'statspai_cloud',label:'云端计算',...engines.statspai_cloud},{id:'r',label:'云端原生 R',...engines.r_native},{id:'browser_webr',label:'浏览器 webR',...engines.browser_webr},{id:'stata',label:'Stata',...engines.stata_native},{id:'eviews',label:'EViews',...engines.eviews_native}],methods:enabledMethods,method_registry:methodRegistry,unsupported:['分批 DID','IV','RDD','事件研究回归'],planner_mode:env.MODEL_API_KEY&&env.MODEL_NAME&&env.MODEL_BASE_URL?'online':'rules',model_capabilities:modelCapabilities(env)});
   }
   if (path === '/api/research/candidate' && request.method === 'POST') {
     try {
@@ -287,7 +288,7 @@ export async function handleResearch(request, env, owner, path) {
           dictionary, metadata, interpretation_warnings:interpretationWarnings(plan,dictionary), csv_lines:data.lines, research_revision:session.research_revision, evidence_snapshot:{...evidenceSnapshot(session),dictionary}, record_version:1,
           source: String(body.source || '用户提供的数据；来源未核实').slice(0, 1000), question: String(body.question || '').slice(0, 1000),
           simulated: body.simulated === true, missing_lines: missingLines, result: null, reflections: [],
-          tool_trace: [{ transport: plan.execution_location, tool: plan.software==='stata'?'Stata regress/xtreg':'fixest::feols' }],
+          tool_trace: [{ transport: plan.execution_location, tool: plan.software==='python'?(plan.method==='ols'?'statspai.regress':'statspai.fast.feols'):plan.software==='stata'?'Stata regress/xtreg':'fixest::feols' }],
         };
         await env.FILES.put(key, body.text);
         try {
@@ -310,6 +311,14 @@ export async function handleResearch(request, env, owner, path) {
   const tail = jobRoute[2] || '';
   try {
     if (!tail && request.method === 'GET') return resultJson(publicJob(job));
+    if (tail === 'stata-code' && request.method === 'GET') {
+      if(job.engine_id!=='statspai_cloud'||job.status!=='succeeded')return fault('本任务尚无可用的对应代码。',409);
+      const code=job.node_artifacts?.['stata-corresponding.do'],manifest=job.node_artifacts?.['stata-corresponding.json'];
+      if(!code||!manifest)return fault('对应代码尚未同步。',409);
+      const metadata=JSON.parse(manifest);
+      if(metadata.executed!==false||metadata.sha256!==await digest(code))return fault('对应代码校验失败。',409);
+      return resultJson({task_id:job.id,plan_sha256:job.plan_sha256,record_version:job.record_version,code,...metadata});
+    }
     if (tail === 'input' && request.method === 'GET') {
       const object = await env.FILES.get(job.input_key);
       if (!object) return fault('输入文件已丢失。', 404);
@@ -394,7 +403,7 @@ export async function handleResearch(request, env, owner, path) {
       const prepared = normalized(parseCsv(original, job.filename), job.plan);
       const interactions=await modelInteractions(env,job.session_id,owner,job.id);
       const files = {
-        'README.md': `# 实证学徒复现包\n\n输入 SHA-256：${job.input_sha256}\n方案 SHA-256：${job.plan_sha256}\n执行位置：${locationLabel(job)}。${job.result_origin||'任务未完成'}\n\n${job.software==='stata'?'使用记录的 Stata 版本，在当前目录批处理 estimate.do。完整参数（含年份虚拟变量）见 full-coefficients.csv。':job.execution_location==='cloud_native'?'使用 R 4.6.1、fixest 0.14.2 与 jsonlite 2.0.0，运行 Rscript --vanilla estimate.R .；结果写入 result.json。':'使用记录的 R/fixest，在本目录运行 reproduce.R。'}\n与 results.json 核对变量、实际样本、系数、标准误、区间及推断口径。原始来源与使用条件须由学生自行核实。\n`,
+        'README.md': `# 实证学徒复现包\n\n输入 SHA-256：${job.input_sha256}\n方案 SHA-256：${job.plan_sha256}\n执行位置：${locationLabel(job)}。${job.result_origin||'任务未完成'}\n\n${job.software==='python'?'使用记录的 Python 3.11 与 StatsPAI 及依赖版本，在当前目录运行 python estimate.py .；Stata 对应代码仅供教学，未由本任务执行。':job.software==='stata'?'使用记录的 Stata 版本，在当前目录批处理 estimate.do。完整参数（含年份虚拟变量）见 full-coefficients.csv。':job.execution_location==='cloud_native'?'使用 R 4.6.1、fixest 0.14.2 与 jsonlite 2.0.0，运行 Rscript --vanilla estimate.R .；结果写入 result.json。':'使用记录的 R/fixest，在本目录运行 reproduce.R。'}\n与 results.json 核对变量、实际样本、系数、标准误、区间及推断口径。原始来源与使用条件须由学生自行核实。\n`,
         'input.csv': original, 'normalized.csv': prepared.csv,
         'plan.json': JSON.stringify(job.plan, null, 2),
         'variable_dictionary.json': JSON.stringify(job.dictionary || {}, null, 2),
@@ -447,13 +456,13 @@ export function reportMarkdown(job) {
     lines.push(`- 软件：${job.result.software_version||job.result.r_version}`, `- 包：${JSON.stringify(job.result.package_versions)}`,`- 推断口径：${JSON.stringify(job.result.inference||{vcov:job.plan.vcov})}`, `- 估计样本：${job.result.n_used}`, '', '| 变量 | 系数 | 标准误 | p 值 | 95% 区间 |', '|---|---:|---:|---:|---:|');
     for (const row of job.result.coefficients) lines.push(`| ${row.term} | ${row.estimate} | ${row.std_error} | ${row.p_value} | [${row.ci_low}, ${row.ci_high}] |`);
     lines.push('', sampleEvidenceText(job),
-      `- R 模型排除原始 CSV 行：${job.result.audit?.model_removed_csv_lines?.join(', ') || (job.result.audit?.used_indices ? '无' : '历史执行未记录')}`,
+      `- 模型排除原始 CSV 行：${job.result.audit?.model_removed_csv_lines?.join(', ') || (job.result.audit?.used_indices ? '无' : '历史执行未记录')}`,
       '## 警告与局限', ...job.result.warnings.map((item) => `- ${item}`), `- ${job.description.checks}`);
   } else lines.push(`状态：${job.status}；${job.error || '尚无执行结果。'}`);
   lines.push('', '## 学生解释与修订');
   if(!job.reflections.length)lines.push('- 解释练习待完成；分析结果可以下载，学习成果尚未提交。');
   for (const [index, item] of job.reflections.entries()) lines.push(`### 第 ${index + 1} 次`, item.answer, '', `反馈：${item.feedback}`);
-  lines.push('', '## 独立复现与核对', '- 下载并解压该任务的完整复现包，保留原始输入、方案、哈希与版本记录。', '- 使用记录的 R 与 fixest 版本，在解压目录运行复现脚本；核对实际样本、变量、系数、标准误和区间。', '- 也可在页面点击“从原始输入独立重跑核对”，使用相同引擎的新任务复算，绝对误差容差 5×10⁻⁶。', '- 浏览器复算一致仍不代表服务器数值认证或因果条件已满足。');
+  lines.push('', '## 独立复现与核对', '- 下载并解压该任务的完整复现包，保留原始输入、方案、哈希与版本记录。', '- 使用计算详情记录的软件和依赖版本，在解压目录运行对应复现脚本；核对样本、变量、系数、标准误和区间。', '- 也可在页面点击“从原始输入独立重跑核对”，使用相同引擎的新任务复算，绝对误差容差 5×10⁻⁶。', '- 浏览器复算一致仍不代表服务器数值认证或因果条件已满足。');
   if(job.verification?.differences?.length)for(const difference of job.verification.differences)lines.push(`- 差异：${difference.term||''} ${difference.field}；${difference.reason||`绝对误差 ${difference.absolute_difference}`}`);
   return lines.join('\n') + '\n';
 }
@@ -517,7 +526,7 @@ function groupTrendsSvg(job, data) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 260" role="img" aria-label="处理组与对照组描述性均值"><rect width="100%" height="100%" fill="#fff"/>${lines}${years.map((year) => `<text x="${x(year)}" y="230" text-anchor="middle" font-size="11">${year}</text>`).join('')}<text x="55" y="20" font-size="12">处理组</text><text x="145" y="20" font-size="12" fill="#c57442">对照组</text><text x="55" y="252" font-size="11">描述性图；不能证明平行趋势</text></svg>`;
 }
 
-export function locationLabel(job){return job.execution_location==='cloud_native'?`云端原生 ${job.software==='stata'?'Stata':'R'}`:'浏览器 webR';}
+export function locationLabel(job){return job.execution_location==='cloud_native'?`云端原生 ${job.software==='stata'?'Stata':job.software==='python'?'Python / StatsPAI':'R'}`:'浏览器 webR';}
 async function submitCloudJob(env,job,text,session){
   const prepared=normalized(parseCsv(text,job.filename),job.plan);
   const payload={id:job.id,session_id:job.session_id,software:job.software,engine_id:job.engine_id,execution_location:job.execution_location,input_sha256:job.input_sha256,plan_sha256:job.plan_sha256,normalized_sha256:await digest(prepared.csv),csv:prepared.csv,plan:prepared.plan,expires_at:(session?.last_activity||Date.now()/1000)+7*86400};
@@ -547,8 +556,8 @@ export async function syncCloudJob(env,job,session){
       if(!Number.isInteger(r.n_used)||r.n_used<1||r.n_used>job.n_rows||!Array.isArray(r.coefficients)||!r.coefficients.length||r.coefficients.length>15||r.coefficients.some(c=>!['estimate','std_error','p_value','ci_low','ci_high'].every(k=>Number.isFinite(c[k]))))throw new Error('执行节点结果格式无效。');
       if(!Array.isArray(r.used_indices)||r.used_indices.length!==r.n_used||new Set(r.used_indices).size!==r.n_used||r.used_indices.some(i=>!Number.isInteger(i)||i<1||i>job.n_rows))throw new Error('执行节点样本索引无效。');
       r.audit={missing_removed_csv_lines:job.missing_lines,used_indices:r.used_indices,model_removed_count:job.n_rows-job.missing_lines.length-r.n_used,model_removed_csv_lines:job.csv_lines.filter((line,i)=>!r.used_indices.includes(i+1)&&!job.missing_lines.includes(line))};
-      job.result=r;job.completed=remote.completed;job.node_artifacts=Object.fromEntries(Object.entries(remote.artifacts||{}).filter(([k,v])=>/^(estimate\.(R|do)|parameters\.json|execution\.log|session-info\.txt|full-coefficients\.csv|sample\.csv)$/.test(k)&&typeof v==='string'));
-      job.result_origin=`${locationLabel(job)}执行节点返回；Sites 校验归属、快照与格式，未另行复算。`;
+      job.result=r;job.completed=remote.completed;job.node_artifacts=Object.fromEntries(Object.entries(remote.artifacts||{}).filter(([k,v])=>/^(estimate\.(R|do|py)|stata-corresponding\.(do|json)|parameters\.json|execution\.log|session-info\.txt|full-coefficients\.csv|sample\.csv)$/.test(k)&&typeof v==='string'));
+      job.result_origin=`${locationLabel(job)}执行节点返回；网站校验归属、快照与格式，未另行复算。`;
       if(job.verification_of_job_id){const original=await getJob(env,job.owner,job.verification_of_job_id);job.verification=compareResults(original,job);if(original){original.verification={...job.verification,rerun_job_id:job.id};original.record_version=(original.record_version||1)+1;await saveJob(env,original);}}
     }
     job.status=remote.status;job.error=remote.error;job.sync_error=null;

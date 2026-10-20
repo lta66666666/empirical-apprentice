@@ -125,7 +125,7 @@ async function researchSample(name){
 }
 function researchRenderPlan(answer){
   researchPlan=answer;const box=$('researchPlanCard');box.replaceChildren(el('span','section-kicker','02 核对方案'),el('h3','',answer.description.label),el('code','research-formula',answer.description.formula),el('p','',answer.description.meaning),el('p','',`请核实：${answer.description.checks}`),el('p','muted',answer.note));
-  const p=answer.plan;box.append(el('p','workspace-note',`执行软件与位置：${p.engine_id==='browser_webr'?'浏览器 webR':p.software==='stata'?'云端原生 Stata':'云端原生 R'}；切换引擎须重新确认。`));box.append(el('p','',`标准误：${p.vcov}${p.cluster?'；聚类列：'+p.cluster:''}。缺失处理：${p.missing==='drop'?'删除选定变量不完整的行，并记录行号':'有缺失则停止'}。`));
+  const p=answer.plan;box.append(el('p','workspace-note',`执行软件与位置：${p.engine_id==='browser_webr'?'浏览器 webR':p.software==='stata'?'云端原生 Stata':p.software==='python'?'云端计算':'云端原生 R'}；切换引擎须重新确认。`));box.append(el('p','',`标准误：${p.vcov}${p.cluster?'；聚类列：'+p.cluster:''}。缺失处理：${p.missing==='drop'?'删除选定变量不完整的行，并记录行号':'有缺失则停止'}。`));
   box.append(el('p','workspace-note',`核对资料版本：${answer.confirmation.research_revision}；变量说明：${JSON.stringify(researchData.dictionary||latestState.variable_dictionary||{})}；来源：${$('researchSource').value||'未提供，尚未核对'}`));
   if(p.method==='did')box.append(el('p','resource-caution','仅同批实施；组均值图不是事件研究，也不会自动验证平行趋势。'));
   $('researchRun').disabled=!researchRuntime?.engines?.[$('researchEngine').value]?.ready;
@@ -205,12 +205,12 @@ function researchDrawJob(j){
   box.dataset.signature=signature;box.replaceChildren();
   const explanation=$('researchExplanation');explanation.replaceChildren(el('h3','','结果解释'),el('p','workspace-note','分析完成后，可用自己的话解释系数、单位与局限。'));
   const statuses={queued:'排队中',preparing:'准备数据',estimating:'正在估计',saving:'正在保存',cancelled:'已取消',running:'正在执行',succeeded:'分析完成',failed:'执行失败',interrupted:'执行已中断'};
-  box.append(el('span','section-kicker','03 查看真实结果'),el('h3','',`${j.description.label} · ${statuses[j.status]||j.status}`));
+  box.append(el('span','section-kicker','分析结果'),el('h3','',`${j.description.label} · ${statuses[j.status]||j.status}`));
   const steps=el('ol','research-progress');
   const stopped=['failed','interrupted','cancelled'].includes(j.status);
   for(const [label,done]of [['方案已确认',true],[j.execution_location==='cloud_native'?'云端任务已记录':'浏览器任务已创建',true],[j.status==='succeeded'?'计算已完成':stopped?'计算未完成':'等待计算完成',j.status==='succeeded'],[j.status==='succeeded'?'结果已保存':stopped?'没有可用结果':'等待保存结果',j.status==='succeeded']]){const li=el('li',done?'done':'',label);steps.append(li);}box.append(steps);
   if(['failed','interrupted','cancelled'].includes(j.status))steps.setAttribute('aria-label','执行未完成，未产生已保存结果');
-  box.append(el('p','',j.simulated?'模拟教学数据 · 不能作为真实政策证据':'用户提供数据 · 来源和识别条件未自动核实'),el('p','workspace-note',j.execution_location==='cloud_native'?`本次由云端原生 ${j.software==='stata'?'Stata':'R/fixest'}执行。Sites 保存结果与证据，未另行复算。`:'本次 R/fixest 在浏览器执行。服务器保存并校验提交格式，没有独立重算数值。'),el('code','research-formula',j.description.formula));
+  box.append(el('p','',j.simulated?'模拟教学数据 · 不能作为真实政策证据':'用户提供数据 · 来源和识别条件未自动核实'),el('p','workspace-note',j.execution_location==='cloud_native'?`本次由云端原生 ${j.software==='stata'?'Stata':j.software==='python'?'Python / StatsPAI':'R/fixest'}执行。网站保存结果与证据，未另行复算。`:'本次 R/fixest 在浏览器执行。服务器保存并校验提交格式，没有独立重算数值。'),el('code','research-formula',j.description.formula));
   if(j.stale)box.append(el('p','resource-caution','研究蓝图已改变：下方对应旧方案，请核对后重新运行。'));
   if(['queued','running','preparing','estimating','saving'].includes(j.status))box.append(button('取消当前计算','btn-secondary',()=> (j.execution_location==='cloud_native'?api(`/api/research/jobs/${j.id}/interrupt`,{method:'POST'}).then(()=>researchWatch(j.id)):browserInterruptJob(j.id)).catch(e=>researchNotice(e.message,true))));
   if(j.sync_error)box.append(el('p','resource-caution',`云端状态暂未同步：${j.sync_error}。任务记录保留，请稍后刷新。`));
@@ -231,9 +231,9 @@ function researchDrawJob(j){
   }
   if(j.status!=='succeeded'){box.append(el('p','muted','任务保存在服务器，刷新后可从当前练习的分析记录继续查看。'));return;}
   const r=j.result;
-  const evidence=el('details','ea-result-evidence'),evidenceBody=el('div');evidence.append(el('summary','','详细表图、软件记录与独立核对'),evidenceBody);
+  const evidence=el('details','ea-result-evidence'),evidenceBody=el('div');evidence.append(el('summary','','计算详情、完整表图与核验'),evidenceBody);
   for(const node of [box.querySelector('.research-progress'),box.querySelector(':scope>.workspace-note'),box.querySelector(':scope>.research-formula')])if(node)evidenceBody.append(node);
-  box.append(el('p','ea-result-summary',`实际估计 ${r.n_used} 行 · ${j.execution_location==='cloud_native'?'云端原生 '+(j.software==='stata'?'Stata':'R'):'浏览器 webR'} · 资料版本 ${j.research_revision??'历史未记录'} · 导出版本 ${j.record_version||1} · ${j.verification?.status==='consistent'?'同引擎复算一致':j.verification?.status==='inconsistent'?'同引擎复算有差异':'尚未独立核对'}`));
+  box.append(el('p','ea-result-summary',`估计样本 ${r.n_used} 行 · 资料版本 ${j.research_revision??'历史未记录'} · 导出版本 ${j.record_version||1} · ${j.verification?.status==='consistent'?'同引擎复算一致':j.verification?.status==='inconsistent'?'同引擎复算有差异':'尚未独立核对'}`));
   if(j.verification?.differences?.length)evidenceBody.append(el('pre','',JSON.stringify(j.verification.differences,null,2)));
   let rerunRequestId=null;const rerun=button('从原始输入独立重跑核对','btn-secondary',async()=>{if(researchRunning){researchNotice('当前操作正在处理中，请稍后重跑。',true);return;}const context=researchContext(),operation=++researchOperationEpoch;researchRunning=true;rerun.disabled=true;researchBusyFeedback('正在创建独立重跑任务…');rerunRequestId||=crypto.randomUUID();try{const next=await api(`/api/research/jobs/${j.id}/rerun`,{method:'POST',body:{request_id:rerunRequestId}});if(!researchContextCurrent(context,false))return;rerunRequestId=null;eaResearchStep('execute');await researchWatch(next.id);if(next.execution_location!=='cloud_native')await browserRunJob(next,true);}catch(e){if(context.session===sessionId)researchNotice(e.message,true);}finally{if(operation===researchOperationEpoch){researchRunning=false;rerun.disabled=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}});evidenceBody.append(rerun);
   evidenceBody.append(el('p','',`${r.software_version||r.r_version} · ${JSON.stringify(r.package_versions)} · 实际估计 ${r.n_used} 行${r.clusters?' · '+r.clusters+' 个聚类':''}`));
@@ -253,6 +253,15 @@ function researchDrawJob(j){
   for(const c of r.coefficients){const row=el('tr');row.tabIndex=0;row.setAttribute('aria-label',`选择 ${c.term} 查看区间与单位`);row.onclick=()=>selectCoefficient(c,row);row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectCoefficient(c,row);}};for(const value of [c.term,c.estimate.toPrecision(5),c.std_error.toPrecision(4),c.p_value.toPrecision(4),`[${c.ci_low.toPrecision(4)}, ${c.ci_high.toPrecision(4)}]`])row.append(el('td','',value));table.append(row);}
   wrap.append(table);evidenceBody.append(wrap);
   box.append(focus);selectCoefficient(r.coefficients.find(c=>c.term!=='(Intercept)')||r.coefficients[0],table.querySelectorAll('tr')[r.coefficients.findIndex(c=>c.term!=='(Intercept)')+1]||table.querySelectorAll('tr')[1]);
+  if(j.engine_id==='statspai_cloud'){
+    const teaching=el('details','ea-corresponding-code'),body=el('div');teaching.append(el('summary','','Stata 对应代码'),body);
+    let loaded=false;teaching.addEventListener('toggle',async()=>{if(!teaching.open||loaded)return;body.textContent='正在读取对应代码…';
+      try{const context=researchContext(),code=await api(`/api/research/jobs/${j.id}/stata-code`);if(!researchContextCurrent(context,false)||researchJob?.id!==j.id)return;
+        const pre=el('pre');pre.textContent=code.code;body.replaceChildren(el('p','muted','教学代码，可复制到 Stata 阅读和运行；本次计算由 StatsPAI 完成。'),pre);
+        for(const note of code.differences||[])body.append(el('p','muted',note));
+        const copy=button('复制代码','btn-secondary',async()=>{try{await navigator.clipboard.writeText(code.code);copy.textContent='已复制';}catch{copy.textContent='复制失败，请选择代码后复制';}});body.append(copy);loaded=true;
+      }catch(e){body.textContent='读取失败：'+e.message+'；关闭后重新展开可重试。';}});box.append(teaching);
+  }
   const selector=el('select');selector.setAttribute('aria-label','选择要解释的系数');for(const c of r.coefficients)selector.append(new Option(c.term,c.term));selector.value=(r.coefficients.find(c=>c.term!=='(Intercept)')||r.coefficients[0]).term;
   for(const option of selector.options)option.textContent=option.value==='(Intercept)'?'截距（查看零点含义）':`${option.value} · 查看系数、区间与单位`;
   selector.className='ea-coefficient-selector';selector.onchange=()=>{const index=r.coefficients.findIndex(c=>c.term===selector.value);selectCoefficient(r.coefficients[index],table.querySelectorAll('tr')[index+1]);const other=$('researchExplanation')?.querySelector('.ea-coefficient-selector');if(other)other.value=selector.value;};box.insertBefore(selector,focus);
@@ -308,7 +317,7 @@ function researchHistory(jobs){
   const box=$('researchHistory');box.replaceChildren(el('h4','','当前练习的分析记录'));
   if(!jobs.length)box.append(el('p','muted','尚无分析记录。'));
   const states={queued:'排队中',running:'正在执行',preparing:'准备数据',estimating:'正在估计',saving:'正在保存',succeeded:'分析完成',failed:'执行失败',cancelled:'已取消',interrupted:'已中断'};
-  for(const j of jobs)box.append(button(`${researchNames[j.plan.method]} · ${new Date(j.created*1000).toLocaleString()} · ${states[j.status]||j.status}`,'research-history-item',()=>{eaSetTask('research');eaResearchStep('execute');window.eaAnalysisEngine='browser_webr';window.eaSelectedTask={id:j.id,session_id:sessionId,engine_id:j.engine_id||'browser_webr'};window.dispatchEvent(new CustomEvent('ea-local-tasks',{detail:{tasks:latestState?.local_stata_tasks||[],session:sessionId}}));researchWatch(j.id);}));
+  for(const j of jobs)box.append(button(`${researchNames[j.plan.method]} · ${new Date(j.created*1000).toLocaleString()} · ${states[j.status]||j.status}`,'research-history-item',()=>{eaSetTask('research');eaResearchStep('execute');window.eaAnalysisEngine=j.engine_id||'statspai_cloud';window.eaSelectedTask={id:j.id,session_id:sessionId,engine_id:j.engine_id||'browser_webr'};window.dispatchEvent(new CustomEvent('ea-local-tasks',{detail:{tasks:latestState?.local_stata_tasks||[],session:sessionId}}));researchWatch(j.id);}));
 }
 function renderResearch(data){
   if(researchPlan && researchPlan.confirmation?.research_revision !== data.research_revision)researchInvalidate();
@@ -333,7 +342,7 @@ function setupResearch(){
   const grid=el('div','research-grid'),form=el('section','research-input'),output=el('section','research-output');
   form.append(el('span','section-kicker','01 准备数据'),el('h3','','数据与研究问题'));
   const label=el('label','research-field','或上传 UTF-8 CSV / TSV（最多 2 MB、20000 行）'),file=el('input');file.type='file';file.accept='.csv,.tsv';file.id='researchFile';label.append(file);form.append(label);
-  file.onchange=async()=>{const f=file.files[0];if(!f)return;if(f.size>2000000){researchNotice('文件超过 2 MB。',true);return;}if(!sessionId||researchRunning){researchNotice('练习尚未就绪或当前操作未完成，请稍后选择文件。',true);return;}const context=researchBeginInput();try{const text=await f.text();if(!researchContextCurrent(context,false))return;const p=await api(`/api/sessions/${context.session}/research/inspect`,{method:'POST',body:{filename:f.name,text}});if(await researchCommitInput({filename:f.name,text,simulated:false,dictionary:{}},p,{},context))researchNotice('数据已检查。请选择变量，填写来源，整理方案。');}catch(e){if(researchContextCurrent(context,false))researchNotice(e.message,true);}finally{if(researchContextCurrent(context,false)){researchInputBusy=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}};
+  file.onchange=async()=>{const f=file.files[0];if(!f)return;if(f.size>2000000){researchNotice('文件超过 2 MB。',true);return;}if(!sessionId||researchRunning){researchNotice('练习尚未就绪或当前操作未完成，请稍后选择文件。',true);return;}if(!confirm('此文件将上传服务器用于字段检查、保存和分析。练习最后活动七天后到期；模型只接收字段摘要。请确认有权上传该数据。')){file.value='';return;}const context=researchBeginInput();try{const text=await f.text();if(!researchContextCurrent(context,false))return;const p=await api(`/api/sessions/${context.session}/research/inspect`,{method:'POST',body:{filename:f.name,text}});if(await researchCommitInput({filename:f.name,text,simulated:false,dictionary:{}},p,{},context))researchNotice('数据已检查。请选择变量，填写来源，整理方案。');}catch(e){if(researchContextCurrent(context,false))researchNotice(e.message,true);}finally{if(researchContextCurrent(context,false)){researchInputBusy=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}};
   const download=button('下载当前案例或数据','text-btn',()=>{if(!researchData)return;const a=el('a');const url=URL.createObjectURL(new Blob([researchData.text],{type:'text/csv;charset=utf-8'}));a.href=url;a.download=researchData.filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});form.append(download);
   const profile=el('div','research-profile');profile.id='researchProfile';form.append(profile);const dictionary=el('details','research-dictionary');dictionary.id='researchDictionary';form.append(dictionary);
   const instruction=researchField('researchInstruction','用自然语言描述你想研究什么','textarea');instruction.querySelector('textarea').rows=3;instruction.querySelector('textarea').maxLength=2000;form.append(instruction);
@@ -343,7 +352,7 @@ function setupResearch(){
   const aiNote=el('div','workspace-note');aiNote.id='researchAiNote';form.append(aiCandidate,aiNote);
   const transfer=el('div','research-prep-transfer');transfer.id='researchPrepTransfer';form.append(transfer);
   const params=el('details','research-parameters');params.open=true;params.append(el('summary','','方法与变量'));
-  const engine=researchField('researchEngine','软件与执行位置');engine.querySelector('select').replaceChildren(new Option('请先选择执行方式',''),new Option('浏览器 R / fixest（无需云端节点）','browser_webr'),new Option('云端原生 R（检测配置后开放）','r_native'),new Option('云端 Stata（授权及环境待验收）','stata_native'));params.append(engine,el('p','workspace-note','浏览器 R 是真实 R / fixest 计算。云端 R、Stata 需要外部执行节点；EViews 未接入。切换执行方式必须重新确认。'));
+  const engine=researchField('researchEngine','软件与执行位置');engine.querySelector('select').replaceChildren(new Option('云端计算（无需安装）','statspai_cloud'),new Option('请先选择执行方式',''),new Option('浏览器 R / fixest（无需云端节点）','browser_webr'),new Option('云端原生 R（检测配置后开放）','r_native'),new Option('云端 Stata（授权及环境待验收）','stata_native'));params.append(engine,el('p','workspace-note','默认云端计算，无需安装软件；数据会上传服务器，练习最后活动七天后到期。浏览器 R 可主动选择作为备用。切换方式须重新确认。'));
   const method=researchField('researchMethod','计量方法');method.querySelector('select').replaceChildren(...Object.entries(researchNames).map(([v,t])=>new Option(t,v)));params.append(method,researchField('researchOutcome','结果变量 Y'));
   const predictors=el('fieldset');predictors.append(el('legend','','解释变量 / DID 控制变量'));const checks=el('div','research-predictors');checks.id='researchPredictors';predictors.append(checks);params.append(predictors);
   const panel=el('div');panel.id='researchPanelFields';panel.hidden=true;panel.append(researchField('researchUnit','个体编号'),researchField('researchTime','年份'));params.append(panel);
@@ -363,10 +372,10 @@ function setupResearch(){
   const explanation=el('section','ea-explanation');explanation.id='researchExplanation';explanation.dataset.researchStage='explain';explanation.append(el('h3','','结果解释'),el('p','workspace-note','完成分析后，在这里练习解释系数、单位与局限。可先查看其他步骤。'));output.append(explanation);
   grid.append(form,output);pane.append(grid);document.querySelector('.workspace-body').append(pane);
   api('/api/research/status').then(s=>{
-    researchRuntime=s;runtime.replaceChildren(el('summary','','执行环境 · 查看或更换执行方式'),el('strong','',s.engines.r_native.ready?'云端原生 R 可执行':'当前可用：浏览器 R / fixest；云端软件尚未就绪'));
-    const engineSelect=$('researchEngine');if(!engineSelect.value)engineSelect.value='browser_webr';
-    for(const option of engineSelect.options){if(['r_native','stata_native'].includes(option.value)){const capability=s.engines[option.value];option.disabled=!capability?.ready;option.textContent=`${option.value==='r_native'?'云端原生 R':'云端 Stata'}（${capability?.status||'未配置'}）`;}}
-    runtime.append(el('p','workspace-note','无需在电脑安装 R，也无需配置模型才能计算。先选择浏览器执行，再载入模拟数据、整理并确认方案。首次运行需下载 R 和 fixest，请保持网页打开。'));
+    researchRuntime=s;runtime.replaceChildren(el('summary','','执行环境 · 查看或更换执行方式'),el('strong','',s.engines.statspai_cloud?.ready?'云端计算已就绪':'云端计算尚未就绪；可主动选择浏览器 R 备用'));
+    const engineSelect=$('researchEngine');if(!engineSelect.value)engineSelect.value=s.default_engine||'statspai_cloud';
+    for(const option of engineSelect.options){if(['statspai_cloud','r_native','stata_native'].includes(option.value)){const capability=s.engines[option.value];option.disabled=!capability?.ready;option.textContent=`${option.value==='statspai_cloud'?'云端计算':option.value==='r_native'?'云端原生 R':'云端 Stata'}（${capability?.status||'未配置'}）`;}}
+    runtime.append(el('p','workspace-note','默认云端计算，无需安装软件；先载入数据，再核对并确认方案。不会在云端失败后自动改用其他软件。'));
     const browserChoice=button('使用浏览器 R / fixest','btn-primary',()=>{if(researchRunning){researchNotice('请等待或中断当前任务后切换执行方式。',true);return;}engineSelect.value='browser_webr';researchInvalidate();researchNotice('已选择浏览器 R / fixest。请载入数据、整理方案并重新确认；这不是云端执行。');});runtime.append(browserChoice);
     const state=el('p','workspace-note');state.id='eaRuntimeStatus';state.setAttribute('role','status');
     const initialize=button('检查并初始化浏览器 R','btn-secondary',async()=>{if(researchRunning)return;initialize.disabled=true;state.textContent='正在下载或初始化浏览器 R 与 fixest…';try{const r=await eaInitWebR();const version=await r.evalRString("paste('R',getRversion(),'· fixest',as.character(packageVersion('fixest')))");state.textContent=`浏览器执行环境已就绪：${version}。仍须选择执行方式并确认方案。`;if(typeof eaRefreshEnvironment==='function')eaRefreshEnvironment();}catch(e){runtime.open=true;state.textContent=`初始化失败：${e.message}。请检查下载网络后重试。`;}finally{initialize.disabled=false;}});runtime.append(initialize,state);
