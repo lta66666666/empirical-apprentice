@@ -1,5 +1,6 @@
 /* Server-owned drafts never replace submitted learning evidence. */
-const eaDraftSessions=new Map();
+const eaDraftSessions=new Map(),eaResearchInputCache=new Map();
+window.eaRememberResearchInput=()=>{if(!researchData||!eaInputHash||!sessionId)return;const key=(window.EA_ACCOUNT?.id||'')+':'+sessionId;eaResearchInputCache.set(key,{hash:eaInputHash,data:structuredClone(researchData)});if(eaResearchInputCache.size>5)eaResearchInputCache.delete(eaResearchInputCache.keys().next().value);};
 let eaDraftRestoreEpoch=0,eaInputHash='';
 function eaDraftStore(id=sessionId){if(!eaDraftSessions.has(id))eaDraftSessions.set(id,new Map());return eaDraftSessions.get(id);}
 function eaDraftEntry(key,id=sessionId){const store=eaDraftStore(id);if(!store.has(key)){let cached=null;try{cached=JSON.parse(storageGet('ea_draft_cache:'+id+':'+key)||'null');}catch{}store.set(key,{key,id,version:cached?.version||0,value:cached?.value||{},dirty:!!cached,serial:0,timer:null,inflight:null});}return store.get(key);}
@@ -92,7 +93,9 @@ async function eaRestoreWorkbench(data){
   researchProfileCache=draft.profile;
   $('researchInstruction').value=draft.question||'';$('researchSource').value=draft.source||'';
   researchSetFields(draft.profile,draft.candidate||{});
-  if(draft.simulated&&draft.fixture_method){
+  const remembered=eaResearchInputCache.get((window.EA_ACCOUNT?.id||'')+':'+id);
+  if(remembered?.hash===draft.input_sha256){researchData=structuredClone(remembered.data);researchData.dictionary={...researchData.dictionary,...draft.dictionary};eaRenderDictionary();}
+  else if(draft.simulated&&draft.fixture_method){
     try{const example=await api(`/api/research/examples/${draft.fixture_method}`);
       if(epoch!==eaDraftRestoreEpoch||sessionId!==id||researchData)return;
       const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(example.text));

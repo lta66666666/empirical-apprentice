@@ -1,15 +1,17 @@
 # 实证学徒：当前能力与交接入口
 
-状态核对：2026-10-19。当前公开版本为 **V42 受限试用**；本轮 Stata 操作指南、知识匹配、样本证据及课程资料一致性修复已发布，验收范围与未通过项见专项报告。
+状态核对：2026-10-20。当前公开版本为 **V46 受限试用**；本轮增加独立完整DID示范、助手自动准备模拟文件、按方法精简设置、同步教学及有证据的解释评价。运行源码为 `51b64bdaf2a2be1d4d765e76a52a6197c1259a1f`；测试、失败回退及边界见专项报告。
 
 - 先注册或登录，首页只有“定向导学”和“边分析边学”两个入口。课程为八阶段；目录、图文手册和实验包说明统一读取 `worker/content.js`，生成命令为 `node scripts/build-course-materials.mjs`。
-- 无已选执行方式时默认浏览器 R / webR。现有计算范围为 OLS、个体＋年份固定效应、同批 DID；参数与输入核对确认后才计算。当前版本真实浏览器、设备与导出验收仍有未完成项。
-- 本机 Stata 需要有效安装与许可、本机助手及配对；执行批准与结果上传批准分别保留。实际模板代码可只读讲解。V39 已取得公网三方法协议闭环证据，不等同于真实浏览器点击、第二台 Windows 或休眠恢复验收。StatsPAI 结果明确标为 Python，不冒充 Stata。
+- 无已选执行方式时默认浏览器 R / webR。现有计算范围为 OLS、个体＋年份固定效应、同批 DID；参数与输入核对确认后才计算。真实浏览器及导出已有证据；首次外部运行时下载可能超时，实体手机及200%实际缩放仍待本版验收。
+- 本机 Stata 需要有效安装与许可、本机助手及配对；执行批准与结果上传批准分别保留。实际模板代码可只读讲解。V46已取得公网DID真实浏览器配对、自动备数据、两次批准、真实执行、刷新恢复、正式解释与报告证据；本机三方法均实际计算，第二台Windows及真实休眠恢复继续待验。StatsPAI 结果明确标为 Python，不冒充 Stata。
 - 八阶段第6阶段保留原有 Python 复现小实验，并提供 [Stata do-file 与运行记录导览](https://empirical-apprentice-webr-trial.liskyler9.chatgpt.site/analysis?stata_guide=do-files)；阅读导览不会执行代码，也不标为“已掌握”。
 - 教材仅发布自编短卡和已核对来源索引；原书、扫描页、私有输入及运行凭据不进入源码包。自编教学表述仍待审校。
 - 云端 R、大陆／JoyCode 部署、云端 Stata、EViews、第二台 Windows、真实休眠、长期清理与生产恢复继续按各自证据列为未完成或待验收。
 
 本轮交付见 [Stata操作教学与验收](docs/STATA_OPERATION_ACCEPTANCE.md) 及 [操作来源索引](docs/STATA_OPERATION_SOURCES.md)；其余目标沿用 [统一优化与验收台账](docs/TEACHING_INTELLIGENCE_ACCEPTANCE.md)。材料出处见 [教学材料索引](docs/TEACHING_SOURCE_INDEX.md)，助手启动见 [本机助手说明](local_stata/README.md)，参赛记录见 [参赛证据台账](docs/COMPETITION_EVIDENCE.md)。历史版本记录用于追溯，不能覆盖本节的当前能力状态。
+
+本轮入口及逐项证据见 [优化说明](docs/CORE_EXPERIENCE_CHANGES.md) 和 [测试验证报告](docs/CORE_EXPERIENCE_ACCEPTANCE.md)。简短演示：登录→边分析边学→一键体验同批DID→核对方案→确认计算；如切换Stata，先下载新版助手，配对后点击“在助手准备模拟数据”，再分别批准执行与上传。
 
 ---
 

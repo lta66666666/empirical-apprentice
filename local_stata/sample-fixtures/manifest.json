@@ -1,0 +1,20 @@
+{
+  "version": "teaching-fixtures-v1",
+  "fixtures": {
+    "ols": {
+      "fixture_id": "ols",
+      "fixture_version": "teaching-fixtures-v1",
+      "input_sha256": "1a771585847400ca1ce294a2ed17db68d2208fbb33326f10445acc4c6abf8f5d"
+    },
+    "panel_fe": {
+      "fixture_id": "panel_fe",
+      "fixture_version": "teaching-fixtures-v1",
+      "input_sha256": "36666c9380bed25e79c8aa7a9a723ebe3e11eb65fe7d0e75498e44039c64abf6"
+    },
+    "did": {
+      "fixture_id": "did",
+      "fixture_version": "teaching-fixtures-v1",
+      "input_sha256": "36666c9380bed25e79c8aa7a9a723ebe3e11eb65fe7d0e75498e44039c64abf6"
+    }
+  }
+}

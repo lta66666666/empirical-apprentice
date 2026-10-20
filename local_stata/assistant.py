@@ -19,6 +19,7 @@ STATE = {'paired':False,'online':False,'mcp_available':False,'task':None,'error'
 CONFIG = {}
 INPUT = None
 CURRENT = None
+FIXTURE_RECEIPT = None
 STOP = threading.Event()
 
 def digest(data): return hashlib.sha256(data).hexdigest()
@@ -47,15 +48,17 @@ def network_message(action,error):
         return '网站接口 '+action+' 返回 HTTP '+str(error.code)+'；请核对连接或配对状态。'
     return '网站连接暂时中断（'+action+'）；已保留本机状态，等待重新连接。'+(' HTTPS连接被提前关闭。' if 'EOF' in str(error) else '')
 
-def remote(action, payload):
+def remote(action, payload, configuration=None):
+    config=dict(configuration or CONFIG)
     try:
-        result=http(CONFIG['site'] + '/api/local-stata/agent/' + CONFIG['id'] + '/' + action, payload,
-                    {'Authorization':'Bearer ' + CONFIG['token']},safe_retry=action in ('heartbeat','claim','preview'))[0]
+        result=http(config['site'] + '/api/local-stata/agent/' + config['id'] + '/' + action, payload,
+                    {'Authorization':'Bearer ' + config['token']},safe_retry=action in ('heartbeat','claim','preview'))[0]
     except Exception as error:
-        STATE.update(online=False,network_error=network_message(action,error))
-        if isinstance(error,urllib.error.HTTPError) and error.code==401: STATE['paired']=False
+        if config.get('id')==CONFIG.get('id'):
+            STATE.update(online=False,network_error=network_message(action,error))
+            if isinstance(error,urllib.error.HTTPError) and error.code==401: STATE['paired']=False
         raise
-    STATE.update(online=True,network_error='',last_contact=time.time())
+    if config.get('id')==CONFIG.get('id'): STATE.update(online=True,network_error='',last_contact=time.time())
     return result
 
 class MCP:
@@ -150,6 +153,33 @@ def read_input(path):
         except (OSError,ValueError) as error:
             metadata_warning='随附字典未载入：'+str(error)+'；仍可计算，不猜测单位。'
     return {'path':str(path),'data':data,'rows':rows,'hash':digest(data),'dictionary':dictionary,'metadata_warning':metadata_warning,'profile':{'row_count':len(rows)-1,'columns':columns}}
+
+def prepare_fixture(request):
+    """Only bundled, versioned synthetic resources; never a remote URL or user path."""
+    global INPUT,FIXTURE_RECEIPT
+    if request.get('session_id')!=CONFIG.get('session_id') or request.get('pairing_id')!=CONFIG.get('id'): raise ValueError('模拟准备请求不属于当前练习')
+    if CURRENT and CURRENT['task']['status'] in ('awaiting_approval','approving','running','awaiting_upload','cancel_requested'): raise ValueError('先完成或取消当前任务')
+    fixture=request.get('fixture_id')
+    if fixture not in ('ols','panel_fe','did'): raise ValueError('非内置模拟案例')
+    packaged=ROOT/'sample-fixtures';manifest=json.loads((packaged/'manifest.json').read_text(encoding='utf-8'))
+    spec=manifest['fixtures'][fixture]
+    if any(request.get(k)!=spec[k] for k in ('fixture_id','fixture_version','input_sha256')): raise ValueError('案例版本与助手包不同，请更新助手')
+    data=(packaged/(fixture+'.csv')).read_bytes()
+    if digest(data)!=request['input_sha256']: raise ValueError('包内模拟数据校验失败')
+    directory=HOME/'samples'/CONFIG['id']/spec['fixture_version'];directory.mkdir(parents=True,exist_ok=True)
+    path=directory/(fixture+'.csv')
+    if path.exists() and digest(path.read_bytes())!=spec['input_sha256']: raise ValueError('模拟文件已被修改；保留文件，请另建示范练习')
+    if not path.exists():
+        temporary=path.with_suffix('.tmp');temporary.write_bytes(data);os.replace(temporary,path)
+    dictionary=packaged/(fixture+'.dictionary.json');target=path.with_suffix('.dictionary.json')
+    if target.exists() and target.read_bytes()!=dictionary.read_bytes(): raise ValueError('模拟字典已被修改，保留原文件')
+    if not target.exists():
+        temporary=target.with_suffix('.tmp');temporary.write_bytes(dictionary.read_bytes());os.replace(temporary,target)
+    selected=read_input(path);selected['pairing_id']=CONFIG['id'];selected['session_id']=CONFIG['session_id']
+    receipt={k:request[k] for k in ('request_id','session_id','pairing_id','fixture_id','fixture_version','input_sha256')};receipt['status']='ready'
+    record=directory/'prepared.json';temporary=record.with_suffix('.tmp');temporary.write_text(json.dumps(receipt),encoding='utf-8');os.replace(temporary,record)
+    # The durable receipt is committed before the input can be advertised.
+    INPUT=selected;FIXTURE_RECEIPT=receipt;STATE.update(input_file=str(path),error='',fixture_status='模拟数据已准备，待同步；尚未执行')
 
 def prepare(task):
     global CURRENT
@@ -290,6 +320,7 @@ def recover_completed(task):
 
 def sync_completed(current,cloud_task):
     if cloud_task['id']!=current['task']['id']: raise ValueError('网站返回了不同任务，本地结果已保留。')
+    if current['task']['status']=='succeeded': return  # A late pre-upload heartbeat cannot reopen a completed task.
     if cloud_task['status']=='running':
         try: cloud_task=remote('event',{'task_id':cloud_task['id'],'status':'awaiting_upload'})['task']
         except Exception:
@@ -336,7 +367,7 @@ def run_current(current):
         current['task']['status']=status;stop_current(current)
 
 def poll():
-    global CURRENT
+    global CURRENT,FIXTURE_RECEIPT
     while not STOP.wait(3):
         try:
             try:
@@ -344,12 +375,30 @@ def poll():
                 STATE.update(mcp_available=health.get('stata_available') is True,mcp_version=health.get('version',''))
             except Exception: STATE['mcp_available']=False
             if not CONFIG: continue
+            with LOCK: captured_config=dict(CONFIG);captured_input=INPUT;captured_receipt=FIXTURE_RECEIPT
             STATE['engines']=engine_capabilities()
-            payload={'mcp_available':STATE['mcp_available'],'mcp_version':STATE.get('mcp_version',''),'engines':STATE['engines']}
-            if INPUT: payload.update(profile=INPUT['profile'],input_sha256=INPUT['hash'],dictionary=INPUT.get('dictionary',{}))
-            paired=remote('heartbeat',payload);STATE.update(paired=paired['paired'],online=True)
+            payload={'mcp_available':STATE['mcp_available'],'mcp_version':STATE.get('mcp_version',''),'engines':STATE['engines'],'fixture_preparation_version':1}
+            if captured_input and captured_input.get('pairing_id')==captured_config.get('id') and captured_input.get('session_id')==captured_config.get('session_id'): payload.update(profile=captured_input['profile'],input_sha256=captured_input['hash'],dictionary=captured_input.get('dictionary',{}))
+            if captured_receipt: payload['fixture_receipt']=captured_receipt
+            paired=remote('heartbeat',payload,captured_config)
+            if captured_config.get('id')!=CONFIG.get('id'): continue
+            STATE.update(paired=paired['paired'],online=True)
             if not paired['paired']: continue
-            task=remote('claim',{})['task']
+            CONFIG['session_id']=paired['session_id']
+            (HOME/'connection.json').write_text(json.dumps(CONFIG),encoding='utf-8')
+            preparation=paired.get('fixture_preparation')
+            if preparation and preparation['status']=='pending':
+                try:
+                    with LOCK: prepare_fixture(preparation)
+                except Exception as error:
+                    FIXTURE_RECEIPT={**preparation,'status':'failed'};STATE.update(error=str(error),fixture_status='模拟数据准备失败；尚未执行')
+                continue
+            if preparation and preparation['status']=='ready':
+                if INPUT is None and paired.get('input_sha256')==preparation['input_sha256']:
+                    with LOCK: prepare_fixture(preparation)
+                STATE['fixture_status']='模拟数据已同步；运行仍需批准'
+            task=remote('claim',{},captured_config)['task']
+            if captured_config.get('id')!=CONFIG.get('id'): continue
             if not task: continue
             if task['status'] in ('running','awaiting_upload') and (HOME/'tasks'/task['id']/'completed.json').exists():
                 if not CURRENT or CURRENT['task']['id']!=task['id']: CURRENT=recover_completed(task)
@@ -363,7 +412,9 @@ def poll():
                 else: remote('event',{'task_id':task['id'],'status':'cancelled'});STATE['task']=dict(task,status='cancelled')
             elif not CURRENT or CURRENT['task']['id']!=task['id']:
                 if task['status']=='awaiting_approval':
-                    prepare(task)
+                    with LOCK:
+                        if captured_config.get('id')!=CONFIG.get('id'): continue
+                        prepare(task)
                 elif task['status']=='running':
                     stop_session('ea_'+task['id'].replace('-',''));remote('event',{'task_id':task['id'],'status':'interrupted'})
                     STATE['error']='助手重启后没有自动重跑；原任务标记为已中断。'
@@ -381,7 +432,7 @@ def poll():
             if not isinstance(error,(urllib.error.URLError,OSError)): STATE['error']=str(error)
             if isinstance(error,urllib.error.HTTPError) and error.code==401 and CURRENT: stop_current(CURRENT)
 
-PAGE='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>实证学徒 · 本机计算助手</title><style>body{font:16px/1.6 system-ui;max-width:1000px;margin:30px auto;padding:20px;color:#19383b;background:#f6faf9}button,input,textarea{font:inherit;padding:12px;margin:8px 0;box-sizing:border-box}button{background:#087e76;color:white;border:0;border-radius:8px;cursor:pointer}input,textarea{width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px}section{margin:20px 0}h1{font-size:26px}</style><h1>本机计算助手（试验）</h1><p>4000端口只在本机使用。代码以你的系统账号权限执行，工作目录不是权限沙箱。原始输入和完整日志保存在本机。</p><section><label>网站HTTPS地址</label><input id="site" placeholder="https://你的站点"><button onclick="act('pair',{site:site.value})">生成五分钟配对码</button><p id="pair"></p></section><section><label>本机CSV/TSV路径（不发送到网站；自动读取同名 .dictionary.json）</label><input id="path"><button onclick="act('input',{path:path.value})">读取字段摘要</button></section><p>可选：与 ols.csv 放在一起的 ols.dictionary.json 可填写列名到含义及单位的映射。只发送字段说明，不发送原始观测；没有字典也能回归。</p><section><h2>执行前核对</h2><p id="state"></p><pre id="paths"></pre><textarea id="code" rows="18" readonly></textarea><p>本次最终代码与输入已经冻结。修改输入后须重新提交任务。仅在理解代码时批准。</p><button id="approve" onclick="act('approve',{})">批准本次完整代码并运行</button><button onclick="act('cancel',{})">取消当前任务</button></section><section><h2>拟上传内容预览</h2><pre id="result"></pre><button id="upload" onclick="act('upload',{})">确认上传以上结果摘要</button><a href="/reproduction.zip">下载本机完整复现包</a><p>不上传原始输入或完整日志。摘要可能含你的研究信息，请逐项检查。</p></section><script>const token='__TOKEN__';async function act(action,data){try{let r=await fetch('/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-Local-CSRF':token},body:JSON.stringify(data)});let x=await r.json();if(!r.ok)throw Error(x.error);if(x.code)pair.textContent='配对码：'+x.code+'（五分钟内在网站输入）';await refresh()}catch(e){alert(e.message)}}async function refresh(){let r=await fetch('/state',{headers:{'X-Local-CSRF':token}});let s=await r.json();state.textContent=[s.paired?'已配对':'待配对',s.online?'网站在线':'网站未连接','引擎：'+Object.entries(s.engines||{}).map(([k,v])=>k+':'+(v.available?'已发现':'不可用')).join(' / '),s.sync_pending?'计算完成，待同步':s.task?.status||'',s.metadata_warning,s.network_error,s.error].join(' · ');paths.textContent='软件：'+(s.task?.engine_id||'待选择')+'；桥接器：'+(s.task?.bridge_id||'待选择')+'；双引擎对照：'+(s.task?.comparison_id?'已明确要求':'未要求')+'\\n输入：'+(s.input_file||'未选择')+'\\n工作目录：'+(s.work_directory||'未创建');code.value=s.code||'';result.textContent=s.result?JSON.stringify(s.result,null,2):'尚无结果';approve.disabled=s.task?.status!=='awaiting_approval';upload.disabled=s.task?.status!=='awaiting_upload'||!s.result||s.sync_pending}setInterval(refresh,3000);refresh();</script></html>'''
+PAGE='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>实证学徒 · 本机计算助手</title><style>body{font:16px/1.6 system-ui;max-width:1000px;margin:30px auto;padding:20px;color:#19383b;background:#f6faf9}button,input,textarea{font:inherit;padding:12px;margin:8px 0;box-sizing:border-box}button{background:#087e76;color:white;border:0;border-radius:8px;cursor:pointer}input,textarea{width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px}section{margin:20px 0}h1{font-size:26px}</style><h1>本机计算助手（试验）</h1><p>4000端口只在本机使用。代码以你的系统账号权限执行，工作目录不是权限沙箱。原始输入和完整日志保存在本机。</p><section><label>网站HTTPS地址</label><input id="site" placeholder="https://你的站点"><button onclick="act('pair',{site:site.value})">生成五分钟配对码</button><p id="pair"></p></section><section><label>本机CSV/TSV路径（不发送到网站；自动读取同名 .dictionary.json）</label><input id="path"><button onclick="act('input',{path:path.value})">读取字段摘要</button></section><p>可选：与 ols.csv 放在一起的 ols.dictionary.json 可填写列名到含义及单位的映射。只发送字段说明，不发送原始观测；没有字典也能回归。</p><section><h2>执行前核对</h2><p id="state"></p><pre id="paths"></pre><textarea id="code" rows="18" readonly></textarea><p>本次最终代码与输入已经冻结。修改输入后须重新提交任务。仅在理解代码时批准。</p><button id="approve" onclick="act('approve',{})">批准本次完整代码并运行</button><button onclick="act('cancel',{})">取消当前任务</button></section><section><h2>拟上传内容预览</h2><pre id="result"></pre><button id="upload" onclick="act('upload',{})">确认上传以上结果摘要</button><a href="/reproduction.zip">下载本机完整复现包</a><p>不上传原始输入或完整日志。摘要可能含你的研究信息，请逐项检查。</p></section><script>const token='__TOKEN__';async function act(action,data){try{let r=await fetch('/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-Local-CSRF':token},body:JSON.stringify(data)});let x=await r.json();if(!r.ok)throw Error(x.error);if(x.code)pair.textContent='配对码：'+x.code+'（五分钟内在网站输入）';await refresh()}catch(e){alert(e.message)}}async function refresh(){let r=await fetch('/state',{headers:{'X-Local-CSRF':token}});let s=await r.json();state.textContent=[s.paired?'已配对':'待配对',s.online?'网站在线':'网站未连接','引擎：'+Object.entries(s.engines||{}).map(([k,v])=>k+':'+(v.available?'已发现':'不可用')).join(' / '),s.sync_pending?'计算完成，待同步':s.task?.status||'',s.fixture_status,s.metadata_warning,s.network_error,s.error].join(' · ');paths.textContent='软件：'+(s.task?.engine_id||'待选择')+'；桥接器：'+(s.task?.bridge_id||'待选择')+'；双引擎对照：'+(s.task?.comparison_id?'已明确要求':'未要求')+'\\n输入：'+(s.input_file||'未选择')+'\\n工作目录：'+(s.work_directory||'未创建');code.value=s.code||'';result.textContent=s.result?JSON.stringify(s.result,null,2):'尚无结果';approve.disabled=s.task?.status!=='awaiting_approval';upload.disabled=s.task?.status!=='awaiting_upload'||!s.result||s.sync_pending}setInterval(refresh,3000);refresh();</script></html>'''
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self,*args): pass
@@ -397,7 +448,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send((CURRENT['dir']/'reproduction.zip').read_bytes(),content='application/zip')
         self.send({'error':'Not found'},404)
     def do_POST(self):
-        global CONFIG,INPUT
+        global CONFIG,INPUT,CURRENT,FIXTURE_RECEIPT
         if not self.allowed(): return self.send({'error':'本机来源或凭据无效'},403)
         try:
             size=int(self.headers.get('Content-Length','0'))
@@ -405,7 +456,7 @@ class Handler(BaseHTTPRequestHandler):
             body=json.loads(self.rfile.read(size) or b'{}')
             with LOCK:
                 if self.path=='/pair':
-                    if CURRENT and CURRENT['task']['status'] in ('running','awaiting_upload','awaiting_approval'): raise ValueError('先完成或取消当前任务。')
+                    if CURRENT and CURRENT['task']['status'] in ('running','approving','cancel_requested','awaiting_upload','awaiting_approval'): raise ValueError('先完成或取消当前任务。')
                     site=body['site'].rstrip('/')
                     from urllib.parse import urlparse
                     url=urlparse(site)
@@ -414,11 +465,14 @@ class Handler(BaseHTTPRequestHandler):
                     token=secrets.token_hex(32);code=str(secrets.randbelow(900000)+100000)
                     paired=http(site+'/api/local-stata/agent/pair',{'token':token,'code':code})[0]
                     CONFIG={'site':site,'token':token,'id':paired['id']}
+                    INPUT=None;CURRENT=None;FIXTURE_RECEIPT=None
+                    STATE.update(paired=False,input_file='',task=None,code='',result=None,work_directory='',fixture_status='',error='',sync_pending=False)
                     (HOME/'connection.json').write_text(json.dumps(CONFIG),encoding='utf-8')
                     return self.send({'code':code})
                 if self.path=='/input':
                     if CURRENT and CURRENT['task']['status'] in ('running','awaiting_upload','awaiting_approval'): raise ValueError('任务已冻结输入，请先取消。')
-                    INPUT=read_input(body['path']);STATE['input_file']=INPUT['path'];STATE['metadata_warning']=INPUT.get('metadata_warning','');return self.send({'profile':INPUT['profile']})
+                    if not CONFIG.get('session_id'): raise ValueError('请先在网页完成配对并等待连接')
+                    INPUT=read_input(body['path']);INPUT.update(pairing_id=CONFIG['id'],session_id=CONFIG['session_id']);FIXTURE_RECEIPT=None;STATE['input_file']=INPUT['path'];STATE['metadata_warning']=INPUT.get('metadata_warning','');return self.send({'profile':INPUT['profile']})
                 if self.path=='/approve':
                     if not CURRENT or CURRENT['task']['status']!='awaiting_approval': raise ValueError('没有等待批准的任务。')
                     if digest(Path(INPUT['path']).read_bytes())!=CURRENT['task']['input_sha256']: raise ValueError('输入文件已经变化，不能沿用批准。')
@@ -427,6 +481,8 @@ class Handler(BaseHTTPRequestHandler):
                     threading.Thread(target=run_current,args=(CURRENT,),daemon=True).start();return self.send({'started':True})
                 if self.path=='/cancel':
                     if CURRENT:
+                        if CURRENT['task']['status'] in ('succeeded','failed','cancelled','interrupted'):
+                            return self.send({'cancel_requested':False,'already_terminal':True})
                         previous=CURRENT['task']['status'];CURRENT['task']['status']='cancel_requested';stopped=stop_current(CURRENT)
                         if previous in ('awaiting_approval','awaiting_upload','approving'): remote('event',{'task_id':CURRENT['task']['id'],'status':'cancelled'});CURRENT['task']['status']='cancelled'
                         elif previous=='running' and stopped:

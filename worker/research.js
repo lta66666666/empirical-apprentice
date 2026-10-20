@@ -1,3 +1,4 @@
+import {normalizeMethodPlan} from './plan-normalization.js';
 import {sampleEvidence,sampleEvidenceText} from './sample-evidence.js';
 import {datasetMetadata,interpretationWarnings} from './dataset-metadata.js';
 import { engineMetadata, engineCapabilities, nodeRequest, digest } from './executor.js';
@@ -81,6 +82,7 @@ function normalized(data, plan) {
 
 function validatePlan(input, data, blueprint, session) {
   if (!input || typeof input !== 'object') throw new Error('请先整理方案。');
+  input=normalizeMethodPlan({...input,method:input.method||'ols',vcov:input.vcov||'hetero'});
   const plan = {
     method: input.method || 'ols', outcome: input.outcome || '',
     predictors: Array.isArray(input.predictors) ? input.predictors : [], unit: input.unit || '',
@@ -274,6 +276,7 @@ export async function handleResearch(request, env, owner, path) {
         const inputHash = await sha256(body.text), planHash = await sha256(JSON.stringify(plan));
         const submittedDictionary = body.dictionary && typeof body.dictionary === 'object' && !Array.isArray(body.dictionary) ? body.dictionary : {};
         const metadata=await datasetMetadata(inputHash,data.profile);
+        if(session.demo_fixture?.input_sha256===inputHash)Object.assign(metadata,{fixture_id:session.demo_fixture.fixture_id,fixture_version:session.demo_fixture.fixture_version});
         const dictionary = {...metadata.dictionary,...Object.fromEntries(Object.entries(submittedDictionary)
           .filter(([name, value]) => data.headers.includes(name) && typeof value === 'string')
           .slice(0, 60).map(([name, value]) => [name, value.slice(0, 300)]))};
@@ -358,7 +361,7 @@ export async function handleResearch(request, env, owner, path) {
       const {audit,used_indices,...summaryResult}=job.result;
       summaryResult.sample_changes={missing_removed:audit.missing_removed_csv_lines.length,model_removed:audit.model_removed_count};
       const result = await modelFeedback('reflection', { answer:text, materials:[{id:'executed_result',content:summaryResult},{id:'confirmed_plan',content:{plan:job.plan,dictionary:job.dictionary,checks:job.description.checks}}] },env,{session_id:job.session_id,owner,task_id:job.id});
-      const item = { task_id:job.id,answer: text, feedback: `${result.warning}\n${result.answer}`, mode:result.mode, model:result.actual_model||result.model,prompt_version:result.prompt_version, interaction_id:result.interaction_id||null,created: Date.now() / 1000, answer_version:job.reflections.length+1 };
+      const item = { task_id:job.id,answer: text, feedback: `${result.warning}\n${result.answer}`, assessment:result.assessment, mode:result.mode, model:result.actual_model||result.model,prompt_version:result.prompt_version, interaction_id:result.interaction_id||null,created: Date.now() / 1000, answer_version:job.reflections.length+1 };
       job.reflections.push(item); job.reflection = item;
       job.record_version=(job.record_version||1)+1;
       job.last_activity=Date.now();

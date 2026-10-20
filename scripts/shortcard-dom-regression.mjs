@@ -53,6 +53,9 @@ try{
  [...d.querySelectorAll('.module-toolbar button')].find(x=>x.textContent==='知识').click();assert.equal(d.querySelector('.coach-side-dialog').open,true);assert.ok(d.querySelector('.coach-side-dialog .coach-knowledge'));d.querySelector('.coach-side-dialog').dispatchEvent(new w.Event('close'));assert.ok(d.querySelector('.analysis-shell > .coach-knowledge'));
  const css=await (await call('/static/module-layout.css')).text();assert.match(css,/240px minmax\(0,1fr\) 280px/);assert.match(css,/max-width:1600px/);assert.match(css,/@media\(max-width:1199px\)/);
  pass('窄屏知识研究使用可恢复侧栏，桌面宽度与断点规则符合计划');
+ const upload=[...d.querySelectorAll('button')].find(b=>b.textContent==='＋ 提交材料');let retained;
+ for(let n=0;n<3;n++){upload.click();[...d.querySelector('.coach-upload').querySelectorAll('button')].find(b=>b.textContent==='数据 CSV / TSV').click();const input=d.querySelector('#researchFile');assert.ok(input);if(retained)assert.equal(input,retained);retained=input;assert.ok([...d.querySelector('.coach-upload').querySelectorAll('button')].some(b=>b.textContent==='使用现有教学数据'));d.querySelector('.coach-upload').close();}
+ pass('连续三次提交材料保留同一文件控件，教学数据入口不丢失');
  await until(()=>!w.eval('busy')&&!w.eaConversation.submit.disabled);assert.deepEqual(errors,[]);
  await writeFile('outputs/shortcard-dom-regression.json',JSON.stringify({date:new Date().toISOString(),scope:'Actual Worker/SQLite page resources with controlled chat responses in JSDOM; no real device, model or numerical execution acceptance claim',checks},null,2));
 }finally{for(const dom of windows)dom.window.close();store.close();}

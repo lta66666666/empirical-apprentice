@@ -28,6 +28,7 @@ try{
  async function save(){await env.DB.prepare('INSERT OR REPLACE INTO local_stata_tasks(id,pairing_id,session_id,owner,status,body,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)').bind(task.id,task.pairing_id,sid,state.owner_id,task.status,JSON.stringify(task),task.created_at,task.updated_at).run();}
  await env.DB.prepare('INSERT INTO local_pairings(id,code,token_hash,owner,session_id,created_at,expires_at,body) VALUES(?,?,?,?,?,?,?,?)').bind(task.pairing_id,'123456','e'.repeat(64),state.owner_id,sid,Date.now(),Date.now()+3600000,'{}').run();
  await save();
+ w.eaAnalysisEngine='stata_local_mcp';w.eaSelectedTask={id:task.id,session_id:sid,engine_id:'stata_local_mcp'};
  const event=()=>w.dispatchEvent(new w.CustomEvent('ea-local-tasks',{detail:{session:sid,tasks:[task]}}));event();
  const main=task.teaching_preview.commands.find(c=>c.topic==='estimate'),code=d.querySelector('.stata-command[aria-label="讲解命令：'+main.text+'"]');assert.ok(code,JSON.stringify({card:d.querySelector('#stataLearningCard')?.outerHTML,errors,selected:w.eaStataTeachingTask,session:w.eval('sessionId')}));assert.doesNotMatch(d.querySelector('#stataLearningCard').textContent,/实际 Stata 结果整理视图/);assert.equal(d.querySelectorAll('#stataLearningCard textarea').length,0);
  code.click();await until(()=>d.querySelector('.coach-knowledge').textContent.includes('执行已确认模型'));
@@ -44,6 +45,16 @@ try{
  assert.match(d.querySelector('#stataLearningCard').textContent,/实际 Stata 结果整理视图/);assert.equal(d.activeElement,focus);const metric=[...d.querySelectorAll('.stata-metric')].find(x=>x.textContent.includes('实际样本'));metric.click();await until(()=>d.querySelector('.coach-knowledge h3').textContent.includes('实际样本'));
  assert.match(d.querySelector('.coach-knowledge').textContent,/159/);assert.equal(focus.value,'未发送的新文字');
  pass('真实结果整理视图点击讲解、轮询保留焦点和未发送文字');
+ let releaseAnswer,enteredAnswer;const heldAnswer=new Promise(r=>enteredAnswer=r),answerGate=new Promise(r=>releaseAnswer=r);let accidentalChat=0;
+ intercept=async(url)=>{if(String(url).startsWith('/api/local-stata/pairings?')){enteredAnswer();await answerGate;}if(String(url).includes('/api/research/chat'))accidentalChat++;return null;};
+ const opening=w.eaOpenAnswer(task.id);await heldAnswer;assert.equal(w.eaConversation.submit.disabled,true);focus.value='等待结果读取期间写下的解释';w.eaConversation.submit.click();assert.equal(accidentalChat,0);releaseAnswer();await opening;intercept=null;
+ assert.equal(w.eaReflectionMode.task.id,task.id);assert.equal(w.eaConversation.submit.disabled,false);assert.equal(focus.value,'等待结果读取期间写下的解释');
+ await [...d.querySelectorAll('button')].find(b=>b.textContent==='返回问答').onclick();assert.equal(w.eaReflectionMode,null);
+ pass('解释模式读取延迟期间禁止误走普通对话，保留输入，明确就绪后才可提交成果');
+ w.eaQueueDraft('analysis-context',{engine_id:'stata_local_mcp'},null);await w.eaFlushAllDrafts();
+ const restored=await open('/analysis'),rw=restored.window;let releasePair;const pairGate=new Promise(r=>releasePair=r);intercept=async(url)=>{if(String(url).startsWith('/api/local-stata/pairings?'))await pairGate;return null;};
+ await rw.resumeSession(sid);await until(()=>rw.eaStataTeachingTask?.id===task.id,'restore saved terminal task while pairing read delayed');assert.equal(rw.document.querySelector('#pcLocalStata').open,false);assert.equal(rw.eaStataTeachingTask.result.n_used,159);releasePair();intercept=null;
+ pass('关闭连接面板及延迟设备读取时，从持久快照恢复终态任务，结果与解释入口可达');
  const params=new URLSearchParams({session_id:sid,task_id:task.id,command_id:main.id,preview_hash:'f'.repeat(64)});assert.equal((await call('/api/local-stata/tasks/lesson?'+params)).status,409);
  const previousAuth=auth;const another=await call('/api/auth/register',{method:'POST',body:JSON.stringify({username:'another_stata',password:testPassword,password_confirmation:testPassword})});auth=another.headers.get('set-cookie').split(';')[0];assert.equal((await call('/api/local-stata/tasks/lesson?'+params)).status,404);auth=previousAuth;
  pass('过期预览拒绝、其他账号不可读取');

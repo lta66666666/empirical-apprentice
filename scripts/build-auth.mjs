@@ -1,5 +1,7 @@
 import {readFile,writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
+const planSource=await readFile(new URL('../worker/plan-normalization.js',import.meta.url),'utf8');
+await writeFile(new URL('../static/plan-normalization.js',import.meta.url),'// Generated from server method-role normalization.\n(()=>{'+planSource.replace('export function normalizeMethodPlan','window.eaNormalizeMethodPlan=function')+'})();\n');
 const root=new URL('../',import.meta.url),source=await readFile(new URL('vendor/bcryptjs-3.0.3/index.js',root),'utf8');
 const expected='import nodeCrypto from "crypto";';if(source.split(expected).length!==2)throw Error('Unexpected bcryptjs source; refusing to generate adapter');
 await writeFile(new URL('worker/bcryptjs-3.0.3.js',root),source.replace(expected,'// Worker adapter: WebCrypto only; no weak random fallback.\nconst nodeCrypto = null;'));

@@ -1,4 +1,5 @@
 import {sampleEvidenceText} from './sample-evidence.js';
+import {fixtureDescriptor,seedFixture} from './demo-fixture.js';
 import { syncSessionNodes, deleteSessionNodes } from './executor.js';
 import { curriculum, practiceCases } from './content.js';
 import { analyzeTwoPeriod } from './analysis.js';
@@ -117,7 +118,7 @@ export async function sessionPayload(env, state, {syncJobs=false}={}) {
   const draftRecords=await readDrafts(env,state.session_id),pairRow=await env.DB.prepare('SELECT body FROM local_pairings WHERE session_id=? AND owner=? AND revoked=0 ORDER BY created_at DESC LIMIT 1').bind(state.session_id,state.owner_id).first();
   Object.defineProperty(state,'research_drafts',{value:draftRecords,enumerable:false,configurable:true});Object.defineProperty(state,'_local_input',{value:pairRow?JSON.parse(pairRow.body):null,enumerable:false,configurable:true});
   return {
-    session_id: state.session_id, state_version:state.state_version, analysis_workspace:state.analysis_workspace||null,research_summary:researchSummary(state,messages),learning_context:state.learning_context,course:coursePayload(state), stage: state.stage, entry_path: state.entry_path,
+    demo_fixture:state.demo_fixture||null,session_id: state.session_id, state_version:state.state_version, analysis_workspace:state.analysis_workspace||null,research_summary:researchSummary(state,messages),learning_context:state.learning_context,course:coursePayload(state), stage: state.stage, entry_path: state.entry_path,
     blueprint: state.project, conversation: state.conversation, case_answers: state.case_answers,
     lesson_records: state.lesson_records, learning_artifacts: state.learning_artifacts,
     preparation: state.preparation, method_learning: state.method_learning,
@@ -395,6 +396,22 @@ export async function handleSessions(request, env, owner, path) {
   if (!env.DB) return error('会话存储未就绪。', 503);
   if (path === '/api/sessions') {
     if (request.method === 'POST') {
+      const body=await request.json().catch(()=>({}));
+      if(body.fixture_id!==undefined){
+        try{
+          if(!/^[a-zA-Z0-9-]{16,80}$/.test(body.request_id||''))return error('示范请求编号无效。');
+          const f=await fixtureDescriptor(body.fixture_id,body.fixture_version),fingerprint=JSON.stringify([f.fixture_id,f.fixture_version]);
+          const replay=async()=>{const row=await env.DB.prepare('SELECT fingerprint,session_id FROM demo_creation_requests WHERE owner=? AND request_id=?').bind(owner,body.request_id).first();if(!row)return null;if(row.fingerprint!==fingerprint)return error('同一请求编号不能创建不同案例。',409);const existing=await loadOwnedSession(env,owner,row.session_id);if(!existing||existing==='expired')return error('原示范已到期，请重新开始。',410);return answer(await sessionPayload(env,existing));};
+          const prior=await replay();if(prior)return prior;
+          const state=newSession(owner),draft=seedFixture(state,f),now=Date.now();state.state_version=1;
+          try{await env.DB.batch([
+            env.DB.prepare('INSERT INTO sessions(id,owner,body,created_at,last_activity,state_version) VALUES(?,?,?,?,?,1)').bind(state.session_id,owner,JSON.stringify(state),now,now),
+            env.DB.prepare('INSERT INTO research_drafts(session_id,draft_key,body,version,updated_at) VALUES(?,?,?,?,?)').bind(state.session_id,'workbench',JSON.stringify(draft),1,now),
+            env.DB.prepare('INSERT INTO demo_creation_requests(owner,request_id,fingerprint,session_id) VALUES(?,?,?,?)').bind(owner,body.request_id,fingerprint,state.session_id)
+          ]);}catch(cause){const found=await replay();if(found)return found;throw cause;}
+          return answer(await sessionPayload(env,state));
+        }catch(cause){return error(cause.message,cause.status||422);}
+      }
       const state = newSession(owner);
       await saveSession(env, state);
       return answer(await sessionPayload(env, state));

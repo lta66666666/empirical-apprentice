@@ -199,7 +199,7 @@ function researchWarning(text){
 }
 function researchDrawJob(j){
   const signature=JSON.stringify([j.id,j.status,j.record_version,j.error,j.sync_error,j.stale,j.verification]);
-  researchJob=j;window.eaSelectedTask={id:j.id,session_id:j.session_id||sessionId,engine_id:j.engine_id||'browser_webr'};const box=$('researchResult');
+  researchJob=j;if(!window.eaSelectedTask||window.eaSelectedTask.id===j.id)window.eaSelectedTask={id:j.id,session_id:j.session_id||sessionId,engine_id:j.engine_id||'browser_webr'};const box=$('researchResult');
   if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();
   if(box.dataset.signature===signature)return;
   box.dataset.signature=signature;box.replaceChildren();
@@ -246,6 +246,7 @@ function researchDrawJob(j){
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 440 64');svg.setAttribute('role','img');svg.setAttribute('aria-label',`${c.term} 的实际估计及95%区间`);
     const lo=Math.min(0,c.ci_low),hi=Math.max(0,c.ci_high),x=v=>24+(v-lo)/(hi-lo||1)*392;
     for(const [tag,attrs]of [['line',{x1:x(0),x2:x(0),y1:8,y2:56,stroke:'#9aacae','stroke-dasharray':'3 3'}],['line',{x1:x(c.ci_low),x2:x(c.ci_high),y1:32,y2:32,stroke:'#087e75','stroke-width':4}],['circle',{cx:x(c.estimate),cy:32,r:6,fill:'#087e75'}]]){const mark=document.createElementNS(svg.namespaceURI,tag);for(const[k,v]of Object.entries(attrs))mark.setAttribute(k,v);svg.append(mark);}focus.append(svg,el('p','workspace-note','圆点：估计；横线：95% 区间；虚线：零。区间与显著性不能单独证明因果。'));
+    window.dispatchEvent(new CustomEvent('ea-teaching-context',{detail:{kind:'result',task:j,term:c.term}}));
     const mirror=$('researchExplanation')?.querySelector('.ea-coefficient-focus');if(mirror)mirror.replaceChildren(...[...focus.childNodes].map(n=>n.cloneNode(true)));
     if(!document.hidden&&!learningMotionReduced())focus.animate([{opacity:.65,transform:'translateY(3px)'},{opacity:1,transform:'translateY(0)'}],{duration:180});
   }
@@ -284,7 +285,7 @@ function researchDrawJob(j){
     if(submit.disabled)return;if(!input.value.trim()){feedback.textContent='请先写下系数、单位及一个尚未验证的条件。';input.focus();return;}const context=researchContext(),submitted=input.value;submit.disabled=true;$('eaNextAction').disabled=true;feedback.textContent='正在保存解释并获取反馈；可继续编辑下一版草稿。';
     try{if(!await eaFlushDraft(draftKey,context.session))throw Error('解释草稿尚未保存，请先处理保存错误或版本冲突。');await api(`/api/research/jobs/${j.id}/reflection`,{method:'POST',body:{answer:submitted,answer_version:attempts.length,session_id:context.session}});if(context.session!==sessionId)return;if(input.value===submitted)eaQueueDraft(draftKey,{answer:submitted,based_on_answer_version:attempts.length+1,submitted:true},draftNote,context.session);await eaFlushDraft(draftKey,context.session);if(researchJob?.id===j.id)await researchWatch(j.id);if(typeof eaRefreshModelEvidence==='function')await eaRefreshModelEvidence();toast('解释已提交，报告已更新；等待期间的新文字保留为草稿。');}
     catch(e){if(context.session===sessionId)feedback.textContent=e.message;}finally{submit.disabled=false;if(context.session===sessionId)eaUpdateStepAction();}
-  });submit.id='researchReflectionSubmit';reflection.append(input,draftNote,el('p','muted','AI 反馈只接收你的回答与汇总结果，不上传逐行数据；无模型时提供明确标注的自查清单。'),submit,feedback);explanation.append(reflection,el('p','workspace-note',attempts.length?'已提交解释，可继续修订。':'解释练习待完成；草稿不作为已完成成果。'),links.cloneNode(true));
+  });submit.id='researchReflectionSubmit';reflection.append(input,draftNote,el('p','muted','AI 反馈只接收你的回答与汇总结果，不上传逐行数据；无模型时提供明确标注的自查清单。'),submit,feedback);explanation.append(reflection,el('p','workspace-note',attempts.length?'已提交，可选修订。':'解释练习待完成；草稿不作为已完成成果。'),links.cloneNode(true));
   if(attempts.length){const past=el('details','ea-reflection-history');past.append(el('summary','',`查看首次解释与修订历史（${attempts.length} 次）`),history);reflection.append(past);}
   if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();
 }
@@ -307,7 +308,7 @@ function researchHistory(jobs){
   const box=$('researchHistory');box.replaceChildren(el('h4','','当前练习的分析记录'));
   if(!jobs.length)box.append(el('p','muted','尚无分析记录。'));
   const states={queued:'排队中',running:'正在执行',preparing:'准备数据',estimating:'正在估计',saving:'正在保存',succeeded:'分析完成',failed:'执行失败',cancelled:'已取消',interrupted:'已中断'};
-  for(const j of jobs)box.append(button(`${researchNames[j.plan.method]} · ${new Date(j.created*1000).toLocaleString()} · ${states[j.status]||j.status}`,'research-history-item',()=>{eaSetTask('research');eaResearchStep('execute');researchWatch(j.id);}));
+  for(const j of jobs)box.append(button(`${researchNames[j.plan.method]} · ${new Date(j.created*1000).toLocaleString()} · ${states[j.status]||j.status}`,'research-history-item',()=>{eaSetTask('research');eaResearchStep('execute');window.eaAnalysisEngine='browser_webr';window.eaSelectedTask={id:j.id,session_id:sessionId,engine_id:j.engine_id||'browser_webr'};window.dispatchEvent(new CustomEvent('ea-local-tasks',{detail:{tasks:latestState?.local_stata_tasks||[],session:sessionId}}));researchWatch(j.id);}));
 }
 function renderResearch(data){
   if(researchPlan && researchPlan.confirmation?.research_revision !== data.research_revision)researchInvalidate();

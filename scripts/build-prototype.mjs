@@ -3,6 +3,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import './build-auth.mjs';
 import './build-sample-evidence.mjs';
 import './build-course-materials.mjs';
+import './build-demo-fixtures.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 await mkdir(resolve(root, 'dist/server'), { recursive: true });

@@ -57,6 +57,13 @@
       "when": 1791770016806,
       "tag": "0007_interaction_consistency",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792368000000,
+      "tag": "0008_demo_creation",
+      "breakpoints": true
     }
   ]
 }

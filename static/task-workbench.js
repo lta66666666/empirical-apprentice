@@ -36,7 +36,7 @@ function eaSetTask(task,selected=false){
 function eaRestoreTask(data,previous){
   if(typeof eaRenderModelEvidence==='function')eaRenderModelEvidence(data.model_interactions||[]);
   eaHydrateDrafts(data);
-  if(!previous||previous.session_id!==data.session_id)eaRestoreWorkbench(data);
+  if(!previous||previous.session_id!==data.session_id)window.eaWorkbenchRestoration=eaRestoreWorkbench(data);
   const statuses=data.model_capabilities||{};
   const statusBox=$('eaModelCapabilities');if(statusBox)statusBox.textContent=['candidate','tutor','reflection'].map((key,i)=>`${['候选方案','课程问答','解释反馈'][i]}：${statuses[key]==='configured_not_verified'?'已配置，待实测':'模型未配置'}`).join(' · ');
   if(!previous||previous.session_id!==data.session_id)eaSetTask(window.EA_MODULE==='analysis'?'research':'learn');
@@ -110,7 +110,7 @@ function eaUpdateStepAction(){
   if(!$('eaNextAction'))return;
   const confirmation=$('researchConfirm').closest('label');
   confirmation.classList.toggle('ea-stage-hidden',eaStep!=='plan'||!researchPlan);
-  $('eaNextAction').textContent={data:'检查数据与变量',health:'选择方法并整理方案',plan:researchPlan?'核对确认后执行':'整理待确认方案',execute:'进入结果解释',explain:researchJob?.status==='succeeded'?(researchJob.reflections?.length?'提交修订并更新报告':'提交解释并更新报告'):'选择数据开始分析'}[eaStep];
+  $('eaNextAction').textContent={data:'检查数据与变量',health:'选择方法并整理方案',plan:researchPlan?'核对确认后执行':'整理待确认方案',execute:'进入结果解释',explain:researchJob?.status==='succeeded'?(researchJob.reflections?.length?'可选修订并更新报告':'提交解释并更新报告'):'选择数据开始分析'}[eaStep];
   if(window.EA_MODULE==='analysis'&&eaStep==='explain'&&researchJob?.status==='succeeded')$('eaNextAction').textContent='在对话中解释或修订';
   $('eaNextAction').disabled=researchRunning||researchInputBusy||(eaStep==='plan'&&(researchRunning||Boolean(researchPlan&&!$('researchConfirm').checked)))||(eaStep==='execute'&&researchJob?.status!=='succeeded')||(eaStep==='explain'&&Boolean($('researchReflectionSubmit')?.disabled));
   if(eaStep==='execute'&&researchJob?.status!=='succeeded')$('eaNextAction').textContent=['failed','interrupted','cancelled'].includes(researchJob?.status)?'执行未完成，请先处理上方提示':'等待计算完成';

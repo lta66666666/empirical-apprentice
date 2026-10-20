@@ -9,6 +9,7 @@
  const current=el('section','analysis-current-turn');current.setAttribute('aria-label','当前一轮对话');dock.querySelector('.dock-shortcuts').after(current);
  const guideBar=el('section','analysis-guide');primary.prepend(guideBar);
  let lastTaskView='overview',localView='overview',localMode='analysis',lastSession='',reflection=null,busy=false,latestReply=null,pendingAction=null;
+ let answerOpening=false,answerSubmitting=false,answerSequence=0;
  const names={overview:'当前练习',prepare:'研究准备',data:'数据',health:'数据体检',plan:'方案确认',execute:'执行状态',explain:'结果解释',reports:'记录与报告'};
  const cardNames={question:'研究问题',sample:'对象与时期',outcome:'结果与单位',predictor:'解释变量',data_source:'数据来源',access:'获取条件'};
  const status=parts.status;
@@ -74,19 +75,20 @@
  let b=button('应用到草稿','btn-primary',async()=>{const result=await action({message_id:reply.id,action_id:a.id,edits:Object.fromEntries(Object.entries(edits).map(([k,n])=>[k,n.value])),dictionary_edits:Object.fromEntries(Object.entries(dictionaryEdits).map(([k,n])=>[k,n.value])),...(a.proposal.plan?{plan_edits:Object.fromEntries(Object.entries(planEdits).map(([k,n])=>[k,k==='predictors'?n.filter(x=>x.checked).map(x=>x.value):n.value]))}:{})},b);if(result){b.textContent='已应用；修改后的方案仍需确认';b.disabled=true;}});panel.append(b);return panel;
  }
  async function openAnswer(taskId){
- const c=scope();try{
+ if(answerSubmitting){info('上一份解释正在保存，请等待完成后再切换。');return;}
+ const c=scope(),sequence=++answerSequence;answerOpening=true;parts.submit.disabled=true;info('正在读取本次真实结果，读取完成后才能提交解释；输入会保留。');try{
  let task,local=false;const selected=window.eaSelectedTask;
  const fromReply=latestReply?.context?.executed_result;
  if((selected?.id===taskId&&['stata_local_mcp','statspai_local'].includes(selected.engine_id))||(fromReply?.id===taskId&&['local_mcp','local_python'].includes(fromReply.execution_location))){local=true;task=(await api('/api/local-stata/pairings?session_id='+c.session)).tasks?.find(t=>t.id===taskId);}
  else {try{task=await api('/api/research/jobs/'+taskId);}catch(e){if(e.status!==404&&!String(e.message).includes('404'))throw e;local=true;task=(await api('/api/local-stata/pairings?session_id='+c.session)).tasks?.find(t=>t.id===taskId);}}
- if(!same(c))return;if(!task||task.status!=='succeeded'||!task.result)throw Error('尚无已完成结果，不能提交解释。');
+ if(!same(c)||sequence!==answerSequence)return;if(!task||task.status!=='succeeded'||!task.result)throw Error('尚无已完成结果，不能提交解释。');
  reflection={task,local,session:c.session,answer_version:task.reflections?.length||0,record_version:task.record_version};
  window.eaReflectionMode=reflection;setView('explain');parts.input.placeholder=(reflection.answer_version?'修订作答':'首次解释作答')+'：请说明系数、单位及尚未验证的条件。发送即提交。';modeLabel.textContent='正式'+(reflection.answer_version?'修订':'首次解释')+'作答 · 任务 '+task.id+' · 发送即保存成果';exitMode.hidden=false;
  if(task.reflections?.length){const last=task.reflections.at(-1);current.replaceChildren(el('h3','','最新已提交解释'),el('p','',last.answer));const f=el('div','prose');markdown(f,typeof last.feedback==='string'?last.feedback:last.feedback?.answer||'');current.append(f,el('p','muted','第 '+task.reflections.length+' 次 · 任务 '+task.id));}
  info('已进入正式作答模式。普通问答可点击“返回问答”。');parts.input.focus();
- }catch(e){info(e.message);}
+ }catch(e){if(same(c)&&sequence===answerSequence)info(e.message);}finally{if(same(c)&&sequence===answerSequence){answerOpening=false;parts.submit.disabled=window.eaIsChatBusy?.()===true;}}
  }
- const modeLabel=el('p','analysis-answer-mode','普通问答 · 发送不会提交解释成果'),exitMode=button('返回问答','btn-secondary',async()=>{if(!await action({action_id:'answer_exit'}))return;reflection=null;window.eaReflectionMode=null;modeLabel.textContent='普通问答 · 发送不会提交解释成果';exitMode.hidden=true;});exitMode.hidden=true;
+ const modeLabel=el('p','analysis-answer-mode','普通问答 · 发送不会提交解释成果'),exitMode=button('返回问答','btn-secondary',async()=>{if(!await action({action_id:'answer_exit'}))return;reflection=null;window.eaReflectionMode=null;modeLabel.textContent='普通问答 · 发送不会提交解释成果';parts.input.placeholder='告诉我你想研究什么，或继续回答上一个问题…';exitMode.hidden=true;});exitMode.hidden=true;
  parts.input.before(modeLabel,exitMode);
  window.eaConversationHistory=history=>{
  const last=[...(history||[])].reverse().find(e=>e.role==='assistant');latestReply=last;current.replaceChildren();
@@ -109,10 +111,11 @@
  for(const shortcut of dock.querySelectorAll('.dock-shortcuts button,.dock-actions button')){if(shortcut.textContent==='导出报告'||shortcut.textContent==='执行分析'||shortcut===parts.submit)continue;const original=shortcut.onclick;shortcut.onclick=async()=>{if(reflection){const key=(reflection.local?'local-reflection:':'reflection:')+reflection.task.id;eaQueueDraft(key,{answer:parts.input.value,submitted:false},parts.draftStatus);if(!await eaFlushDraft(key))return;await exitMode.onclick();if(reflection)return;}return original?.();};}
  const send=parts.submit,ordinarySend=send.onclick;
  send.onclick=async()=>{
+ if(answerOpening){info('正在读取本次结果，请等待解释模式就绪；当前文字已保留。');return;}
  if(!reflection)return ordinarySend();
  if(window.eaComposerKind&&window.eaComposerKind!=='question'){info('正式解释请使用自然语言；代码讲解请先返回问答。');return;}
  if(send.disabled||!parts.input.value.trim()){info('请先写下自己的解释。');return;}
- const captured=scope(),mode=reflection,text=parts.input.value;send.disabled=true;info('正在保存正式解释与反馈…');
+ const captured=scope(),mode=reflection,text=parts.input.value;answerSubmitting=true;send.disabled=true;info('正在保存正式解释与反馈…');
  try{
  const path=mode.local?'/api/local-stata/tasks/reflection':'/api/research/jobs/'+mode.task.id+'/reflection';
  const r=await api(path,{method:'POST',body:{session_id:captured.session,task_id:mode.task.id,record_version:mode.record_version,answer_version:mode.answer_version,answer:text}});
@@ -124,8 +127,8 @@
  mode.task=updated;mode.answer_version=updated.reflections.length;mode.record_version=updated.record_version;
  if(parts.input.value===text){parts.input.value='';parts.input.dispatchEvent(new Event('input'));}
  const feedback=updated.reflections.at(-1);current.replaceChildren(el('h3','','我的解释已提交'),el('p','',text));const prose=el('div','prose');markdown(prose,typeof feedback.feedback==='string'?feedback.feedback:feedback.feedback?.answer||'已保存，请查看报告。');current.append(prose,el('p','muted','第 '+mode.answer_version+' 次解释 · 任务 '+mode.task.id));
- modeLabel.textContent='正式修订作答 · 任务 '+mode.task.id+' · 发送即保存成果';parts.input.placeholder='修订作答：请说明系数、单位及尚未验证的条件。发送即提交。';info('解释与反馈已保存，可继续修订或查看报告。');
- }catch(e){info('未确认提交成功，文字保留：'+e.message);}finally{send.disabled=false;}
+ modeLabel.textContent='已提交，可选修订 · 任务 '+mode.task.id+' · 发送即保存成果';parts.input.placeholder='可选修订：请说明系数、单位及尚未验证的条件。发送即提交。';info('已提交，可选修订；也可以查看报告或返回普通问答。');
+ }catch(e){info('未确认提交成功，文字保留：'+e.message);}finally{answerSubmitting=false;send.disabled=answerOpening||window.eaIsChatBusy?.()===true;}
  };
  // The execution entry opens and builds the complete confirmation card.
  for(const b of dock.querySelectorAll('button'))if(b.textContent==='执行分析')b.onclick=async()=>{if(!researchData){await navigate('data');info('先载入数据并检查字段，再整理方案。');return;}await navigate('plan');await researchMakePlan();};
@@ -133,7 +136,7 @@
  for(const v of ['overview','prepare','data','health','plan','execute','explain'])manual.append(button(names[v],'btn-secondary',()=>navigate(v)));dock.append(manual);
  const formula=el('details','analysis-formula');formula.append(el('summary','','编辑公式并预览'));const formulaInput=el('textarea'),formulaPreview=el('output');formulaInput.setAttribute('aria-label','公式表达式');formulaInput.placeholder='例如 y = β₀ + β₁x + ε';formulaInput.oninput=()=>{formulaPreview.textContent=formulaInput.value;eaQueueDraft('analysis-formula',{formula:formulaInput.value},null);};formula.append(formulaInput,formulaPreview);dock.append(formula);
  const taskChanged=window.eaTaskChanged;window.eaTaskChanged=task=>{taskChanged?.(task);if(task!=='records')setView(localView==='reports'?lastTaskView:localView,localMode);};
- const restore=eaRestoreTask;eaRestoreTask=function(data,previous){const out=restore(data,previous);const changed=lastSession!==data.session_id;if(changed){lastSession=data.session_id;reflection=null;window.eaReflectionMode=null;exitMode.hidden=true;const wb=data.research_drafts?.workbench;localView=wb?.updated_at>(data.analysis_workspace?.updated_at||0)?wb.value.ui_view||'overview':data.analysis_workspace?.view||'overview';localMode=data.analysis_workspace?.mode||'analysis';}else if(data.analysis_workspace){localView=data.analysis_workspace.view;localMode=data.analysis_workspace.mode;}
+ const restore=eaRestoreTask;eaRestoreTask=function(data,previous){const out=restore(data,previous);const changed=lastSession!==data.session_id;if(changed){lastSession=data.session_id;answerSequence++;answerOpening=false;answerSubmitting=false;reflection=null;window.eaReflectionMode=null;exitMode.hidden=true;modeLabel.textContent='普通问答 · 发送不会提交解释成果';parts.input.placeholder='告诉我你想研究什么，或继续回答上一个问题…';const wb=data.research_drafts?.workbench;localView=wb?.updated_at>(data.analysis_workspace?.updated_at||0)?wb.value.ui_view||'overview':data.analysis_workspace?.view||'overview';localMode=data.analysis_workspace?.mode||'analysis';}else if(data.analysis_workspace){localView=data.analysis_workspace.view;localMode=data.analysis_workspace.mode;}
  if(eaTask!=='records')setView(localView,localMode);renderGuide();window.eaConversationHistory(data.practical_messages||[]);
  formulaInput.value=eaDraftEntry('analysis-formula').value.formula||'';formulaPreview.textContent=formulaInput.value;if(changed&&data.analysis_workspace?.answer_task)openAnswer(data.analysis_workspace.answer_task);return out;};
  // Resources belong in the upper knowledge area, not an independent drawer.

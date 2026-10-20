@@ -51,7 +51,7 @@ try{
   let tutorPrompt,reflectionPrompt;globalThis.fetch=async(_url,init)=>{const content=JSON.parse(init.body).messages[0].content;if(content.includes('初学者研究辅导'))tutorPrompt=content;else reflectionPrompt=content;return provider({answer:'单位说明数值按什么尺度记录。可以先查数据说明。',summary:'先查数据说明。',details:'完整阅读内容。',references:['current_lesson','invented']});};
   const context={question:'我不知道单位是什么',coaching:{kind:'research_tutor'},research_understanding:{outcome:{value:'城市年度碳排放总量'},unit:{status:'unknown'}},current_question:{field:'outcome_unit'},materials:[{id:'current_lesson',content:'单位依据数据说明。'}]};
   const tutor=await modelFeedback('tutor',context,env);assert.match(tutorPrompt,/不是在批改作答/);assert.match(tutorPrompt,/不要说回答错误/);assert.match(tutorPrompt,/current_question/);assert.equal(tutor.summary,'先查数据说明。');assert.equal(tutor.details,'完整阅读内容。');assert.deepEqual(tutor.references,['current_lesson']);
-  await modelFeedback('reflection',{answer:'系数意味着正相关',materials:[{id:'executed_result',content:{coefficients:[{estimate:2}]}}]},env);assert.match(reflectionPrompt,/正式结果解释反馈/);assert.match(reflectionPrompt,/需修订的具体错误/);
+  await modelFeedback('reflection',{answer:'系数意味着正相关',materials:[{id:'executed_result',content:{coefficients:[{estimate:2}]}}]},env);assert.match(reflectionPrompt,/正式结果解释反馈/);assert.match(reflectionPrompt,/required_corrections/);assert.match(reflectionPrompt,/同义措辞/);
   check('tutor coaching and formal reflection use separate prompts; short and full readings are validated');
 
   const input={question:'教育与收入的关联',profile:{row_count:100,columns:[{name:'income',numeric:true,missing:0},{name:'education',numeric:true,missing:0}]},context:{dictionary:{}}};

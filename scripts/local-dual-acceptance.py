@@ -13,7 +13,7 @@ for method in ('ols','panel_fe','did'):
     file=out/(method+'.csv');file.write_text(fixture['text'],encoding='utf-8')
     a.INPUT=a.read_input(file)
     plan=dict(fixture['plan'],missing='drop');plan.setdefault('same_batch',True);plan.setdefault('cluster','');plan.setdefault('vcov','hetero' if method=='ols' else 'cluster')
-    task={'id':'acceptance-'+method+'-'+str(time.time_ns()),'kind':'template','plan':plan,'input_sha256':a.INPUT['hash'],
+    task={'id':'acceptance-'+method+'-'+str(time.time_ns()),'kind':'template','profile':a.INPUT['profile'],'plan':plan,'input_sha256':a.INPUT['hash'],
           'plan_sha256':a.digest(json.dumps(plan,sort_keys=True).encode()),'engine_id':'stata_local_mcp','bridge_id':'stata_code','status':'awaiting_approval'}
     # Use evidence directory rather than the user's paired assistant HOME.
     a.HOME=out

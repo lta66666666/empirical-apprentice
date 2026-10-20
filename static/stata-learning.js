@@ -10,10 +10,10 @@
  function current(t){return t&&scope===sessionId&&selected?.id===t.id;}
  function viewRecord(t,id){const key='stata-reading',old=eaDraftEntry(key).value||{};if(old.task_id!==t.id||old.preview_hash!==t.teaching_preview.preview_hash)viewed=new Set();else viewed=new Set(old.viewed||[]);viewed.add(id);eaQueueDraft(key,{task_id:t.id,preview_hash:t.teaching_preview.preview_hash,command_id:id,viewed:[...viewed].slice(-100),view_only:true},parts.draftStatus);}
  async function explain(t,c,focus='command',term=null,reveal=true,part='command'){
-  if(!current(t))return;const epoch=++request,params=new URLSearchParams({session_id:sessionId,task_id:t.id,preview_hash:t.teaching_preview.preview_hash,command_id:c.id,focus,part,...(term?{term}:{})});
-  reference={intent:'stata_explain',task_id:t.id,command_id:c.id,preview_hash:t.teaching_preview.preview_hash,focus,term,part};window.eaStataQuestionContext=reference;
+  if(!current(t))return;const fingerprint=window.eaTeachingFingerprint?.();const epoch=++request,params=new URLSearchParams({session_id:sessionId,task_id:t.id,preview_hash:t.teaching_preview.preview_hash,command_id:c.id,focus,part,...(term?{term}:{})});
+  reference={intent:'stata_explain',task_id:t.id,command_id:c.id,preview_hash:t.teaching_preview.preview_hash,focus,term,part};window.eaStataQuestionContext=null;
   parts.status.textContent='正在读取这条命令的讲解…';
-  try{const result=await api('/api/local-stata/tasks/lesson?'+params);if(epoch!==request||!current(t))return;window.eaShowStataLesson?.(result.card,{reveal});viewRecord(t,c.id);parts.status.textContent='讲解已打开。可继续提问这条命令；不会执行代码。';}
+  try{const result=await api('/api/local-stata/tasks/lesson?'+params);if(epoch!==request||!current(t)||fingerprint!==window.eaTeachingFingerprint?.())return;window.eaStataQuestionContext=reference;window.eaShowStataLesson?.(result.card,{reveal});viewRecord(t,c.id);parts.status.textContent='讲解已打开。可继续提问这条命令；不会执行代码。';}
   catch(e){if(epoch===request&&current(t))parts.status.textContent='讲解读取失败：'+e.message+'。代码与输入已保留，请再次点击重试。';}
  }
  function commandRow(t,c){const row=el('div','stata-command-row'),b=button(c.text,'stata-command',()=>explain(t,c));b.setAttribute('aria-label','讲解命令：'+c.text);row.append(b,el('small','muted',brief[c.topic]||'查看当前命令说明'));return row;}
@@ -23,6 +23,7 @@
   const next=JSON.stringify([t.id,t.status,t.teaching_preview?.preview_hash,t.result,t.record_version]);if(next===signature)return;
   const top=feed.scrollTop,atEnd=feed.scrollHeight-feed.scrollTop-feed.clientHeight<80;signature=next;card.hidden=false;card.replaceChildren(el('h3','','本次 Stata 代码'),el('p','muted',statusNames[t.status]||t.status));
   const preview=t.teaching_preview;
+  if(['awaiting_approval','awaiting_upload'].includes(t.status)){const approval=el('a','btn-primary',t.status==='awaiting_approval'?'在本机查看并批准执行':'在本机查看并批准上传');approval.href='http://127.0.0.1:8767/';approval.target='_blank';approval.rel='noopener';card.append(approval);}
   if(t.status==='failed')card.append(button('查看排错提示','text-btn',()=>window.eaOpenStataGuide?.('files','error')));
   if(!preview){card.append(el('p','','助手准备代码后，这里会显示真实核心命令。旧版助手不支持讲解时，请下载新版；本机完整批准仍可使用。'));return;}
   card.append(el('p','','点击命令看左侧说明。这里只展示核心片段，完整脚本仍须在本机核对批准。'));
@@ -50,7 +51,7 @@
   tasks=e.detail.tasks||[];
   const candidates=tasks.filter(t=>t.kind==='template'&&t.engine_id==='stata_local_mcp');
   const explicit=window.eaSelectedTask?.session_id===sessionId?window.eaSelectedTask.id:null;
-  const next=explicit&&tasks.some(t=>t.id===explicit)?candidates.find(t=>t.id===explicit):candidates[0];
+  const next=explicit?candidates.find(t=>t.id===explicit):window.eaAnalysisEngine==='stata_local_mcp'?candidates[0]:null;
   if(selected?.id!==next?.id){request++;reference=null;window.eaStataQuestionContext=null;window.eaShowStataLesson?.(null);}
   selected=next;window.eaLocalTeachingActive=candidates.some(t=>['queued','awaiting_approval','running','awaiting_upload','cancel_requested'].includes(t.status));window.eaStataTeachingTask=selected;render();window.dispatchEvent(new Event('ea-stata-selection'));
  });

@@ -144,7 +144,7 @@ const eaRenderMetrics=[];window.eaRenderMetrics=eaRenderMetrics;
 function renderState(data) {
   const renderStarted=performance.now();
   const previous = latestState;
-  latestState = data; sessionId = data.session_id; storageSet("ea_session_id", sessionId);
+  latestState = data; sessionId = data.session_id;if(typeof eaHydrateDrafts==='function')eaHydrateDrafts(data); storageSet("ea_session_id", sessionId);
   $("modeLabel").textContent = data.demo_mode ? "课程与自查可用" : "模型已配置 · 待实测";
   $("demoHint").textContent = "客观题按答案核对；自由回答的规则提示或 AI 建议不代表掌握认证。";
   renderOutline(data); renderBlueprint(data); renderRecords(data); renderMain(data); renderAnalysis(data); if(typeof renderTutorial==='function')renderTutorial(data); if(typeof renderResearch==='function')renderResearch(data); if(typeof renderPreparation==='function')renderPreparation(data);

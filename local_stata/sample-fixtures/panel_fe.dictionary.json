@@ -1,0 +1,9 @@
+{
+  "city": "模拟城市编号",
+  "year": "观测年份",
+  "productivity": "模拟生产率指数",
+  "digitalization": "模拟数字化指数",
+  "investment": "模拟投资指数",
+  "emissions": "模拟排放指标",
+  "treated": "固定组别，1=处理组，0=对照组"
+}
