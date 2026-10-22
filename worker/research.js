@@ -1,5 +1,7 @@
 import {normalizeMethodPlan} from './plan-normalization.js';
 import {methodRegistry,enabledMethods} from './method-registry.js';
+import {handleResearchData,loadResearchData} from './research-data.js';
+import {correspondingReference} from './corresponding-teaching.js';
 import {sampleEvidence,sampleEvidenceText} from './sample-evidence.js';
 import {datasetMetadata,interpretationWarnings} from './dataset-metadata.js';
 import { engineMetadata, engineCapabilities, nodeRequest, digest } from './executor.js';
@@ -24,18 +26,18 @@ export function parseCsv(text, filename = 'data.csv') {
   if (typeof text !== 'string' || new TextEncoder().encode(text).length > MAX_BYTES) throw new Error('文件最多 2 MB。');
   if (text.includes('\ufffd')) throw new Error('检测到无法解码的字符，请重新导出 UTF-8 CSV/TSV。');
   const delimiter = filename.toLowerCase().endsWith('.tsv') ? '\t' : ',';
-  const rows = [], starts = [];
-  let row = [], value = '', quoted = false, afterQuote = false, line = 1, rowLine = 1;
+  const rows = [], starts = [], meaningful=[];
+  let row = [], value = '', quoted = false, rowQuoted=false, afterQuote = false, line = 1, rowLine = 1;
   const source = text.replace(/^\ufeff/, '');
   const pushField = () => { row.push(value); value = ''; afterQuote = false; };
-  const pushRow = () => { pushField(); rows.push(row); starts.push(rowLine); row = []; rowLine = line + 1; };
+  const pushRow = () => { meaningful.push(rowQuoted||row.length>0||Boolean(value.trim()));pushField(); rows.push(row); starts.push(rowLine); row = [];rowQuoted=false; rowLine = line + 1; };
   for (let i = 0; i < source.length; i++) {
     const ch = source[i];
     if (quoted) {
       if (ch === '"' && source[i + 1] === '"') { value += '"'; i++; }
       else if (ch === '"') { quoted = false; afterQuote = true; }
       else { value += ch; if (ch === '\n') line++; }
-    } else if (ch === '"' && value === '' && !afterQuote) quoted = true;
+    } else if (ch === '"' && value === '' && !afterQuote) {quoted = true;rowQuoted=true;}
     else if (ch === delimiter) pushField();
     else if (ch === '\n') { pushRow(); line++; }
     else if (ch === '\r' && source[i + 1] === '\n') { pushRow(); i++; line++; }
@@ -46,13 +48,13 @@ export function parseCsv(text, filename = 'data.csv') {
   if (value || row.length || afterQuote) pushRow();
   if (!rows.length) throw new Error('数据文件为空。');
   const headers = rows.shift().map((value) => value.trim());
-  starts.shift();
+  starts.shift();meaningful.shift();
   if (!headers.length || headers.length > 60 || headers.some((value) => !value || value.length > 100) || new Set(headers).size !== headers.length) {
     throw new Error('列名须非空且不重复，最多 60 列，单列名最多 100 字。');
   }
   const body = [], lines = [];
   for (let i = 0; i < rows.length; i++) {
-    if (rows[i].every((value) => !value.trim())) continue;
+    if (!meaningful[i]) continue;
     if (rows[i].length !== headers.length) throw new Error(`第 ${starts[i]} 行列数与表头不一致。`);
     if (body.length >= MAX_ROWS) throw new Error('最多支持 20000 行。');
     body.push(rows[i].map((value) => value.trim())); lines.push(starts[i]);
@@ -80,6 +82,10 @@ function normalized(data, plan) {
   const csv = [data.headers.map((name) => aliases[name]).join(','), ...data.rows.map((row) => row.map(quoteCsv).join(','))].join('\n') + '\n';
   return { csv, plan: normalizedPlan };
 }
+function validateDateRole(plan,material){
+ const format=material.labels?.date_formats?.[plan.time];
+ if(plan.method!=='ols'&&format&&!/^%ty/.test(format))throw new Error('所选时间列是Stata月／季／日等日期编码，不能直接当作年度。请先预览并确认年度转换；不会自动合并观测。');
+}
 
 function validatePlan(input, data, blueprint, session) {
   if (!input || typeof input !== 'object') throw new Error('请先整理方案。');
@@ -96,6 +102,7 @@ function validatePlan(input, data, blueprint, session) {
   Object.assign(plan,engineMetadata[plan.engine_id]); delete plan.label;
   if (!enabledMethods.includes(plan.method)) throw new Error(methodRegistry[plan.method]?.reason||'该方法尚未接入。');
   if (!['iid', 'hetero', 'cluster'].includes(plan.vcov) || !['block', 'drop'].includes(plan.missing)) throw new Error('标准误或缺失处理设置无效。');
+  if(plan.method!=='ols'&&plan.vcov!=='cluster')throw new Error('本轮固定效应和DID仅开放单向聚类标准误，请选择聚类列。');
   if (!data.headers.includes(plan.outcome)) throw new Error('请选择数据中的结果变量。');
   if (plan.predictors.length > 12 || new Set(plan.predictors).size !== plan.predictors.length || plan.predictors.includes(plan.outcome)) throw new Error('解释变量不能重复或包含结果变量，最多 12 列。');
   if (plan.method !== 'did' && !plan.predictors.length) throw new Error('请至少选择一个解释变量。');
@@ -119,11 +126,13 @@ function validatePlan(input, data, blueprint, session) {
   const missingLines = data.rows.flatMap((row, index) => incomplete(row) ? [data.lines[index]] : []);
   if (missingLines.length && plan.missing === 'block') throw new Error(`选定列存在 ${missingLines.length} 行缺失；请核查或明确允许删除。`);
   const usableRows = data.rows.filter((row) => !incomplete(row));
-  if (usableRows.length < Math.max(3, plan.predictors.length + 2)) throw new Error('删除缺失行后可用观测不足，请核对样本与变量。');
+  if (usableRows.length < Math.max(8, plan.predictors.length+(plan.method==='did'?1:0)+2)) throw new Error('选定变量完整样本不足，至少需要 max(8,解释项数量＋2) 行。');
+  if(plan.vcov==='cluster'&&new Set(usableRows.map(r=>r[data.headers.indexOf(plan.cluster)])).size<2)throw new Error('至少需要两个聚类组。');
   if (plan.method !== 'ols') {
     const ui = data.headers.indexOf(plan.unit), ti = data.headers.indexOf(plan.time), seen = new Set();
     for (const row of usableRows) {
-      const key = JSON.stringify([row[ui], row[ti]]);
+      const year=Number(row[ti]);if(!Number.isInteger(year))throw new Error('年份必须为整数。');
+      const key = JSON.stringify([row[ui], year]);
       if (seen.has(key)) throw new Error('个体 × 时间键重复，请核查或合并重复观测。');
       seen.add(key);
     }
@@ -214,7 +223,16 @@ function validateSubmittedResult(result, job) {
   };
 }
 
+async function exportInteractions(env,job,owner){
+ const accepted=new Set((job.reflections||[]).map(x=>x.interaction_id).filter(Boolean));
+ return (await modelInteractions(env,job.session_id,owner,job.id)).filter(x=>x.kind!=='reflection'||accepted.has(x.id));
+}
+async function requireExportVersion(env,job){const row=await env.DB.prepare('SELECT body FROM jobs WHERE id=? AND owner=?').bind(job.id,job.owner).first();if(!row||(JSON.parse(row.body).record_version||1)!==(job.record_version||1))throw Object.assign(Error('报告在导出期间更新，请重新生成。'),{status:409});}
+
 export async function handleResearch(request, env, owner, path) {
+  const materialReply=await handleResearchData(request,env,owner,path);if(materialReply)return materialReply;
+  const teachingRoute=/^\/api\/sessions\/([a-z0-9]{12})\/research\/teaching$/.exec(path);
+  if(teachingRoute&&request.method==='GET')try{const state=await loadOwnedSession(env,owner,teachingRoute[1]);if(!state||state==='expired')return fault('练习不可读取。',404);const ref=Object.fromEntries(new URL(request.url).searchParams),lesson=await correspondingReference(env,owner,state,ref);return resultJson({card:lesson.card,reference:lesson.reference});}catch(e){return fault(e.message,e.status||422);}
   if (path === '/api/research/status' && request.method === 'GET') {
     const engines=await engineCapabilities(env,owner);
     return resultJson({r:engines.browser_webr,engines,default_engine:'statspai_cloud',software:[{id:'statspai_cloud',label:'云端计算',...engines.statspai_cloud},{id:'r',label:'云端原生 R',...engines.r_native},{id:'browser_webr',label:'浏览器 webR',...engines.browser_webr},{id:'stata',label:'Stata',...engines.stata_native},{id:'eviews',label:'EViews',...engines.eviews_native}],methods:enabledMethods,method_registry:methodRegistry,unsupported:['分批 DID','IV','RDD','事件研究回归'],planner_mode:env.MODEL_API_KEY&&env.MODEL_NAME&&env.MODEL_BASE_URL?'online':'rules',model_capabilities:modelCapabilities(env)});
@@ -224,6 +242,8 @@ export async function handleResearch(request, env, owner, path) {
       const body = await request.json();
       const session = await loadOwnedSession(env, owner, String(body?.session_id || ''));
       if(session==='expired')return fault('练习已到期。',410);if(!session)return fault('练习不存在或不可读取。',404);
+      let material=null;
+      if(body.data_id){material=await loadResearchData(env,owner,session.session_id,body.data_id);body.text=material.text;body.filename=material.format==='dta'?'normalized.csv':material.filename;}
       requireSessionVersion(session,body);
       const profile = body?.text===undefined?{row_count:0,columns:[]}:parseCsv(body.text, body.filename || 'data.csv').profile;
       if(modelCapabilities(env).candidate!=='unconfigured')await reserveModelCall(env, owner);
@@ -255,12 +275,17 @@ export async function handleResearch(request, env, owner, path) {
         const repeated=await repeatedTask(env,'jobs',owner,session.session_id,identity);
         if(repeated)return resultJson({...publicJob(repeated),execution_nonce:repeated.nonce,state_version:session.state_version},202);
       }
+      let material=null;
+      if(body.data_id){material=await loadResearchData(env,owner,session.session_id,body.data_id);body.text=material.text;body.filename=material.format==='dta'?'normalized.csv':material.filename;}
       if(action!=='inspect')requireSessionVersion(session,body);
       const data = parseCsv(body?.text, body?.filename || 'data.csv');
-      if (action === 'inspect') return resultJson(data.profile);
+      if (action === 'inspect'){const metadata=await datasetMetadata(await sha256(body.text),data.profile,body.dictionary);return resultJson({...data.profile,metadata});}
       if (action === 'plan') {
         const { plan, missingLines } = validatePlan(body.candidate, data, session.project, session);
-        session.pending_confirmation = { token: crypto.randomUUID(), input_sha256: await sha256(body.text), plan_sha256: await sha256(JSON.stringify(plan)), research_revision: session.research_revision };
+        if(material)validateDateRole(plan,material);
+        session.pending_confirmation = { token: crypto.randomUUID(), input_sha256: material?.canonical_sha256||await sha256(body.text), data_id:material?.data_id||null, canonical_sha256:material?.canonical_sha256||null, plan_sha256: await sha256(JSON.stringify(plan)), research_revision: session.research_revision };
+        session.pending_confirmation.plan=plan;
+        if(env.EXECUTOR_URL&&env.EXECUTOR_SECRET){const preview=await nodeRequest(env,owner,'teaching',{plan:normalized(data,plan).plan,input_sha256:session.pending_confirmation.input_sha256,plan_sha256:session.pending_confirmation.plan_sha256});if(preview.sha256!==await digest(preview.code)||preview.executed!==false)throw Error('教学产物校验失败');session.pending_confirmation.corresponding_code=preview;}
         await saveSession(env, session);
         return resultJson({ plan, state_version:session.state_version, confirmation: session.pending_confirmation, description: description(plan), profile: data.profile,
           note: `本核对卡按当前字段与参数整理，不代表模型已核实方案。原始 ${data.rows.length} 行，选定变量缺失 ${missingLines.length} 行。来源、单位和方法假设仍需学生核对。` });
@@ -269,22 +294,24 @@ export async function handleResearch(request, env, owner, path) {
         if (body?.confirmed !== true) throw new Error('执行前必须确认方案。');
         const { plan, missingLines } = validatePlan(body.plan, data, session.project, session);
         const confirmation = session.pending_confirmation;
-        if (!confirmation || body.confirmation_token !== confirmation.token || confirmation.research_revision !== session.research_revision || confirmation.input_sha256 !== await sha256(body.text) || confirmation.plan_sha256 !== await sha256(JSON.stringify(plan))) return fault('资料、输入或方案已变化，请重新整理并确认方案。',409);
+        if(material)validateDateRole(plan,material);
+        if (!confirmation || body.confirmation_token !== confirmation.token || confirmation.research_revision !== session.research_revision || confirmation.input_sha256 !== (material?.canonical_sha256||await sha256(body.text)) || (confirmation.data_id||null)!==(material?.data_id||null) || confirmation.plan_sha256 !== await sha256(JSON.stringify(plan))) return fault('资料、输入或方案已变化，请重新整理并确认方案。',409);
         const count = await env.DB.prepare(env.ACCOUNT_ID?'SELECT ((SELECT COUNT(*) FROM jobs WHERE owner IN (SELECT owner FROM account_owners WHERE user_id=?) AND created_at>?)+(SELECT COUNT(*) FROM local_stata_tasks WHERE owner IN (SELECT owner FROM account_owners WHERE user_id=?) AND created_at>?)) AS n':'SELECT ((SELECT COUNT(*) FROM jobs WHERE owner=? AND created_at>?)+(SELECT COUNT(*) FROM local_stata_tasks WHERE owner=? AND created_at>?)) AS n').bind(env.ACCOUNT_ID||owner, Date.now() - 86400000,env.ACCOUNT_ID||owner,Date.now()-86400000).first();
         if (count.n >= 30) return fault('今日分析次数达到上限。', 429);
         if(plan.engine_id!=='browser_webr' && !(await engineCapabilities(env,owner))[plan.engine_id].ready) throw new Error((await engineCapabilities(env,owner))[plan.engine_id].reason);
         const id = crypto.randomUUID(), key = `jobs/${owner}/${id}/input.csv`;
-        const inputHash = await sha256(body.text), planHash = await sha256(JSON.stringify(plan));
+        const inputHash = material?.canonical_sha256||await sha256(body.text), planHash = await sha256(JSON.stringify(plan));
         const submittedDictionary = body.dictionary && typeof body.dictionary === 'object' && !Array.isArray(body.dictionary) ? body.dictionary : {};
-        const metadata=await datasetMetadata(inputHash,data.profile);
+        const metadata=material?.metadata||await datasetMetadata(inputHash,data.profile);
         if(session.demo_fixture?.input_sha256===inputHash)Object.assign(metadata,{fixture_id:session.demo_fixture.fixture_id,fixture_version:session.demo_fixture.fixture_version});
         const dictionary = {...metadata.dictionary,...Object.fromEntries(Object.entries(submittedDictionary)
           .filter(([name, value]) => data.headers.includes(name) && typeof value === 'string')
           .slice(0, 60).map(([name, value]) => [name, value.slice(0, 300)]))};
+        metadata.provenance={...(metadata.provenance||{}),...Object.fromEntries(Object.entries(dictionary).filter(([k,v])=>v!==metadata.dictionary?.[k]).map(([k])=>[k,'user_edited']))};
         const job = { id, owner, session_id: session.session_id, request_id:identity.id,status: 'running', created: Date.now() / 1000,
           last_activity: Date.now(), execution_location: plan.execution_location, software:plan.software, engine_id:plan.engine_id, nonce: crypto.randomUUID(),
           input_key: key, input_sha256: inputHash, plan_sha256: planHash, n_rows: data.rows.length,
-          filename: String(body.filename || 'data.csv').slice(0, 200), plan, description: description(plan),
+          filename: String(body.filename || 'data.csv').slice(0, 200), corresponding_code:confirmation.corresponding_code||null, data_id:material?.data_id||null, source_filename:material?.filename||null, source_sha256:material?.source_sha256||inputHash, canonical_sha256:material?.canonical_sha256||null, import_version:material?.import_version||null, plan, description: description(plan),
           dictionary, metadata, interpretation_warnings:interpretationWarnings(plan,dictionary), csv_lines:data.lines, research_revision:session.research_revision, evidence_snapshot:{...evidenceSnapshot(session),dictionary}, record_version:1,
           source: String(body.source || '用户提供的数据；来源未核实').slice(0, 1000), question: String(body.question || '').slice(0, 1000),
           simulated: body.simulated === true, missing_lines: missingLines, result: null, reflections: [],
@@ -308,10 +335,12 @@ export async function handleResearch(request, env, owner, path) {
   if (!jobRoute) return null;
   const job = await getJob(env, owner, jobRoute[1],true);
   if (!job) return fault('任务不存在、已到期或不属于当前浏览器。', 404);
+  const expectedVersion=new URL(request.url).searchParams.get('record_version');if(expectedVersion!==null&&String(job.record_version||1)!==expectedVersion)return fault('报告版本已变化，请重新导出。',409);
   const tail = jobRoute[2] || '';
   try {
     if (!tail && request.method === 'GET') return resultJson(publicJob(job));
     if (tail === 'stata-code' && request.method === 'GET') {
+      if(job.corresponding_code)return resultJson({task_id:job.id,record_version:job.record_version,plan_sha256:job.plan_sha256,...job.corresponding_code});
       if(job.engine_id!=='statspai_cloud'||job.status!=='succeeded')return fault('本任务尚无可用的对应代码。',409);
       const code=job.node_artifacts?.['stata-corresponding.do'],manifest=job.node_artifacts?.['stata-corresponding.json'];
       if(!code||!manifest)return fault('对应代码尚未同步。',409);
@@ -395,13 +424,13 @@ export async function handleResearch(request, env, owner, path) {
       if(clone.execution_location==='cloud_native')await submitCloudJob(env,clone,originalText);
       return resultJson({...publicJob(clone),execution_nonce:clone.nonce},202);
     }
-    if (tail === 'report' && request.method === 'GET') return new Response(reportMarkdown(job)+'\n'+modelEvidenceMarkdown(await modelInteractions(env,job.session_id,owner,job.id),false), { headers: { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': 'attachment; filename="r-analysis-report.md"' } });
+    if (tail === 'report' && request.method === 'GET'){const interactions=await exportInteractions(env,job,owner);await requireExportVersion(env,job);return new Response(reportMarkdown(job)+'\n'+modelEvidenceMarkdown(interactions,false),{headers:{'Content-Type':'text/markdown; charset=utf-8','Content-Disposition':'attachment; filename="analysis-report.md"'}});}
     if (tail === 'package' && request.method === 'GET') {
       const object = await env.FILES.get(job.input_key);
       if (!object) return fault('输入文件已丢失。', 404);
       const original = await object.text();
       const prepared = normalized(parseCsv(original, job.filename), job.plan);
-      const interactions=await modelInteractions(env,job.session_id,owner,job.id);
+      const interactions=await exportInteractions(env,job,owner);
       const files = {
         'README.md': `# 实证学徒复现包\n\n输入 SHA-256：${job.input_sha256}\n方案 SHA-256：${job.plan_sha256}\n执行位置：${locationLabel(job)}。${job.result_origin||'任务未完成'}\n\n${job.software==='python'?'使用记录的 Python 3.11 与 StatsPAI 及依赖版本，在当前目录运行 python estimate.py .；Stata 对应代码仅供教学，未由本任务执行。':job.software==='stata'?'使用记录的 Stata 版本，在当前目录批处理 estimate.do。完整参数（含年份虚拟变量）见 full-coefficients.csv。':job.execution_location==='cloud_native'?'使用 R 4.6.1、fixest 0.14.2 与 jsonlite 2.0.0，运行 Rscript --vanilla estimate.R .；结果写入 result.json。':'使用记录的 R/fixest，在本目录运行 reproduce.R。'}\n与 results.json 核对变量、实际样本、系数、标准误、区间及推断口径。原始来源与使用条件须由学生自行核实。\n`,
         'input.csv': original, 'normalized.csv': prepared.csv,
@@ -409,13 +438,16 @@ export async function handleResearch(request, env, owner, path) {
         'variable_dictionary.json': JSON.stringify(job.dictionary || {}, null, 2),
         'evidence_snapshot.json': JSON.stringify(job.evidence_snapshot || {},null,2),
         'verification.json': JSON.stringify(job.verification || {status:'not_checked'},null,2),
-        'export_version.json':JSON.stringify({task_id:job.id,research_revision:job.research_revision,record_version:job.record_version||1,execution_location:job.execution_location||'browser_webr',engine_id:job.engine_id||'browser_webr',software:job.software||'r'}),
+        'export_version.json':JSON.stringify({task_id:job.id,research_revision:job.research_revision,record_version:job.record_version||1,execution_location:job.execution_location||'browser_webr',engine_id:job.engine_id||'browser_webr',software:job.software||'r',data_id:job.data_id||null,source_sha256:job.source_sha256||null,canonical_sha256:job.canonical_sha256||null,plan_sha256:job.plan_sha256,code_sha256:job.corresponding_code?.sha256||null}),
+        'reflections.json':JSON.stringify({record_version:job.record_version||1,reflections:job.reflections||[],reflection:job.reflection||null}),
         'results.json': JSON.stringify(job.result || { status: job.status, error: job.error || '' }, null, 2),
         'report.md': reportMarkdown(job)+'\n'+modelEvidenceMarkdown(interactions,false), 'agent_interactions.json':JSON.stringify(interactions,null,2),...(job.node_artifacts||{'reproduce.R': reproductionScript(prepared.plan)}),
         'execution.log': job.node_artifacts?.['execution.log'] || `created=${new Date(job.created * 1000).toISOString()}\nstatus=${job.status}\nlocation=${job.execution_location||'browser_webr'}\nR=${job.result?.r_version || 'not completed'}\nfixest=${job.result?.package_versions?.fixest || 'not completed'}\n`,
       };
+      if(job.data_id){const d=await loadResearchData(env,owner,job.session_id,job.data_id),source=await env.FILES.get(d.source_key),sidecar=await env.FILES.get(d.metadata_key);if(!source||!sidecar)throw Error('原始材料或导入记录丢失，未导出不完整复现包。');files['original.'+d.format]=new Uint8Array(await source.arrayBuffer());files['import_metadata.json']=await sidecar.text();files['data_identity.json']=JSON.stringify({data_id:d.id,source_sha256:d.source_sha256,canonical_sha256:d.canonical_sha256,import_version:d.import_version,labels:d.labels});}
       if(job.result){files['coefficients.svg']=coefficientsSvg(job);if(job.plan.method==='did')files['group_trends.svg']=groupTrendsSvg(job,parseCsv(original,job.filename));}
-      return new Response(zipFiles(files), { headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="r-reproduction.zip"' } });
+      await requireExportVersion(env,job);
+      return new Response(zipFiles(files), { headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="analysis-reproduction.zip"' } });
     }
     if (/^artifacts\/(coefficients\.svg|group_trends\.svg|coefficients\.csv|execution\.log)$/.test(tail) && request.method === 'GET') {
       if (!job.result) return fault('任务尚无执行结果。', 409);
@@ -439,6 +471,7 @@ export function reportMarkdown(job) {
     `- 输入 SHA-256：${job.input_sha256}`, `- 方案 SHA-256：${job.plan_sha256}`,
     `- 执行位置：${locationLabel(job)}`, `- 方案确认：学生执行前确认`];
   lines.push(`- 执行资料版本：${job.research_revision ?? '历史未记录'}；导出版本：${job.record_version || 1}`,`- 重跑核对：${job.verification?.status || 'not_checked'}`);
+  lines.push(`- 原始文件 SHA-256：${job.source_sha256||'历史未记录'}`,`- 规范化数据 SHA-256：${job.canonical_sha256||job.input_sha256}`,`- 导入版本：${job.import_version||'历史未记录'}`,`- 对应代码 SHA-256：${job.corresponding_code?.sha256||'历史未记录'}`);
   if(job.stale)lines.push('> 当前研究资料已修改；以下为历史方案与执行结果。');
   lines.push('', '## 执行前资料与来源状态');
   const snapshot=job.evidence_snapshot||{},cards=snapshot.preparation?.cards||{};
@@ -448,9 +481,9 @@ export function reportMarkdown(job) {
   for(const [key,card]of Object.entries(cards))lines.push(`- ${labels[key]||key}：${card.value||'待查找'}；${sourceStatuses[card.status]||'待查找'}；来源：${card.source_title||'未提供'}；链接：${card.source_url||'未提供'}；查阅：${card.accessed_on||'未提供'}`);
   for(const [key,field]of Object.entries(snapshot.blueprint||{}))if(field.value)lines.push(`- 蓝图 ${key}：${field.value}；来源核对状态：${field.verification}`);
   lines.push('- 完整执行快照见复现包 evidence_snapshot.json。');
-  lines.push('', '## 变量定义与单位（学生提供，未自动核实）');
+  lines.push('', '## 变量定义与单位（资料来源，未独立核实）');
   const names = [job.plan.outcome, ...job.plan.predictors, job.plan.unit, job.plan.time, job.plan.treated, job.plan.cluster].filter(Boolean);
-  for (const name of new Set(names)) lines.push(`- ${name}：${job.dictionary?.[name] || '未提供定义与单位，需核对'}`);
+  for (const name of new Set(names)) lines.push(`- ${name}：${job.dictionary?.[name] || '未提供定义与单位，需核对'}；出处：${job.metadata?.provenance?.[name]||'历史未记录'}`);
   lines.push('', '## 已执行结果');
   if (job.result) {
     lines.push(`- 软件：${job.result.software_version||job.result.r_version}`, `- 包：${JSON.stringify(job.result.package_versions)}`,`- 推断口径：${JSON.stringify(job.result.inference||{vcov:job.plan.vcov})}`, `- 估计样本：${job.result.n_used}`, '', '| 变量 | 系数 | 标准误 | p 值 | 95% 区间 |', '|---|---:|---:|---:|---:|');
@@ -462,7 +495,7 @@ export function reportMarkdown(job) {
   lines.push('', '## 学生解释与修订');
   if(!job.reflections.length)lines.push('- 解释练习待完成；分析结果可以下载，学习成果尚未提交。');
   for (const [index, item] of job.reflections.entries()) lines.push(`### 第 ${index + 1} 次`, item.answer, '', `反馈：${item.feedback}`);
-  lines.push('', '## 独立复现与核对', '- 下载并解压该任务的完整复现包，保留原始输入、方案、哈希与版本记录。', '- 使用计算详情记录的软件和依赖版本，在解压目录运行对应复现脚本；核对样本、变量、系数、标准误和区间。', '- 也可在页面点击“从原始输入独立重跑核对”，使用相同引擎的新任务复算，绝对误差容差 5×10⁻⁶。', '- 浏览器复算一致仍不代表服务器数值认证或因果条件已满足。');
+  lines.push('', '## 独立复现与核对', '- 下载并解压该任务的完整复现包，保留原始输入、方案、哈希与版本记录。', '- 使用计算详情记录的软件和依赖版本，在解压目录运行对应复现脚本；核对样本、变量、系数、标准误和区间。', '- 也可在页面点击“从原始输入独立重跑核对”，使用相同引擎的新任务复算，绝对容差1e-8、相对容差1e-6；p值绝对容差1e-6。', '- 浏览器复算一致仍不代表服务器数值认证或因果条件已满足。');
   if(job.verification?.differences?.length)for(const difference of job.verification.differences)lines.push(`- 差异：${difference.term||''} ${difference.field}；${difference.reason||`绝对误差 ${difference.absolute_difference}`}`);
   return lines.join('\n') + '\n';
 }
@@ -476,15 +509,16 @@ function reproductionScript(plan) {
 }
 
 export function compareResults(original, rerun) {
-  const a=original?.result,b=rerun?.result,tolerance=5e-6,differences=[];
+  const a=original?.result,b=rerun?.result,tolerance={absolute:1e-8,relative:1e-6,p_absolute:1e-6},differences=[];
   if(!a||!b)return {status:'not_checked',tolerance};
   for(const key of ['input_sha256','plan_sha256'])if(original[key]!==rerun[key])differences.push({field:key,reason:'哈希不同'});
   if(a.n_used!==b.n_used||a.r_version!==b.r_version||a.software_version!==b.software_version||JSON.stringify(a.package_versions)!==JSON.stringify(b.package_versions)||JSON.stringify(a.audit?.used_indices)!==JSON.stringify(b.audit?.used_indices)||JSON.stringify(a.inference)!==JSON.stringify(b.inference)||original.engine_id!==rerun.engine_id)differences.push({field:'sample_or_version',reason:'样本或版本不同'});
   const terms=new Map(b.coefficients.map(r=>[r.term,r]));
   if(terms.size!==a.coefficients.length)differences.push({field:'terms',reason:'系数集合不同'});
-  for(const row of a.coefficients)for(const key of ['estimate','std_error','ci_low','ci_high']){
+  for(const row of a.coefficients)for(const key of ['estimate','std_error','p_value','ci_low','ci_high']){
     const delta=terms.has(row.term)?Math.abs(row[key]-terms.get(row.term)[key]):null;
-    if(delta===null||delta>tolerance)differences.push({term:row.term,field:key,absolute_difference:delta});
+    const allowed=key==='p_value'?tolerance.p_absolute:tolerance.absolute+tolerance.relative*Math.max(Math.abs(row[key]),Math.abs(terms.get(row.term)?.[key]||0));
+    if(delta===null||!Number.isFinite(delta)||delta>allowed)differences.push({term:row.term,field:key,absolute_difference:delta});
   }
   return {status:differences.length?'inconsistent':'consistent',tolerance,differences,location:rerun.execution_location||'browser_webr',at:new Date().toISOString()};
 }
@@ -553,6 +587,7 @@ export async function syncCloudJob(env,job,session){
     if(remote.status==='succeeded'&&!remote.result)throw new Error('执行节点未提供已完成任务的结果。');
     if(remote.result){
       const r=remote.result;
+      if(job.corresponding_code&&remote.artifacts?.['stata-corresponding.do']!==job.corresponding_code.code)throw new Error('计算后的教学代码与核对方案时不一致。');
       if(!Number.isInteger(r.n_used)||r.n_used<1||r.n_used>job.n_rows||!Array.isArray(r.coefficients)||!r.coefficients.length||r.coefficients.length>15||r.coefficients.some(c=>!['estimate','std_error','p_value','ci_low','ci_high'].every(k=>Number.isFinite(c[k]))))throw new Error('执行节点结果格式无效。');
       if(!Array.isArray(r.used_indices)||r.used_indices.length!==r.n_used||new Set(r.used_indices).size!==r.n_used||r.used_indices.some(i=>!Number.isInteger(i)||i<1||i>job.n_rows))throw new Error('执行节点样本索引无效。');
       r.audit={missing_removed_csv_lines:job.missing_lines,used_indices:r.used_indices,model_removed_count:job.n_rows-job.missing_lines.length-r.n_used,model_removed_csv_lines:job.csv_lines.filter((line,i)=>!r.used_indices.includes(i+1)&&!job.missing_lines.includes(line))};

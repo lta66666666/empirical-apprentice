@@ -86,3 +86,9 @@ export const authAttempts=sqliteTable('auth_attempts',{id:text('id').primaryKey(
 
 export const demoCreationRequests=sqliteTable('demo_creation_requests',{owner:text('owner').notNull(),requestId:text('request_id').notNull(),fingerprint:text('fingerprint').notNull(),sessionId:text('session_id').notNull().references(()=>sessions.id,{onDelete:'cascade'})},t=>[primaryKey({columns:[t.owner,t.requestId]})]);
 export const localFixturePreparations=sqliteTable('local_fixture_preparations',{pairingId:text('pairing_id').primaryKey().references(()=>localPairings.id,{onDelete:'cascade'}),body:text('body').notNull()});
+
+export const researchData = sqliteTable('research_data', {
+ id:text('id').primaryKey(),sessionId:text('session_id').notNull().references(()=>sessions.id,{onDelete:'cascade'}),
+ owner:text('owner').notNull(),body:text('body').notNull(),createdAt:integer('created_at').notNull(),
+ requestId:text('request_id').notNull(),requestSha256:text('request_sha256').notNull(),
+},table=>[index('research_data_session_owner').on(table.sessionId,table.owner),uniqueIndex('research_data_request').on(table.owner,table.sessionId,table.requestId)]);

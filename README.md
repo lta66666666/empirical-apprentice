@@ -1,3 +1,23 @@
+# 独立候选：三方法体验、DTA 与 Stata 对应教学（2026-10-22）
+
+本目录继续在 `joycode-cloud-candidate` 上开发，未发布 JoyCode，也未更新旧 Sites。新增统一 CSV/TSV/DTA 材料、显式日期转换、计算前对应代码阅读、混合意图与换题确认，以及导出版本保护。
+
+- 计算范围仅 OLS、双向固定效应、同批 DID；默认 StatsPAI/Python，浏览器 R 为主动选择的备用。Python 结果不标为 Stata 执行。
+- DTA 数值码、中文标签、扩展缺失类别和日期格式保留；标签来自文件，未独立核实。未知单位不阻挡有效普通回归。
+- 本机 Stata 两次批准继续保留，本轮没有改变旧站或用户助手的运行配置。
+- 本地真实计算、独立数值参考、接口与部分真实浏览器链路通过；CSV/DTA完整浏览器上传、实体手机、200%缩放全链路、新手试用和完整PDF下载核验仍待补证。
+- 原始材料、规范化数据和导入侧车分别保存；账号长期保留、练习最后活动七天到期。原书、学生数据与密钥不进入源码包。
+
+请阅读 [优化内容说明](docs/EXPERIENCE_20261022_CHANGES.md) 和 [逐项验收报告](docs/EXPERIENCE_20261022_ACCEPTANCE.md)。当前电脑预览：在本目录运行 `node scripts/build-prototype.mjs`，再运行 `node scripts/preview-experience.mjs`，打开 `http://127.0.0.1:18843/`。该辅助脚本复用本机既有 Python 环境；跨机器部署配置见 [部署说明](deploy/joycode/README.md)，尚未验收通用安装。
+
+`.openai/hosting.json` 仅保留构建需要的兼容绑定，不关联旧 Sites，也不表示 JoyCode 已部署。
+
+---
+
+## 以下为历史交付记录
+
+旧版本验收按其日期理解，不能替代本候选验收。
+
 # JoyCode 独立整站候选（2026-10-21）
 
 本目录为 V46 基线导出的独立云端版本，尚未在 JoyCode 上线。默认 StatsPAI 云端三方法已完成本地真实计算与网站 HTTP 验收；平台资源、Linux 安装、真实浏览器及新增方法仍待验收。旧 Sites 站点不变，新站独立注册。

@@ -10,6 +10,13 @@ files.update(str(p.relative_to(root)).replace('\\','/') for p in (root/'deploy/j
 files.update(('Dockerfile','.dockerignore','executor/statspai_runner.py','executor/cloud_artifacts.py',
  'worker/method-registry.js','docs/JOYCODE_CLOUD_ACCEPTANCE.md','scripts/package-joycode.py',
  'scripts/verify-cloud-compute.py','scripts/verify-cloud-site.mjs','scripts/verify-cloud-model.mjs','scripts/verify-cloud-dom.mjs'))
+files.update((
+ 'drizzle/0009_research_data.sql','executor/import_data.py','worker/input-identity.js','worker/research-data.js',
+ 'worker/corresponding-teaching.js','static/corresponding-learning.js','scripts/verify-experience-site.mjs',
+ 'scripts/verify-dialogue-intake.mjs','scripts/verify-dta-import.py','scripts/verify-corresponding-stata.py',
+ 'scripts/verify-statistical-edges.py','scripts/verify-fixest-reference.R','scripts/preview-experience.mjs',
+ 'docs/EXPERIENCE_20261022_CHANGES.md','docs/EXPERIENCE_20261022_ACCEPTANCE.md'))
+
 diff=[];manifest=[]
 for name in sorted(files):
     assert Path(name).parts[0] not in ('outputs','dist')

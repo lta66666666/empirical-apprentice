@@ -4,6 +4,7 @@ import {knowledgeContext} from './knowledge.js';
 import {requestIdentity} from './request-consistency.js';
 import {readDrafts} from './drafts.js';
 import {applyUnderstanding,researchSummary} from './research-understanding.js';
+import {inputIdentity} from './input-identity.js';
 const cards=['question','sample','outcome','predictor','data_source','access','policy_name','policy_doc','effective_date','treated_list','comparison'];
 const methods=['ols','panel_fe','did'],steps=['prepare','data','health','plan','execute','explain','reports'];
 const labels={prepare:'整理研究准备',data:'载入数据',health:'检查数据与变量',plan:'核对完整方案',execute:'确认并执行',explain:'解释与修订',reports:'下载并核验报告'};
@@ -68,6 +69,8 @@ export async function handleAnalysisAction(request,env,owner,path){
  if(request.method!=='POST')throw fail('方法不支持',405);
  const body=await request.json(),state=await loadOwnedSession(env,owner,match[1]);if(state==='expired')throw fail('练习已到期',410);if(!state)throw fail('练习不可读取',404);
  Object.defineProperty(state,'research_drafts',{value:await readDrafts(env,state.session_id),enumerable:false,configurable:true,writable:true});
+ const pair=await env.DB.prepare('SELECT body FROM local_pairings WHERE session_id=? AND owner=? AND revoked=0 ORDER BY created_at DESC LIMIT 1').bind(state.session_id,owner).first();
+ Object.defineProperty(state,'_local_input',{value:pair?JSON.parse(pair.body):null,enumerable:false,configurable:true});
  const current=workspace(state),op=String(body.request_id||'');if(!/^[a-zA-Z0-9-]{8,80}$/.test(op))throw fail('缺少有效操作编号');
  const fingerprint=(await requestIdentity({request_id:op,message_id:body.message_id,action_id:body.action_id,edits:body.edits,plan_edits:body.plan_edits,dictionary_edits:body.dictionary_edits,command:body.command,view:body.view,mode:body.mode})).sha256;
  const previous=(current.applied||[]).find(x=>x.id===op);if(previous){if(previous.fingerprint!==fingerprint)throw fail('同一操作编号内容不同',409);return Response.json({...(await sessionPayload(env,state)),action_result:previous.result});}
@@ -77,7 +80,7 @@ export async function handleAnalysisAction(request,env,owner,path){
  if(!row)throw fail('建议记录不可读取',404);const message=JSON.parse(row.body);action=message.actions?.find(a=>a.id===body.action_id);if(!action)throw fail('行动不在保存的允许列表中');
  if(action.kind==='apply'&&message.research_revision!==state.research_revision)throw fail('资料已变化，建议过期；请重新提问',409);
  if(action.kind==='apply'){
- if(message.input_sha256!==(state.research_drafts?.workbench?.value?.input_sha256||''))throw fail('数据已变化，请重新提问',409);
+ if(message.input_sha256!==inputIdentity(state).sha256)throw fail('数据已变化，请重新提问',409);
  const proposal=action.proposal,edits=body.edits||{},allowed=Object.keys(proposal.cards||{});if(Object.keys(edits).some(k=>!allowed.includes(k)))throw fail('编辑字段超出建议范围');
  if(allowed.some(k=>edits[k]!==undefined&&typeof edits[k]!=='string'))throw fail('资料修改必须是文字');
  for(const k of allowed){const value=String(edits[k]??proposal.cards[k]).trim().slice(0,2000);state.preparation.cards[k]={value,status:value?'filled':'to_find',source_title:'对话整理，学生确认填写；来源待核对',source_url:'',accessed_on:''};}

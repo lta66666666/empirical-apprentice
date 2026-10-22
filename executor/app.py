@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS usage(id TEXT PRIMARY KEY, owner TEXT, created REAL);
 INSERT OR IGNORE INTO usage SELECT id,owner,created FROM tasks;''')
 db.commit()
 active = {}
+IMPORT_LOCK=asyncio.Lock()
 TERMINAL = {'succeeded', 'failed', 'interrupted', 'cancelled'}
 
 def update(task):
@@ -92,6 +93,7 @@ def validate(body):
         raise ValueError('Cluster variable required')
     if p['method']!='ols' and (not p.get('unit') or not p.get('time') or p['unit']==p['time']):
         raise ValueError('Panel mapping required')
+    if p['method']!='ols' and p['vcov']!='cluster':raise ValueError('Panel methods require one-way clustering')
     if p['method']=='did' and (p.get('same_batch') is not True or not isinstance(p.get('policy_year'), int) or not 1800<=p['policy_year']<=2200 or not p.get('treated')):
         raise ValueError('Only confirmed same-batch DID is supported')
     for key in ('input_sha256','plan_sha256'):
@@ -151,7 +153,7 @@ async def lifespan(app):
         task=json.loads(row['body']); task.update(status='interrupted',error='Node restarted during execution'); update(task)
     # Clear abandoned input directories only inside this executor's data root.
     for child in ROOT.iterdir():
-        if child.is_dir() and re.fullmatch(r'[0-9a-f-]{36}',child.name): shutil.rmtree(child)
+        if child.is_dir() and re.fullmatch(r'(?:[0-9a-f-]{36}|import-[a-zA-Z0-9_-]+)',child.name): shutil.rmtree(child)
     runner=asyncio.create_task(worker())
     yield
     runner.cancel()
@@ -163,6 +165,34 @@ app=FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 @app.api_route('/v1/{route:path}',methods=['GET','POST','DELETE'])
 async def gateway(route,request:Request):
     owner=await authenticate(request)
+    if route=='teaching' and request.method=='POST':
+        from .cloud_artifacts import teaching
+        body=await request.json();plan=body.get('plan',{})
+        try:
+            fields=[plan.get(k,'') for k in ('outcome','unit','time','treated','cluster')]+plan.get('predictors',[])
+            if plan.get('method') not in ('ols','panel_fe','did') or plan.get('vcov') not in ('iid','hetero','cluster') or plan.get('missing') not in ('drop','block'):raise ValueError('教学方案无效')
+            if len(plan.get('predictors',[]))>12 or any(v and not re.fullmatch(r'v\d+',v) for v in fields):raise ValueError('教学字段必须为受控别名')
+            if plan['method']!='ols' and plan['vcov']!='cluster':raise ValueError('面板方法仅开放单向聚类')
+            if plan['method']=='did' and (plan.get('same_batch') is not True or not isinstance(plan.get('policy_year'),int) or not 1800<=plan['policy_year']<=2200):raise ValueError('同批设定无效')
+            code,manifest=teaching(plan)
+            return {'code':code,**manifest,'input_sha256':body['input_sha256'],'plan_sha256':body['plan_sha256']}
+        except (ValueError,KeyError,TypeError) as error:raise HTTPException(422,str(error))
+    if route=='data/import' and request.method=='POST':
+        import base64,tempfile,sys
+        from .engines import process
+        body=await request.json()
+        if IMPORT_LOCK.locked():raise HTTPException(429,'数据解析正忙，请稍后重试原上传')
+        async with IMPORT_LOCK:
+            try:
+                raw=base64.b64decode(body.get('content_base64',''),validate=True)
+                if not 0<len(raw)<=2_000_000:raise ValueError('DTA文件最多2MB')
+                with tempfile.TemporaryDirectory(prefix='import-',dir=ROOT) as folder:
+                    directory=Path(folder);(directory/'input.dta').write_bytes(raw)
+                    code,log=await process([sys.executable,Path(__file__).parent/'import_data.py',directory],timeout=12)
+                    if code:raise ValueError('DTA无法导入：'+(log.splitlines()[-1][:180] if log.splitlines() else '解析失败'))
+                    return json.loads((directory/'import.json').read_text(encoding='utf-8'))
+            except asyncio.TimeoutError:raise HTTPException(422,'DTA解析超时，文件未导入')
+            except Exception as error:raise HTTPException(422,str(error)[:250])
     if route=='capabilities' and request.method=='GET': return await capabilities()
     if route=='jobs' and request.method=='POST':
         body=await request.json()

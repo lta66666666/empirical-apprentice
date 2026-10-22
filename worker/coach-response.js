@@ -15,7 +15,8 @@ export function checkedCoach(raw,allowedSources=[]){
   if(!follow_up||typeof option!=='object'||!text(option.label,45)||!text(option.answer,240))continue;
   // An unknown unit cannot be supplied by the model as a claimed data fact.
   if(follow_up.field==='unit'&&!/待|不知道|不清楚|查看|确认/.test(option.answer))continue;
-  choices.push({id:'reply_'+choices.length,label:text(option.label,45),answer:text(option.answer,240)});
+  const answer=text(option.answer,240),kind=['value','unknown','consult'].includes(option.kind)?option.kind:/了解|区别|再决定|是什么|什么意思|举例/.test(answer)?'consult':/待|不知道|不清楚|不确定|先查看/.test(answer)?'unknown':'value';
+  choices.push({id:'reply_'+choices.length,label:text(option.label,45),answer,kind,value:kind==='value'?text(option.value||answer,240):''});
  }
  let learning_card=null;
  if(c.learning_card){const k=c.learning_card;if(typeof k!=='object'||!text(k.title,70)||!text(k.summary,240))throw Error('invalid learning card');learning_card={title:text(k.title,70),summary:text(k.summary,240),example:text(k.example,240),reminder:text(k.reminder,180),content:text(k.content,2400),source_ids:references,review_status:'AI结合所给资料整理，待核对'};}

@@ -62,6 +62,7 @@ function eaHydrateDrafts(data){
 function eaWorkbenchSnapshot(){
   const prior=eaDraftEntry('workbench').value;
   return {ui_view:window.eaCurrentAnalysisView||'data',filename:researchData?.filename||prior.filename||'',input_sha256:eaInputHash,simulated:researchData?Boolean(researchData.simulated):Boolean(prior.simulated),fixture_method:researchData?researchData.fixture_method||null:prior.fixture_method||null,
+    data_id:researchData?.data_id||null,source_filename:researchData?.source_filename||null,metadata:researchData?.metadata||null,
     profile:researchProfileCache?{row_count:researchProfileCache.row_count,columns:researchProfileCache.columns.map(c=>({name:c.name,numeric:c.numeric,missing:c.missing}))}:null,
     dictionary:eaDictionaryValues(),question:$('researchInstruction').value,source:$('researchSource').value,candidate:researchCandidate()};
 }
@@ -95,7 +96,11 @@ async function eaRestoreWorkbench(data){
   researchSetFields(draft.profile,draft.candidate||{});
   const remembered=eaResearchInputCache.get((window.EA_ACCOUNT?.id||'')+':'+id);
   if(remembered?.hash===draft.input_sha256){researchData=structuredClone(remembered.data);researchData.dictionary={...researchData.dictionary,...draft.dictionary};eaRenderDictionary();}
-  else if(draft.simulated&&draft.fixture_method){
+  else if(draft.data_id){
+    try{const material=await api(`/api/sessions/${id}/research/data/${draft.data_id}`);if(epoch!==eaDraftRestoreEpoch||sessionId!==id||researchData)return;
+      researchData={...material,filename:material.format==='dta'?'normalized.csv':material.filename,source_filename:material.filename,dictionary:{...material.metadata.dictionary,...draft.dictionary},source:material.metadata.source};eaRenderDictionary();researchNotice('已恢复数据、标签与草稿，请重新核对方案。');
+    }catch(e){researchNotice(e.message,true);}
+  }else if(draft.simulated&&draft.fixture_method){
     try{const example=await api(`/api/research/examples/${draft.fixture_method}`);
       if(epoch!==eaDraftRestoreEpoch||sessionId!==id||researchData)return;
       const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(example.text));

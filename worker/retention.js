@@ -1,5 +1,6 @@
 import {ensureAuthSchema} from './auth.js';
 import {syncCloudJob} from './research.js';
+import {cleanupResearchData} from './research-data.js';
 const RETENTION = 7 * 86400000;
 
 export async function cleanupExpired(env) {
@@ -30,6 +31,7 @@ export async function cleanupExpired(env) {
   const expiredSessions = await env.DB.prepare("SELECT id FROM sessions WHERE last_activity<=? AND id NOT IN (SELECT session_id FROM jobs WHERE status IN ('running','queued','preparing','estimating','saving')) AND id NOT IN (SELECT session_id FROM local_stata_tasks WHERE status IN ('running','cancel_requested')) LIMIT 100").bind(cutoff).all();
   let sessions = 0;
   for (const row of expiredSessions.results) {
+    await cleanupResearchData(env,row.id);
     const remaining = await env.DB.prepare('SELECT id,input_key FROM jobs WHERE session_id=?').bind(row.id).all();
     for (const job of remaining.results) {
       await env.FILES.delete([job.input_key,job.input_key+'.node.json']);

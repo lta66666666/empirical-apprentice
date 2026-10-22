@@ -38,6 +38,11 @@ try{
  assert.equal(w.eaAnalysisEngine,'statspai_cloud');assert.equal(d.querySelectorAll('.analysis-shell>aside').length,2);
  assert.equal(d.querySelectorAll('.coach-center').length,1);
  checks.push('default cloud execution and compact three-column shell');
+ const uploaded={text:'x,y\n1,2\n2,3\n',filename:'normalized.csv',labels:{value_labels:{x:{1:'first'}},date_formats:{y:'%tm'}},dictionary:{x:'来自文件的标签'},data_id:crypto.randomUUID()};
+ await w.eaLoadResearchInput(uploaded,{row_count:2,columns:[{name:'x',numeric:true,missing:0},{name:'y',numeric:true,missing:0}]},{});
+ assert.ok(d.getElementById('eaImportDetails'));assert.ok(d.getElementById('eaImportDetails').textContent.includes('提取年度'));w.eaRenderDictionary();assert.ok(d.getElementById('eaImportDetails'));
+ checks.push('import labels and date conversion entry survive dictionary redraw; no background model call');
+
  const report=await (await call(`/api/sessions/${session.session_id}`)).json();assert.equal(report.research_drafts['analysis-context'].value.engine_id,'statspai_cloud');
  assert.ok(!errors.some(e=>!e.includes('Not implemented:')) ,JSON.stringify(errors));
  await writeFile('outputs/cloud-dom-acceptance.json',JSON.stringify({scope:'DOM simulation, controlled capability only; no browser acceptance',checks,errors},null,2));

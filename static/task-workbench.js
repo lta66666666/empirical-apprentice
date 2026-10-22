@@ -122,6 +122,7 @@ const dictionaryEditor=el('section','ea-variable-editor');dictionaryEditor.id='e
 function eaRenderDictionary(){
   const root=$('eaDictionaryEditor');if(!root)return;
   if(!researchProfileCache){root.replaceChildren(el('p','workspace-note','载入数据后可填写变量定义与单位。'));return;}
+  if(typeof researchRenderImportDetails==='function')researchRenderImportDetails();
   const saved=eaDictionaryValues();root.dataset.inputHash=eaInputHash;root.replaceChildren(el('h3','','变量含义、单位与来源'),el('p','workspace-note','填写会自动保存草稿；点击“提交变量字典”后才纳入方案和执行快照。'));
   const p=researchCandidate(),selected=new Set([p.outcome,...p.predictors,p.unit,p.time,p.treated,p.cluster].filter(Boolean));
   const remaining=el('details','ea-other-columns');remaining.append(el('summary','',`其他数据列（${researchProfileCache.columns.filter(c=>!selected.has(c.name)).length}）`));

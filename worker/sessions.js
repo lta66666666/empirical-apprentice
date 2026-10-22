@@ -1,4 +1,5 @@
 import {sampleEvidenceText} from './sample-evidence.js';
+import {cleanupResearchData} from './research-data.js';
 import {fixtureDescriptor,seedFixture} from './demo-fixture.js';
 import { syncSessionNodes, deleteSessionNodes } from './executor.js';
 import { curriculum, practiceCases } from './content.js';
@@ -8,7 +9,7 @@ import { modelFeedback, reserveModelCall, modelCapabilities } from './model.js';
 import { draftEndpoint, readDrafts } from './drafts.js';
 import {modelInteractions,modelEvidenceMarkdown} from './model-evidence.js';
 import {practicalMessages} from './practical.js';
-import {researchSummary,refreshUnderstandingFromPreparation} from './research-understanding.js';
+import {researchSummary,refreshUnderstandingFromPreparation,absorbAnswer} from './research-understanding.js';
 import {localTasks} from './local-stata.js';
 import {ensureLearningContext,coursePayload,openCourse,learningProjection,commitLearningProjection,courseView} from './course.js';
 
@@ -397,6 +398,29 @@ export async function handleSessions(request, env, owner, path) {
   if (path === '/api/sessions') {
     if (request.method === 'POST') {
       const body=await request.json().catch(()=>({}));
+      if(body.topic_switch){
+        try{
+          if(!/^[a-zA-Z0-9-]{16,80}$/.test(body.request_id||''))return error('换题操作编号无效。');
+          const from=String(body.topic_switch.from_session||''),messageId=String(body.topic_switch.message_id||''),fingerprint=JSON.stringify(['topic',from,messageId]);
+          const replay=await env.DB.prepare('SELECT fingerprint,session_id FROM demo_creation_requests WHERE owner=? AND request_id=?').bind(owner,body.request_id).first();
+          if(replay){if(replay.fingerprint!==fingerprint)return error('操作编号内容不同。',409);const existing=await loadOwnedSession(env,owner,replay.session_id);return existing&&existing!=='expired'?answer(await sessionPayload(env,existing)):error('新练习已到期。',410);}
+          const original=await loadOwnedSession(env,owner,from);if(!original||original==='expired')return error('原练习不可读取。',404);requireSessionVersion(original,{state_version:body.topic_switch.state_version});
+          const row=await env.DB.prepare('SELECT body FROM practical_messages WHERE id=? AND session_id=? AND owner=?').bind(messageId,from,owner).first(),message=row?JSON.parse(row.body):null;
+          if(!message?.topic_switch)return error('没有可确认的换题建议。',409);
+          const state=newSession(owner),now=Date.now(),question=message.topic_switch.question.replace(/^.*?(?:换(?:个|一个)?(?:研究)?(?:题目|主题)|重新研究|换成研究|改研究)[，,。:：\s]*/,'');
+          state.entry_path='data';state.stage='free_chat';state.state_version=1;state.research_revision=1;
+          state.research_understanding=absorbAnswer(state,[],question,messageId).understanding;
+          state.preparation.cards.question={value:question,status:'filled',source_title:'用户确认的新研究主题，来源待核对',source_url:''};
+          const intro={dialogue:{summary:'已开始独立研究，原练习完整保留。请继续提问或提交数据。',choices:[],current_question:null},id:crypto.randomUUID(),role:'assistant',content:'已开始独立研究，原练习完整保留。请继续提问或提交数据。',created_at:now,research_revision:1};
+          const created=await env.DB.batch([
+            env.DB.prepare('INSERT INTO sessions(id,owner,body,created_at,last_activity,state_version) SELECT ?,?,?,?,?,1 WHERE EXISTS(SELECT 1 FROM sessions WHERE id=? AND owner=? AND state_version=?)').bind(state.session_id,owner,JSON.stringify(state),now,now,from,owner,original.state_version),
+            env.DB.prepare('INSERT INTO demo_creation_requests(owner,request_id,fingerprint,session_id) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM sessions WHERE id=?)').bind(owner,body.request_id,fingerprint,state.session_id,state.session_id),
+            env.DB.prepare('INSERT INTO practical_messages(id,session_id,owner,body,created_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM sessions WHERE id=?)').bind(intro.id,state.session_id,owner,JSON.stringify(intro),now,state.session_id)
+          ]);
+          if(!created[0].meta.changes)return error('原研究在保存期间已变化，请同步后重试。',409);
+          return answer(await sessionPayload(env,state));
+        }catch(e){const repeat=await env.DB.prepare('SELECT session_id,fingerprint FROM demo_creation_requests WHERE owner=? AND request_id=?').bind(owner,body.request_id||'').first();if(repeat&&repeat.fingerprint===JSON.stringify(['topic',String(body.topic_switch.from_session||''),String(body.topic_switch.message_id||'')])){const existing=await loadOwnedSession(env,owner,repeat.session_id);if(existing&&existing!=='expired')return answer(await sessionPayload(env,existing));}return error(e.message,e.status||422);}
+      }
       if(body.fixture_id!==undefined){
         try{
           if(!/^[a-zA-Z0-9-]{16,80}$/.test(body.request_id||''))return error('示范请求编号无效。');
@@ -456,6 +480,7 @@ export async function handleSessions(request, env, owner, path) {
       const jobs = await env.DB.prepare('SELECT id,input_key FROM jobs WHERE session_id=? AND owner=?').bind(id, owner).all();
       for (const job of jobs.results) await env.FILES.delete([job.input_key,job.input_key+'.node.json']);
       await env.DB.prepare('DELETE FROM jobs WHERE session_id=? AND owner=?').bind(id, owner).run();
+      await cleanupResearchData(env,id);
       await env.DB.prepare('DELETE FROM sessions WHERE id=? AND owner=?').bind(id, owner).run();
       return answer({ ok: true });
     }

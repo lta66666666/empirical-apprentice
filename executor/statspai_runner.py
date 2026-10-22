@@ -26,6 +26,7 @@ def stats_compute(directory, plan):
     if platform.python_version_tuple()[:2] != ('3', '11'): raise ValueError('需要 Python 3.11')
     if plan['method'] not in ('ols', 'panel_fe', 'did'): raise ValueError('方法未开放')
     if plan['vcov'] not in ('iid','hetero','cluster') or plan['missing'] not in ('block','drop'): raise ValueError('方差或缺失值处理参数无效')
+    if plan['method']!='ols' and plan['vcov']!='cluster':raise ValueError('面板方法仅开放单向聚类')
     # Read strings first, exactly as the Stata template does. No patsy formulas
     # containing user-supplied names: all columns are locally generated aliases.
     frame = pd.read_csv(directory/'normalized.csv', dtype=str, keep_default_na=False)
@@ -38,13 +39,13 @@ def stats_compute(directory, plan):
         if not np.isfinite(frame[name].dropna()).all(): raise ValueError('非有限输入')
     missing = frame[selected].isna().any(axis=1)
     if plan['missing'] == 'block' and missing.any(): raise ValueError('存在缺失值，需要先核对删除规则')
-    # The current Stata template checks panel IDs before deleting missing rows.
-    if plan['method'] != 'ols':
-        if frame[[plan['unit'], plan['time']]].isna().any().any(): raise ValueError('个体或年份缺失')
-        if frame.duplicated([plan['unit'], plan['time']]).any(): raise ValueError('个体年份重复')
-        if not (frame[plan['time']] == np.floor(frame[plan['time']])).all(): raise ValueError('年份必须为整数')
     data = frame.loc[~missing].copy()
-    if len(data) < 8: raise ValueError('完整样本少于8行')
+    minimum=max(8,len(plan['predictors'])+(1 if plan['method']=='did' else 0)+2)
+    if len(data)<minimum:raise ValueError('完整样本不足，需要至少'+str(minimum)+'行')
+    if plan['method'] != 'ols':
+        if data.duplicated([plan['unit'], plan['time']]).any(): raise ValueError('个体年份重复')
+        if not (data[plan['time']] == np.floor(data[plan['time']])).all(): raise ValueError('年份必须为整数')
+    if plan['vcov']=='cluster' and data[plan['cluster']].nunique()<2:raise ValueError('至少需要两个聚类组')
     rhs = list(plan['predictors'])
     if plan['method'] == 'did':
         if not plan.get('same_batch') or not data[plan['treated']].isin([0, 1]).all(): raise ValueError('同批DID组别无效')
@@ -60,6 +61,8 @@ def stats_compute(directory, plan):
         if plan['vcov'] == 'cluster': opts = {'cluster': plan['cluster']}
         fit = sp.regress(formula, data=data, collinear='raise', **opts)
         params, errors = fit.params, fit.std_errors
+        covariance=fit.vcov()
+        dimensions={'parameters':len(params),'residual_df':float(fit.data_info['df_resid'])}
         df = float(fit.data_info.get('df_inference', fit.data_info['df_resid']))
         used = [int(x) for x in fit.data_info['sample_index']]
         correction = 'StatsPAI regress; explicit HC1 or one-way cluster; t inference'
@@ -73,6 +76,8 @@ def stats_compute(directory, plan):
                             ssc='fixest', drop_singletons=False)
         if fit.n_kept != len(data) or fit.n_dropped_singletons: raise ValueError('原生结果未提供足够的实际样本证据')
         params, errors = fit.coef(), fit.se()
+        covariance=fit.vcov()
+        dimensions={'parameters':len(params),'residual_df':int(fit.df_resid),'fe_cardinality':list(fit.fe_cardinality),'ssc':fit.ssc,'drop_singletons':False}
         df = float(data[plan['cluster']].nunique()-1) if plan['vcov']=='cluster' else float(fit.df_resid)
         used = [int(x) for x in data.index]
         correction = 'StatsPAI native feols ssc=fixest; cluster t(G-1), otherwise t(df_resid)'
@@ -90,7 +95,8 @@ def stats_compute(directory, plan):
     (directory/'statspai-native.json').write_text(json.dumps(native, default=lambda x: x.tolist() if hasattr(x,'tolist') else str(x), ensure_ascii=False), encoding='utf-8')
     return {'summary':'StatsPAI 云端计算；对应 Stata 代码仅供教学。', 'software_version':'StatsPAI '+versions['statspai'],
             'package_versions':versions,'python_version':platform.python_version(), 'n_used':len(used), 'used_indices':used,
-            'coefficients':coefficients,'deleted_count':len(frame)-len(used),'omitted_terms':[],
+            'coefficients':coefficients,'deleted_count':len(frame)-len(used),'omitted_terms':None,'omitted_status':'未分项记录；奇异或不可识别模型停止计算',
+            'covariance':{'terms':[str(n) for n in covariance.index],'matrix':covariance.to_numpy().tolist()},'model_dimensions':dimensions,
             'inference':{'vcov':plan['vcov'],'cluster':plan['labels'].get(plan['cluster'],plan['cluster']),'df':df,'confidence':.95,'correction':correction},
             'validation_scope':'当前受控配置；数值对照、来源和识别条件分别核验'}
 

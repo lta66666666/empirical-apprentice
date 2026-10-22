@@ -18,11 +18,21 @@ function setField(u,key,value,status,origin){
  next.history=[...(old.history||[]),...(old.source?[{value:old.value,status:old.status,source:old.source}]:[])].slice(-10);u.fields[key]=next;return true;
 }
 function explicitFacts(u,text,message,field){
+ if(isResearchHelpQuestion(text)){
+   let changed=false;
+   for(const span of text.split(/[，,。；;？！?\n]/).map(s=>s.trim()).filter(Boolean)){
+     if(!isResearchHelpQuestion(span)&&!/^例如|^比如/.test(span)&&/(?:是|为|改成|改为|研究|选择|单位|年份)/.test(span))changed=explicitFacts(u,span,message,null)||changed;
+   }
+   return changed;
+ }
  const origin=source(message,text);let changed=false;
  if(/^\s*(?:请)?(?:讲解|解释)|^\s*什么是|^\s*我已(?:提交|选择)/.test(text))return false;
  const put=(k,v,status='provided')=>{if(k==='outcome'&&u.fields.outcome.value&&u.fields.outcome.value!==v&&known(u.fields.unit)&&u.fields.unit.source?.message_id!==message)changed=setField(u,'unit','','unknown',origin)||changed;changed=setField(u,k,v,status,origin)||changed;};
  const noAnswer=unknown.test(text),correction=/改成|改为|更正|修正|不是.*而是|实际上|单位(?:是|为)|时期(?:是|为)/.test(text);
  const value=text.replace(/^\s*(?:改成|改为|更正(?:为)?|实际上|应该是)\s*[:：]?/,'').trim();
+ const object=value.match(/(?:研究对象|观察对象|对象)(?:是|为|[:：])\s*([^，。；;\n]{1,100})/);
+ if(object&&!unknown.test(object[1]))put('object',object[1]);
+ for(const [key,pattern]of [['outcome',/(?:结果指标|结果变量|指标)(?:是|为|改成|改为|[:：])\s*([^，。；;\n]{1,100})/],['predictor',/(?:解释变量|控制变量)(?:是|为|[:：])\s*([^，。；;\n]{1,100})/],['data_source',/(?:数据来源)(?:是|为|[:：])\s*([^，。；;\n]{1,200})/]]){const match=value.match(pattern);if(match&&!unknown.test(match[1]))put(key,match[1]);}
  if(allPeriod.test(value))put('period','希望使用数据覆盖的全部年份（范围待确认）','awaiting_data');
  const years=value.match(/((?:18|19|20|21)\d{2})\s*(?:年)?\s*(?:[-—–~～至到])\s*((?:18|19|20|21)\d{2})/);
  if(years)put('period',years[1]+'–'+years[2]+'年');
@@ -39,8 +49,9 @@ function explicitFacts(u,text,message,field){
  else if(/同批|同一年|同一时间|同一天/.test(value)&&!/不是同批|不确定|尚未/.test(value))put('adoption_mode','single_batch');
  const date=value.match(/(?:实施(?:时间|日期)?(?:是|为|从)?|自)\s*[:：]?\s*((?:18|19|20|21)\d{2}(?:年|[-/]\d{1,2})?(?:\d{1,2}月|[-/]\d{1,2})?(?:\d{1,2}日)?)/)||value.match(/((?:18|19|20|21)\d{2}年)(?:开始|同批|正式)?实施/);
  if(date)put('effective_date',date[1]);
- if(field==='unit'&&noAnswer)put('unit','','unknown');
- else if(field==='outcome'&&noAnswer&&!measured)put('outcome','','unknown');
+ if(/单位/.test(value)&&noAnswer)put('unit','待数据说明确认','awaiting_data');
+ if(field==='unit'&&noAnswer)put('unit','待数据说明确认','awaiting_data');
+ else if(field==='outcome'&&noAnswer&&!measured&&!/单位/.test(value))put('outcome','','unknown');
  else if(field==='period'&&noAnswer&&!allPeriod.test(value))put('period','','unknown');
  else if(field==='policy'&&noAnswer)put('policy','','unknown');
  else if(field==='object'&&noAnswer&&!measured)put('object','','unknown');
@@ -51,7 +62,7 @@ function explicitFacts(u,text,message,field){
  else if(field==='period'&&!noAnswer&&!allPeriod.test(value)&&!years&&!goal&&value.length<=200)put('period',value);
  else if(field==='effective_date'&&!noAnswer&&!date&&/\d/.test(value)&&value.length<=100)put('effective_date',value);
  else if(['predictor','data_source','access','policy_doc','treated_list','comparison'].includes(field)&&!noAnswer&&!goal)put(field,value);
- if(/不知道.*单位|不清楚.*单位|单位.*(?:不知道|不清楚|待查|待确认|等.*确认|需.*确认|未知)/.test(value))put('unit','','unknown');
+ if(/不知道.*单位|不清楚.*单位|单位.*(?:不知道|不清楚|待查|待确认|等.*确认|需.*确认|未知)/.test(value))put('unit','待数据说明确认','awaiting_data');
  if(/拿到数据后|等数据后|数据说明后|数据到手后/.test(value)&&(/单位/.test(value)||field==='unit'))put('unit','待数据说明确认','awaiting_data');
  if(correction&&!field&&measured)put('outcome',measured[1]);
  return changed;
@@ -70,7 +81,7 @@ export function understanding(state,messages=[]){
 }
 export function absorbAnswer(state,messages,text,userId,choice=null){
  const u=understanding(state,messages),before=JSON.stringify(u.fields);if(isComputeRequest(text))u.compute_requested=true;const field=choice?.field||u.active_question?.field||null;
- const changed=explicitFacts(u,text,userId,field);
+ const changed=choice?.kind==='consult'?false:explicitFacts(u,text,userId,field);
  if(choice?.status)setField(u,choice.field,choice.value,choice.status,source(userId,text,'choice'));
  u.active_question=null;u.revision++;u.last_user_message_id=userId;
  return {understanding:u,changed:changed||before!==JSON.stringify(u.fields),answer_field:field};
@@ -89,7 +100,7 @@ export function nextGap(state,u,profile={row_count:0,columns:[]}){
  else if(isPolicyRequest(state,u)&&needs('effective_date')){field='effective_date';prompt='政策实际从什么时候实施？可以先查政策原文再确认。';}
  else if(isPolicyRequest(state,u)&&needs('adoption_mode')){field='adoption_mode';prompt='政策是同一批、同一时间实施，还是分批实施？';}
  else if(isPolicyRequest(state,u)&&needs('policy_doc')){field='policy_doc';prompt='请提交政策原文或链接，方便核对实施时间和对象。';}
- else if(!profile.row_count){field='data';prompt='请提交CSV或TSV数据，我会先检查字段和需要补充的说明。';}
+ else if(!profile.row_count){field='data';prompt='请提交CSV、TSV或DTA数据，我会先检查字段和需要补充的说明。';}
  else {field='mapping';prompt='数据已收到。请核对结果指标对应的列、含义和单位，然后再讨论方法。';}
  return {field,label:labels[field]||{data:'数据材料',mapping:'变量核对'}[field],prompt};
 }
@@ -149,7 +160,7 @@ export function validateChoice(state,messages,body){
  const latest=messages.filter(x=>x.role==='assistant').at(-1),q=latest?.dialogue?.current_question;
  if(!q||q.id!==body.question_id||state.research_understanding?.active_question?.id!==q.id||latest.research_revision!==state.research_revision)throw Object.assign(Error('这个问题已更新，请使用当前一轮的选项。'),{status:409});
  const dynamic=latest.dialogue.schema_version===2&&body.choice_id.startsWith('reply_')?latest.dialogue.choices?.find(c=>c.id===body.choice_id):null;
- if(dynamic){if(!fieldsForChoice(q.field)||typeof dynamic.answer!=='string'||dynamic.answer.length>240)throw Object.assign(Error('回答选项无效。'),{status:422});return {...dynamic,field:q.field,value:dynamic.answer,status:q.field==='unit'?'awaiting_data':'provided'};}
+ if(dynamic){if(!fieldsForChoice(q.field)||typeof dynamic.answer!=='string'||dynamic.answer.length>240)throw Object.assign(Error('回答选项无效。'),{status:422});const kind=dynamic.kind||(/了解|区别|再决定|是什么/.test(dynamic.answer)?'consult':/待|不知道|不确定|查看/.test(dynamic.answer)?'unknown':'value');return {...dynamic,kind,field:q.field,value:kind==='value'?(dynamic.value||dynamic.answer):'',status:kind==='consult'?null:kind==='unknown'||q.field==='unit'?'awaiting_data':'provided'};}
  const publicChoice=latest.dialogue.choices?.find(x=>x.id===body.choice_id),definition=choiceDefinitions[q.field]?.find(x=>x.id===body.choice_id);
  if(!publicChoice||!definition||publicChoice.answer!==definition.answer)throw Object.assign(Error('回答选项无效。'),{status:422});
  return {...definition,field:q.field};
@@ -185,8 +196,7 @@ function indicatorHelp(u,text){
 }
 export function absorbQuotedFacts(state,updates,user){
  const u=understanding(state);let changed=false;
- if(isResearchHelpQuestion(user.content))return {understanding:u,changed};
- for(const item of updates||[]){if(!Object.hasOwn(labels,item.field)||!user.content.includes(item.source_span)||!item.source_span.includes(item.value)||unknown.test(item.value))continue;
+  for(const item of updates||[]){if(!Object.hasOwn(labels,item.field)||!user.content.includes(item.source_span)||!item.source_span.includes(item.value)||unknown.test(item.value)||/[？?]|有哪些|是什么|什么意思|如何|怎么|例如|假如|假设/.test(item.source_span))continue;
   if(item.field==='outcome'&&u.fields.outcome.value!==item.value&&known(u.fields.unit))changed=setField(u,'unit','','unknown',source(user.id,user.content,'user_extract'))||changed;
   const allPeriod=item.field==='period'&&/全部|所有|覆盖|可获得/.test(item.value);
   changed=setField(u,item.field,allPeriod?'希望使用数据覆盖的全部年份（范围待确认）':item.value,allPeriod?'awaiting_data':'provided',source(user.id,item.source_span,'user_extract'))||changed;
