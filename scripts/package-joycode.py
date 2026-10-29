@@ -10,6 +10,7 @@ files.update(str(p.relative_to(root)).replace('\\','/') for p in (root/'deploy/j
 files.update(('Dockerfile','.dockerignore','executor/statspai_runner.py','executor/cloud_artifacts.py',
  'worker/method-registry.js','docs/JOYCODE_CLOUD_ACCEPTANCE.md','scripts/package-joycode.py',
  'scripts/verify-cloud-compute.py','scripts/verify-cloud-site.mjs','scripts/verify-cloud-model.mjs','scripts/verify-cloud-dom.mjs'))
+files.update(('scripts/verify-novice-contracts.mjs','docs/HISTORY_ARCHIVE.md','docs/NOVICE_20261029_ACCEPTANCE.md',))
 files.update((
  'drizzle/0009_research_data.sql','executor/import_data.py','worker/input-identity.js','worker/research-data.js',
  'worker/corresponding-teaching.js','static/corresponding-learning.js','scripts/verify-experience-site.mjs',

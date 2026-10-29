@@ -39,14 +39,14 @@ try{
  const sid=state.session_id;
  const uploadBytes=await readFile('outputs/dta-acceptance/hospital.dta');
  const multipart=new FormData();multipart.append('file',new Blob([uploadBytes]),'hospital.dta');multipart.append('state_version',state.state_version);multipart.append('request_id',randomUUID());
- let uploaded=await fetch(origin+`/api/sessions/${sid}/research/data`,{method:'POST',headers:{Origin:origin,Cookie:cookie},body:multipart});let data=await uploaded.json();assert.equal(uploaded.status,200,JSON.stringify(data));assert.equal(data.format,'dta');assert.equal(data.labels.value_labels.group['1'],'处理');assert.match(data.text,/-99/);
+ let uploaded=await fetch(origin+`/api/sessions/${sid}/research/data`,{method:'POST',headers:{Origin:origin,Cookie:cookie},body:multipart});let data=await uploaded.json();assert.equal(uploaded.status,200,JSON.stringify(data));assert.equal(data.format,'dta');assert.equal(data.labels.value_labels.group['1'],'����');assert.match(data.text,/-99/);
  assert.equal((await call(`/api/sessions/${sid}/research/data/${data.id}`,undefined,otherCookie)).status,404);
  const restored=await call(`/api/sessions/${sid}/research/data/${data.id}`);assert.equal(restored.value.text,data.text);
  state=(await call(`/api/sessions/${sid}`)).value;
  const preview=await call(`/api/sessions/${sid}/research/data/${data.id}`,{operation:'preview_year',column:'month',state_version:state.state_version});assert.equal(preview.status,200,JSON.stringify(preview.value));assert.equal(preview.value.min_year,2019);
  const transformation={operation:'year',column:'month',state_version:state.state_version,confirmed:true,request_id:randomUUID()};
  const converted=await call(`/api/sessions/${sid}/research/data/${data.id}`,transformation);assert.equal(converted.status,200,JSON.stringify(converted.value));assert.equal((await call(`/api/sessions/${sid}/research/data/${data.id}`,transformation)).value.id,converted.value.id);assert.match(converted.value.text,/month_year/);
- const datePlan=await call(`/api/sessions/${sid}/research/plan`,{state_version:state.state_version,data_id:data.id,candidate:{method:'panel_fe',engine_id:'statspai_cloud',outcome:'cost',predictors:['group'],unit:'hospital',time:'month',cluster:'hospital',vcov:'cluster',missing:'drop'}});assert.equal(datePlan.status,422);assert.match(datePlan.value.detail,/年度|年份/);
+ const datePlan=await call(`/api/sessions/${sid}/research/plan`,{state_version:state.state_version,data_id:data.id,candidate:{method:'panel_fe',engine_id:'statspai_cloud',outcome:'cost',predictors:['group'],unit:'hospital',time:'month',cluster:'hospital',vcov:'cluster',missing:'drop'}});assert.equal(datePlan.status,422);assert.match(datePlan.value.detail,/���|���/);
  evidence.checks.push('real DTA upload, original numeric codes/labels, negative code retained, owned refresh, monthly date rejects annual role, explicit year conversion and idempotence');
 
  let importedResults=[];
@@ -66,7 +66,7 @@ try{
   assert.equal(plan.status,200,JSON.stringify(plan.value));
   const preview=plan.value.confirmation.corresponding_code;assert.ok(preview?.commands?.length);assert.equal(preview.executed,false);
   const ref=new URLSearchParams({confirmation_token:plan.value.confirmation.token,preview_hash:preview.sha256,command_id:preview.core_command_id});
-  const lesson=await call(`/api/sessions/${sid}/research/teaching?${ref}`);assert.equal(lesson.status,200,JSON.stringify(lesson.value));assert.match(lesson.value.card.content,/字段映射/);
+  const lesson=await call(`/api/sessions/${sid}/research/teaching?${ref}`);assert.equal(lesson.status,200,JSON.stringify(lesson.value));assert.match(lesson.value.card.content,/�ֶ�ӳ��/);
   assert.equal((await call(`/api/sessions/${sid}/research/teaching?${ref}`,undefined,otherCookie)).status,404);
   const body={state_version:plan.value.state_version,request_id:randomUUID(),filename:f.filename,text:f.text,plan:plan.value.plan,confirmation_token:plan.value.confirmation.token,confirmed:true,source:f.source,dictionary:f.dictionary,simulated:true};
   assert.equal((await call(`/api/sessions/${sid}/research/jobs`,{...body,confirmed:false})).status,422);
@@ -81,14 +81,29 @@ try{
   const zip=await call(`/api/research/jobs/${id}/package`);assert.equal(zip.status,200);assert.ok(zip.value.length>5000);await writeFile(resolve(folder,method+'.zip'),zip.value);
   evidence.jobs.push({method,id,n_used:job.result.n_used,record_version:job.record_version,code_sha256:code.value.sha256});
  }
+ {
+ const f=fixtures.did,lines=f.text.trim().split(/\r?\n/),headers=lines[0].split(','),ui=headers.indexOf(f.plan.unit),ti=headers.indexOf(f.plan.time),first=lines[1].split(',')[ui];
+ const text=lines.filter((line,index)=>!index||!(line.split(',')[ui]===first&&Number(line.split(',')[ti])>=f.plan.policy_year)).join('\n')+'\n';
+ state=(await call(`/api/sessions/${sid}`)).value;
+ const rejected=await call(`/api/sessions/${sid}/research/plan`,{state_version:state.state_version,filename:f.filename,text,candidate:{...f.plan,engine_id:'statspai_cloud',missing:'block'}});
+ assert.equal(rejected.status,422,JSON.stringify(rejected));assert.match(rejected.value.detail,/����ȱ������ǰ|������ȱ������ǰ/);
+ evidence.checks.push('DID unit without a post period rejected before confirmation');
+ }
+ const rerunBody={request_id:randomUUID()};const original=evidence.jobs[0].id;
+ const repeats=await Promise.all([call(`/api/research/jobs/${original}/rerun`,rerunBody),call(`/api/research/jobs/${original}/rerun`,rerunBody)]);
+ assert.equal(repeats[0].status,202,JSON.stringify(repeats[0]));assert.equal(repeats[1].status,202,JSON.stringify(repeats[1]));assert.equal(repeats[0].value.id,repeats[1].value.id);
+ assert.equal((await call(`/api/research/jobs/${original}/rerun`,rerunBody)).value.id,repeats[0].value.id);
+ assert.equal((await waitJob(repeats[0].value.id)).status,'succeeded');
+ evidence.jobs[0].record_version=(await call(`/api/research/jobs/${original}`)).value.record_version;
+ evidence.checks.push('concurrent rerun and lost-response retry return the same real computation');
  const reflectionJob=evidence.jobs.at(-1).id;
- for(let i=0;i<3;i++){const saved=await call(`/api/research/jobs/${reflectionJob}/reflection`,{answer:`第${i+1}版解释：模拟DID系数约-1.835，不能单独证明因果。`,answer_version:i});assert.equal(saved.status,200,JSON.stringify(saved.value));}
+ for(let i=0;i<3;i++){const saved=await call(`/api/research/jobs/${reflectionJob}/reflection`,{answer:`��${i+1}����ͣ�ģ��DIDϵ��Լ-1.835�����ܵ���֤�������`,answer_version:i});assert.equal(saved.status,200,JSON.stringify(saved.value));}
  const revised=(await call(`/api/research/jobs/${reflectionJob}`)).value;assert.equal(revised.record_version,4);assert.equal(revised.reflections.length,3);
  assert.equal((await call(`/api/research/jobs/${reflectionJob}/report?record_version=1`)).status,409);
- const revisedReport=await call(`/api/research/jobs/${reflectionJob}/report?record_version=4`);assert.match(revisedReport.value,/第3版解释/);
+ const revisedReport=await call(`/api/research/jobs/${reflectionJob}/report?record_version=4`);assert.match(revisedReport.value,/��3�����/);
  const revisedZip=await call(`/api/research/jobs/${reflectionJob}/package?record_version=4`);assert.equal(revisedZip.status,200);await writeFile(resolve(folder,'revised-report.zip'),revisedZip.value);
  evidence.jobs.at(-1).record_version=4;evidence.checks.push('first explanation and two revisions saved in one versioned record; stale export rejected; Markdown and ZIP use version 4 (model unavailable in this test)');
- evidence.checks.push('three real website→signed queue→StatsPAI jobs','execution requires confirmation','idempotent repeat returns same job','two-account task isolation','browser cannot forge cloud completion','corresponding Stata code bound to task/plan','Markdown and ZIP generated; browser PDF pending');
+ evidence.checks.push('three real website��signed queue��StatsPAI jobs','execution requires confirmation','idempotent repeat returns same job','two-account task isolation','browser cannot forge cloud completion','corresponding Stata code bound to task/plan','Markdown and ZIP generated; browser PDF pending');
  state=(await call(`/api/sessions/${sid}`)).value;
  const f=fixtures.ols,cancelPlan=await call(`/api/sessions/${sid}/research/plan`,{state_version:state.state_version,filename:f.filename,text:f.text,candidate:{...f.plan,engine_id:'statspai_cloud',missing:'block'}});
  assert.equal(cancelPlan.status,200);
