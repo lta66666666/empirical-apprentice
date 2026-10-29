@@ -13,7 +13,7 @@ const env={DB:store.DB,FILES:store.FILES,EXECUTOR_URL:'https://executor.test/',E
 let cookie='',dom;const errors=[],checks=[];
 const nativeFetch=globalThis.fetch;globalThis.fetch=async url=>{
  assert.match(String(url),/^https:\/\/executor\.test\/v1\/capabilities$/);
- return Response.json({statspai_cloud:{ready:true,status:'��ִ��',reason:'ģ��������Ӧ���Ǽ�������'}});
+ return Response.json({statspai_cloud:{ready:true,status:'可执行',reason:'模拟能力响应；非计算验收'}});
 };
 async function call(url,options={}){return worker.fetch(new Request(new URL(url,origin),{...options,headers:{Origin:origin,Cookie:cookie,...options.headers}}),env);}
 class Loader extends ResourceLoader{fetch(url){return call(url).then(async r=>Buffer.from(await r.arrayBuffer()));}}
@@ -39,9 +39,9 @@ try{
  assert.equal(d.querySelectorAll('.coach-center').length,1);
  assert.equal(d.querySelector('.coach-current-operation').tagName,'SECTION');assert.ok(d.querySelector('.coach-center>.coach-current-operation'));
  checks.push('default cloud execution and compact three-column shell');
- const uploaded={text:'x,y\n1,2\n2,3\n',filename:'normalized.csv',labels:{value_labels:{x:{1:'first'}},date_formats:{y:'%tm'}},dictionary:{x:'�����ļ��ı�ǩ'},data_id:crypto.randomUUID()};
+ const uploaded={text:'x,y\n1,2\n2,3\n',filename:'normalized.csv',labels:{value_labels:{x:{1:'first'}},date_formats:{y:'%tm'}},dictionary:{x:'来自文件的标签'},data_id:crypto.randomUUID()};
  await w.eaLoadResearchInput(uploaded,{row_count:2,columns:[{name:'x',numeric:true,missing:0},{name:'y',numeric:true,missing:0}]},{});
- assert.ok(d.getElementById('eaImportDetails'));assert.ok(d.getElementById('eaImportDetails').textContent.includes('��ȡ���'));w.eaRenderDictionary();assert.ok(d.getElementById('eaImportDetails'));
+ assert.ok(d.getElementById('eaImportDetails'));assert.ok(d.getElementById('eaImportDetails').textContent.includes('提取年度'));w.eaRenderDictionary();assert.ok(d.getElementById('eaImportDetails'));
  checks.push('import labels and date conversion entry survive dictionary redraw; no background model call');
 
  const report=await (await call(`/api/sessions/${session.session_id}`)).json();assert.equal(report.research_drafts['analysis-context'].value.engine_id,'statspai_cloud');
