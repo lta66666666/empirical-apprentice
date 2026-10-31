@@ -194,12 +194,12 @@ async function researchAskModel(){
     if(typeof eaSaveWorkbenchDraft==='function')eaSaveWorkbenchDraft();
   }catch(e){if(context.session===sessionId)researchNotice(e.message,true);}finally{button.disabled=false;if(context.session===sessionId&&typeof eaRefreshModelEvidence==='function')eaRefreshModelEvidence();}
 }
-async function researchRun(){
+async function researchRun({confirmed=false}={}){
   if(researchRunning||researchInputBusy){researchNotice('当前操作正在处理中，请等待完成。',true);return;}
   if(!researchPlan||!researchData){researchNotice('请先载入原始数据并整理当前方案。',true);return;}
   if(researchPlan.context&&!researchContextCurrent(researchPlan.context)){researchInvalidate();researchNotice('输入、资料或参数已变化，请重新整理方案。',true);return;}
   if(!researchRuntime?.engines?.[$('researchEngine').value]?.ready){researchNotice('当前执行环境不可用。请选择可用引擎，再重新整理与确认方案。',true);return;}
-  if(!$('researchConfirm').checked){researchNotice('请先核对方案并勾选执行确认。',true);return;}
+  if(!(confirmed===true||$('researchConfirm').checked)){researchNotice('请先核对完整方案，再点击确认方案并开始计算。',true);return;}
   const context=researchContext(),operation=++researchOperationEpoch;
   const payload={filename:researchData.filename,text:researchData.text,data_id:researchData.data_id||undefined,plan:researchPlan.plan,confirmation_token:researchPlan.confirmation.token,confirmed:true,source:$('researchSource').value,dictionary:researchData.dictionary||latestState.variable_dictionary||{},simulated:Boolean(researchData.simulated),question:$('researchInstruction').value};
   const signature=JSON.stringify([context.session,payload]);if(!researchPendingSubmission||researchPendingSubmission.signature!==signature)researchPendingSubmission={signature,id:crypto.randomUUID()};payload.request_id=researchPendingSubmission.id;
@@ -279,7 +279,7 @@ function researchDrawJob(j){
   }
   for(const c of r.coefficients){const row=el('tr');row.tabIndex=0;row.setAttribute('aria-label',`选择 ${c.term} 查看区间与单位`);row.onclick=()=>selectCoefficient(c,row);row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectCoefficient(c,row);}};for(const value of [c.term,c.estimate.toPrecision(5),c.std_error.toPrecision(4),c.p_value.toPrecision(4),`[${c.ci_low.toPrecision(4)}, ${c.ci_high.toPrecision(4)}]`])row.append(el('td','',value));table.append(row);}
   wrap.append(table);evidenceBody.append(wrap);
-  box.append(focus);selectCoefficient(r.coefficients.find(c=>c.term!=='(Intercept)')||r.coefficients[0],table.querySelectorAll('tr')[r.coefficients.findIndex(c=>c.term!=='(Intercept)')+1]||table.querySelectorAll('tr')[1]);
+  box.append(window.eaSampleEvidencePanel(j),focus);selectCoefficient(r.coefficients.find(c=>c.term!=='(Intercept)')||r.coefficients[0],table.querySelectorAll('tr')[r.coefficients.findIndex(c=>c.term!=='(Intercept)')+1]||table.querySelectorAll('tr')[1]);
   if(j.engine_id==='statspai_cloud'){
     const teaching=el('details','ea-corresponding-code'),body=el('div');teaching.append(el('summary','','Stata 对应代码'),body);
     let loaded=false;teaching.addEventListener('toggle',async()=>{if(!teaching.open||loaded)return;body.textContent='正在读取对应代码…';
@@ -345,7 +345,7 @@ function researchHistory(jobs){
   const box=$('researchHistory');box.replaceChildren(el('h4','','当前练习的分析记录'));
   if(!jobs.length)box.append(el('p','muted','尚无分析记录。'));
   const states={queued:'排队中',running:'正在执行',preparing:'准备数据',estimating:'正在估计',saving:'正在保存',succeeded:'分析完成',failed:'执行失败',cancelled:'已取消',interrupted:'已中断'};
-  for(const j of jobs)box.append(button(`${researchNames[j.plan.method]} · ${new Date(j.created*1000).toLocaleString()} · ${states[j.status]||j.status}`,'research-history-item',()=>{eaSetTask('research');eaResearchStep('execute');window.eaAnalysisEngine=j.engine_id||'statspai_cloud';window.eaSelectedTask={id:j.id,session_id:sessionId,engine_id:j.engine_id||'browser_webr'};window.dispatchEvent(new CustomEvent('ea-local-tasks',{detail:{tasks:latestState?.local_stata_tasks||[],session:sessionId}}));researchWatch(j.id);}));
+  for(const j of jobs)box.append(button(`${researchNames[j.plan.method]} · ${new Date(j.created*1000).toLocaleString()} · ${states[j.status]||j.status}`,'research-history-item',()=>{eaSetTask('research');eaResearchStep('execute');window.eaAnalysisEngine=j.engine_id||'statspai_cloud';window.eaSelectedTask={id:j.id,session_id:sessionId,engine_id:j.engine_id||'browser_webr'};window.dispatchEvent(new CustomEvent('ea-local-tasks',{detail:{tasks:latestState?.local_stata_tasks||[],session:sessionId}}));researchWatch(j.id);window.eaWorkspaceOpen?.('execute','分析结果');}));
 }
 function renderResearch(data){
   if(researchPlan && researchPlan.confirmation?.research_revision !== data.research_revision)researchInvalidate();

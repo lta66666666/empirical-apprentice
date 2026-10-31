@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {JSDOM,ResourceLoader,VirtualConsole} from '../outputs/ui-qa/node_modules/jsdom/lib/api.js';
+import {JSDOM,ResourceLoader,VirtualConsole} from '../../empirical_apprentice_sites/outputs/ui-qa/node_modules/jsdom/lib/api.js';
 import {webcrypto} from 'node:crypto';
 import {openStorage} from '../standalone/storage.mjs';
 import worker from '../dist/server/index.js';
@@ -14,7 +14,7 @@ try{
     await new Promise(r=>dom.window.addEventListener('load',()=>setTimeout(r,800)));
     const document=dom.window.document;
     if(route==='/home'){assert.equal(document.querySelectorAll('a,button,input,select,textarea,[tabindex]').length,2);assert.equal(document.querySelectorAll('script').length,0);}
-    else{assert.ok(document.querySelector('.module-toolbar'));if(route==='/analysis'){assert.ok(document.querySelector('.analysis-shell'));assert.ok(document.querySelector('.analysis-dock textarea'));assert.equal(document.querySelector('.analysis-top').dataset.mode,'analysis');assert.ok(document.querySelector('.coach-center .coach-feed'));assert.ok(document.querySelector('.coach-knowledge'));assert.ok(document.querySelector('.coach-materials'));assert.equal(document.querySelector('.coach-review').open,false);}}
+    else{assert.ok(document.querySelector('.module-toolbar'));if(route==='/analysis'){assert.ok(document.querySelector('.analysis-shell'));assert.ok(document.querySelector('.analysis-dock textarea'));assert.equal(document.querySelector('.analysis-top').dataset.mode,'analysis');assert.ok(document.querySelector('.coach-center .coach-feed'));assert.ok(document.querySelector('.coach-knowledge'));assert.ok(document.querySelector('.coach-materials'));assert.equal(document.querySelector('.coach-review').hidden,true);}}
     dom.window.close();
   }
   assert.deepEqual(errors,[]);globalThis.console.log('PASS home exact DOM controls, complete module scripts, conversation-first columns and closed detail dialog. DOM-only; real viewport/phone pending.');

@@ -100,23 +100,23 @@ for(const id of ['researchVcov','researchCluster','researchMissing'])advanced.ap
 const draftStatus=el('p','ea-draft-status');draftStatus.id='eaDraftStatus';draftStatus.setAttribute('role','status');$('researchNotice').after(draftStatus);
 const footer=el('div','ea-step-actions'),nextAction=button('检查数据与变量','btn-primary',async()=>{
   if(eaStep==='data'){if(!researchData&&!researchProfileCache){researchNotice('请选择模拟数据或上传 CSV/TSV，再检查字段。',true);return;}eaResearchStep('health');}
-  else if(eaStep==='health')eaResearchStep('plan');
-  else if(eaStep==='plan'){if(!researchPlan){await researchMakePlan();return;}await researchRun();}
-  else if(eaStep==='execute'&&researchJob?.status==='succeeded'){eaResearchStep('explain');}
+  else if(eaStep==='health'){const dict=eaDictionaryValues(),ctx=sessionId;if(!await eaFlushDraft('workbench'))return;const ok=await mutate('variable-dictionary',{dictionary:dict},{method:'PUT'});if(!ok||ctx!==sessionId)return;if(researchData)researchData.dictionary=dict;eaResearchStep('plan');await researchMakePlan();}
+  else if(eaStep==='plan'){if(!researchPlan){await researchMakePlan();return;}await researchRun({confirmed:true});}
+  else if(eaStep==='execute'&&researchJob?.status==='succeeded'){window.eaOpenRecords?.();}
   else if(researchJob?.status==='succeeded'){if(window.eaOpenAnswer)await window.eaOpenAnswer(researchJob.id);else $('researchReflectionSubmit')?.click();}
   else{eaResearchStep('data');}
 });nextAction.id='eaNextAction';footer.append(nextAction);$('pane-research').append(footer);
 function eaUpdateStepAction(){
   if(!$('eaNextAction'))return;
   const confirmation=$('researchConfirm').closest('label');
-  confirmation.classList.toggle('ea-stage-hidden',eaStep!=='plan'||!researchPlan);
-  $('eaNextAction').textContent={data:'检查数据与变量',health:'选择方法并整理方案',plan:researchPlan?'核对确认后执行':'整理待确认方案',execute:'进入结果解释',explain:researchJob?.status==='succeeded'?(researchJob.reflections?.length?'可选修订并更新报告':'提交解释并更新报告'):'选择数据开始分析'}[eaStep];
+  confirmation.hidden=window.EA_MODULE==='analysis';confirmation.classList.toggle('ea-stage-hidden',eaStep!=='plan'||!researchPlan);
+  $('eaNextAction').textContent={data:'检查数据与变量',health:'保存字段并继续',plan:researchPlan?'确认方案并开始计算':'整理待确认方案',execute:'查看与导出报告',explain:researchJob?.status==='succeeded'?(researchJob.reflections?.length?'可选修订并更新报告':'提交解释并更新报告'):'选择数据开始分析'}[eaStep];
   if(window.EA_MODULE==='analysis'&&eaStep==='explain'&&researchJob?.status==='succeeded')$('eaNextAction').textContent='在对话中解释或修订';
-  $('eaNextAction').disabled=researchRunning||researchInputBusy||(eaStep==='plan'&&(researchRunning||Boolean(researchPlan&&!$('researchConfirm').checked)))||(eaStep==='execute'&&researchJob?.status!=='succeeded')||(eaStep==='explain'&&Boolean($('researchReflectionSubmit')?.disabled));
+  $('eaNextAction').disabled=researchRunning||researchInputBusy||(eaStep==='plan'&&(researchRunning||false))||(eaStep==='execute'&&researchJob?.status!=='succeeded')||(eaStep==='explain'&&Boolean($('researchReflectionSubmit')?.disabled));
   if(eaStep==='execute'&&researchJob?.status!=='succeeded')$('eaNextAction').textContent=['failed','interrupted','cancelled'].includes(researchJob?.status)?'执行未完成，请先处理上方提示':'等待计算完成';
   $('pane-research').querySelector(':scope>h2').textContent={data:'选择数据，开始一次分析',health:'核对数据与变量',plan:'整理方案，核对后执行',execute:'查看真实执行与结果',explain:'解释系数，记录自己的理解'}[eaStep];
   let hint=$('eaStepHint');if(!hint){hint=el('p','workspace-note');hint.id='eaStepHint';stepper.after(hint);}
-  hint.textContent={data:'选择数据后检查字段；模拟数据与自己的研究分别记录。',health:researchProfileCache?'先填写所选变量的含义与单位；其他列可稍后补充。':'尚无数据。可先浏览方法短课，或返回数据步骤。',plan:researchData?'修改资料或参数后需重新整理方案、核对并确认。':'请载入原始数据后整理方案；仅有字段草稿不能执行。',execute:researchJob?'按真实任务状态查看结果；执行完成后即可下载。':'尚未提交任务。请在方案步骤核对并确认。',explain:researchJob?.status==='succeeded'?'解释练习可稍后完成；草稿保存不代表已提交。':'完成一次分析后，这里会出现系数解释练习。'}[eaStep];
+  hint.textContent={data:'选择数据后检查字段；模拟数据与自己的研究分别记录。',health:researchProfileCache?'核对字段；含义与单位可后补，未知内容不会猜填。':'尚无数据。可先浏览方法短课，或返回数据步骤。',plan:researchData?'修改资料或参数后需重新整理方案、核对并确认。':'请载入原始数据后整理方案；仅有字段草稿不能执行。',execute:researchJob?'按真实任务状态查看结果；执行完成后即可下载。':'尚未提交任务。请在方案步骤核对并确认。',explain:researchJob?.status==='succeeded'?'解释练习可稍后完成；草稿保存不代表已提交。':'完成一次分析后，这里会出现系数解释练习。'}[eaStep];
 }
 const dictionaryEditor=el('section','ea-variable-editor');dictionaryEditor.id='eaDictionaryEditor';mark(dictionaryEditor,'health');document.querySelector('.research-input').append(dictionaryEditor);
 function eaRenderDictionary(){

@@ -20,7 +20,8 @@ export async function draftEndpoint(request,env,state,tail) {
   }
   const {value,version}=await request.json();
   if(!Number.isInteger(version)||version<0||!value||typeof value!=='object'||Array.isArray(value))throw Error('草稿版本或内容无效。');
-  if(key==='workspace-view'&&(Object.keys(value).some(k=>!['view','collapsed'].includes(k))||!['prepare','data','health','plan','execute','explain','reports'].includes(value.view)||typeof value.collapsed!=='boolean'))throw Error('页面位置无效');
+  if(key==='workspace-view'&&(Object.keys(value).some(k=>!['view','collapsed','engine_id','task_id','scroll_top'].includes(k))||!['prepare','data','health','plan','execute','explain','reports'].includes(value.view)||typeof value.collapsed!=='boolean'))throw Error('页面位置无效');
+  if(key==='workspace-view'){if(value.engine_id!==undefined&&![...Object.keys(engineMetadata),'stata_local_mcp','statspai_local'].includes(value.engine_id))throw Error('页面执行方式无效');if(value.scroll_top!==undefined&&(!Number.isInteger(value.scroll_top)||value.scroll_top<0||value.scroll_top>10000000))throw Error('阅读位置无效');if(value.task_id){if(typeof value.task_id!=='string'||!/^[-a-f0-9]{36}$/.test(value.task_id))throw Error('任务引用无效');const table=['stata_local_mcp','statspai_local'].includes(value.engine_id)?'local_stata_tasks':'jobs';const owned=await env.DB.prepare('SELECT id FROM '+table+' WHERE id=? AND session_id=? AND owner=?').bind(value.task_id,state.session_id,state.owner_id).first();if(!owned)return Response.json({detail:'任务不可读取'},{status:404});}}
   if(key==='analysis-context'&&(Object.keys(value).some(k=>!['engine_id'].includes(k))||![...Object.keys(engineMetadata),'stata_local_mcp','statspai_local'].includes(value.engine_id)))throw Error('执行方式无效');
   if(key==='stata-guide'){
     if(Object.keys(value).some(k=>!['lesson_id','step_id','guide_version','view_only'].includes(k))||value.view_only!==true||value.guide_version!==stataGuideVersion)throw Error('操作指南阅读记录无效，请重新打开指南。');

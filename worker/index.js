@@ -85,7 +85,7 @@ export default {
       if(['/','/app','/static/index.html','/trial'].includes(path))return Response.redirect(new URL('/home',request.url),303);
       if(path==='/home'||path==='/static/home.html')return staticResponse('/static/home.html');
       const base=staticResponse('/static/index.html'),html=await base.text();
-      const boot=`<script>window.EA_ACCOUNT=${JSON.stringify({id:user.id,username:user.username})};window.EA_MODULE=${JSON.stringify(path.slice(1))};</script><link rel="stylesheet" href="/static/module-layout.css">`;
+      const boot=`<script>window.EA_ACCOUNT=${JSON.stringify({id:user.id,username:user.username})};window.EA_MODULE=${JSON.stringify(path.slice(1))};</script><link rel="stylesheet" href="/static/module-layout.css"><link rel="stylesheet" href="/static/ui/theme.css">`;
       return new Response(html.replace('</head>',boot+'</head>').replace('</body>','<script defer src="/static/data-fragment.js"></script><script defer src="/static/module-layout.js"></script><script defer src="/static/analysis-dialogue.js"></script><script defer src="/static/conversation-workspace.js"></script><script defer src="/static/stata-learning.js"></script><script defer src="/static/stata-guide.js"></script><script defer src="/static/corresponding-learning.js"></script></body>'),{headers:{...headers,'Content-Type':'text/html; charset=utf-8'}});
     }
     if(path.startsWith('/api/local-stata/agent/'))return await handleLocalStata(request,env,null,path);

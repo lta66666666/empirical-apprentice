@@ -1,4 +1,14 @@
-# 独立候选：新手中央操作卡与流程补缺（2026-10-29）
+# 实证学徒 · 单一操作主线候选（2026-10-31）
+
+本轮修改与证据见 [操作主线验收](docs/FLOW_20261031_ACCEPTANCE.md)。当前仍为部分验收通过的独立候选。
+
+# 实证学徒 · 界面升级候选（2026-10-30）
+
+本轮采用清爽青绿主题、新手简洁布局与按需 Bootstrap 5.3.8 组件样式。首页增加标题和视觉层次，仍只有两个入口。所有业务控制器与计算接口沿用现有实现。
+
+本轮状态和未完成验收见 [视觉升级验收](docs/UI_20261030_ACCEPTANCE.md)。修改前回退副本：`outputs/ui-baseline-20261030/source.zip`。
+
+样式开发：`npm ci --prefix ui --ignore-scripts`，然后 `node scripts/build-ui.mjs`。依赖仅用于编译；页面从本地读取已打包样式，不依赖CDN。通常预览继续运行 `node scripts/build-prototype.mjs` 和 `node scripts/preview-experience.mjs`。
 
 本目录继续在 `joycode-cloud-candidate` 上开发，未发布 JoyCode，也未更新旧 Sites。本轮将主要操作移到中央卡，上传后按需请求AI辅导；修复独立重跑幂等、DTA失败恢复、DID前置检查和教学软件标识。
 

@@ -15,7 +15,7 @@ try{
   assert.equal((await call('/api/auth/register','POST',{username:'mismatch',password:'Test-password-12!',password_confirmation:'Different-password-12!'})).status,422);
   const started=performance.now(),a=await call('/api/auth/register','POST',{username:'Student_A',password:'Test-password-12!'});assert.equal(a.status,200);credentials=a.cookie;const accountA=a.value.user.id;
   assert.match(a.headers.get('set-cookie'),/HttpOnly/);assert.match(a.headers.get('set-cookie'),/Secure/);assert.match(a.headers.get('set-cookie'),/SameSite=Lax/);
-  const home=await call('/home');assert.equal(home.status,200);assert.equal((home.value.match(/<a /g)||[]).length,2);assert.equal(/<script|<button|<nav|<header/.test(home.value),false);
+  const home=await call('/home');assert.equal(home.status,200);assert.equal((home.value.match(/<a /g)||[]).length,2);assert.equal(/<script|<button|<nav/.test(home.value),false);
   const session=(await call('/api/sessions','POST')).value;assert.ok(session.session_id);
   const b=await call('/api/auth/register','POST',{username:'student_b',password:'Another-password-12!'},'', '192.0.2.2');assert.equal(b.status,200);
   assert.equal((await call('/api/sessions/'+session.session_id,'GET',undefined,b.cookie)).status,404);

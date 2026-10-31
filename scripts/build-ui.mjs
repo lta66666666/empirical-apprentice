@@ -1,0 +1,10 @@
+import {readFile,writeFile,mkdir,copyFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+const root=resolve(import.meta.dirname,'..');
+const sass=await import('../ui/node_modules/sass/sass.node.js');
+const compile=sass.compile||sass.default.compile;
+await mkdir(resolve(root,'static/ui'),{recursive:true});
+const result=compile(resolve(root,'ui/components.scss'),{style:'compressed',silenceDeprecations:['import','global-builtin','color-functions']});
+await writeFile(resolve(root,'static/ui/components.css'),result.css);
+await copyFile(resolve(root,'ui/node_modules/bootstrap/LICENSE'),resolve(root,'static/ui/BOOTSTRAP-LICENSE.txt'));
+console.log('Built scoped Bootstrap components:',result.css.length,'bytes');

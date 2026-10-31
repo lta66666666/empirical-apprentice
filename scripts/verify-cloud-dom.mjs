@@ -37,12 +37,20 @@ try{
  assert.equal(d.getElementById('researchEngine').value,'statspai_cloud');
  assert.equal(w.eaAnalysisEngine,'statspai_cloud');assert.equal(d.querySelectorAll('.analysis-shell>aside').length,2);
  assert.equal(d.querySelectorAll('.coach-center').length,1);
- assert.equal(d.querySelector('.coach-current-operation').tagName,'SECTION');assert.ok(d.querySelector('.coach-center>.coach-current-operation'));
+ assert.equal(d.querySelector('.coach-current-operation').tagName,'SECTION');assert.ok(d.querySelector('.coach-center>.coach-stream>.coach-current-operation'));
  checks.push('default cloud execution and compact three-column shell');
  const uploaded={text:'x,y\n1,2\n2,3\n',filename:'normalized.csv',labels:{value_labels:{x:{1:'first'}},date_formats:{y:'%tm'}},dictionary:{x:'来自文件的标签'},data_id:crypto.randomUUID()};
  await w.eaLoadResearchInput(uploaded,{row_count:2,columns:[{name:'x',numeric:true,missing:0},{name:'y',numeric:true,missing:0}]},{});
  assert.ok(d.getElementById('eaImportDetails'));assert.ok(d.getElementById('eaImportDetails').textContent.includes('提取年度'));w.eaRenderDictionary();assert.ok(d.getElementById('eaImportDetails'));
  checks.push('import labels and date conversion entry survive dictionary redraw; no background model call');
+ const retained=d.getElementById('researchFile');w.eaWorkspaceOpen('health','核对字段');assert.equal(d.querySelector('.coach-current-operation').hidden,false);
+ d.querySelector('.coach-current-operation>button').click();assert.equal(d.querySelector('.coach-current-operation').hidden,true);
+ d.querySelector('.coach-operation-summary button').click();assert.equal(d.querySelector('.coach-current-operation').hidden,false);assert.equal(d.getElementById('researchFile'),retained);
+ w.eaWorkspaceOpen('prepare','研究准备');assert.equal(d.getElementById('pane-preparation').hidden,false);
+ w.eaWorkspaceOpen('plan','核对方案');assert.equal(d.getElementById('researchConfirm').closest('label').hidden,true);
+ assert.equal(await w.eaFlushAllDrafts(),true);const activeId=w.eval('sessionId');const display=await (await call(`/api/sessions/${activeId}/drafts`)).json();assert.equal(display.drafts['workspace-view'].value.collapsed,false);assert.equal(display.drafts['workspace-view'].value.view,'plan');
+ checks.push('single stream retains file control, collapse/reopen persists, preparation route and checkbox-free confirmation');
+
 
  const report=await (await call(`/api/sessions/${session.session_id}`)).json();assert.equal(report.research_drafts['analysis-context'].value.engine_id,'statspai_cloud');
  assert.ok(!errors.some(e=>!e.includes('Not implemented:')) ,JSON.stringify(errors));

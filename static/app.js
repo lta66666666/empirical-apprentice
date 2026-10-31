@@ -10,7 +10,7 @@ const chartCache = new Map();
 function storageGet(key) { try { return localStorage.getItem(window.EA_ACCOUNT?`ea_account:${window.EA_ACCOUNT.id}:${key}`:key); } catch { return null; } }
 function storageSet(key, value) { try { localStorage.setItem(window.EA_ACCOUNT?`ea_account:${window.EA_ACCOUNT.id}:${key}`:key, value); } catch { /* Private browsing can disable storage. */ } }
 function storageRemove(key) {try{localStorage.removeItem(window.EA_ACCOUNT?`ea_account:${window.EA_ACCOUNT.id}:${key}`:key);}catch{}}
-function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if(tag === "button") n.classList.add("btn"); if (text != null) n.textContent = text; return n; }
 function icon(name) { const n = el("i"); n.dataset.lucide = name; return n; }
 function icons() { window.lucide?.createIcons(); }
 function button(text, cls, action) { const b = el("button", cls, text); b.type = "button"; b.onclick = action; return b; }
