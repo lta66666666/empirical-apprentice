@@ -6,6 +6,8 @@ import {requestIdentity} from './request-consistency.js';
 import {proposeCandidate,modelFeedback,modelCapabilities,reserveModelCall,requestModel} from './model.js';
 import {didConflict} from './evidence.js';
 import {knowledgeContext,knowledgeVersion,knowledgeOptions} from './knowledge.js';
+import {textbookCatalog} from './textbook-sources.js';
+import {textbookCards} from './textbook-cards.js';
 import {getStataGuide,guideCard,stataGuideVersion} from './stata-guide.js';
 import {readDrafts} from './drafts.js';
 import {inputIdentity} from './input-identity.js';
@@ -63,6 +65,7 @@ export async function handlePractical(request,env,owner,path){
  const actionReply=await handleAnalysisAction(request,env,owner,path);if(actionReply)return actionReply;
  if(path==='/api/knowledge'&&request.method==='GET'){
   const params=new URL(request.url).searchParams,options=knowledgeOptions(Object.fromEntries(params)),query=params.get('q')||'';
+  if(params.has('catalog')){if(params.get('catalog')!=='textbooks')throw fail('教材目录标识无效。');return Response.json({knowledge_version:knowledgeVersion,catalog:textbookCatalog(textbookCards)});}
   if(params.has('guide')){if(params.get('guide')!=='stata18')throw fail('指南标识无效。');const guide=getStataGuide(params.get('lesson_id')||undefined,params.get('step_id')||undefined);return Response.json({knowledge_version:knowledgeVersion,guide,materials:[guideCard(guide.lesson.id,guide.step.id)]});}
   return Response.json({knowledge_version:knowledgeVersion,materials:await knowledgeContext(query.slice(0,2000),options)});
  }
@@ -144,7 +147,7 @@ export async function handlePractical(request,env,owner,path){
  else if(intent==='analysis'||intent==='guided'){
   const response=await proposeCandidate({question,profile:clean,preparation:intake,context,blocker:didConflict({...state,preparation:intake}),history:history.filter(x=>x.id!==user.id).slice(-10).map(x=>({role:x.role,content:x.content}))},env,{session_id:state.session_id,owner});output=await response.json();
  }else{
-  const retrieval=await teachingMaterials(question,context),materials=retrieval.map(c=>({id:c.id,content:c.content}));let related_task=null;
+  const retrieval=await teachingMaterials(question,context),materials=retrieval.map(c=>({id:c.id,title:c.title,content:c.content,version:c.version,content_hash:c.content_hash,references:c.references||[]}));let related_task=null;
   if(intent==='reflection'&&context.executed_result){related_task=context.executed_result.id;materials.push({id:'executed_result',content:context.executed_result});}
   const feedback=intent==='reflection'&&!related_task?{answer:'尚无可用的已执行结果。请先核对方案并完成真实计算，不能解释未执行的系数或检验。',mode:'checklist',references:[]}:await modelFeedback(intent==='reflection'?'reflection':'tutor',{question,answer:question,coaching:{kind:'research_tutor'},knowledge_context:{method:context.focus_method||undefined,stage:context.step,engine:context.engine},research_understanding:u,current_question:priorUnderstanding.active_question,materials:[...materials,{id:'analysis_context',content:context},{id:'research_preparation',content:state.preparation}]},env,{session_id:state.session_id,owner,task_id:related_task});
   output={...feedback,reason:feedback.answer,retrieval,related_task};

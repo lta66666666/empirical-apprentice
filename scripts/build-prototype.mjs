@@ -4,6 +4,7 @@ import './build-auth.mjs';
 import './build-sample-evidence.mjs';
 import './build-course-materials.mjs';
 import './build-demo-fixtures.mjs';
+import './build-teaching-index.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 await mkdir(resolve(root, 'dist/server'), { recursive: true });

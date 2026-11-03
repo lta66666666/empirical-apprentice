@@ -20,5 +20,6 @@ RUN node scripts/build-prototype.mjs && cp deploy/joycode/start.sh /bin/start.sh
 USER node
 ENV PATH=/opt/venv/bin:$PATH PORT=8080 BIND_ADDRESS=0.0.0.0 \
     EA_DATA_DIR=/data/web EA_NODE_DATA=/data/executor NODE_ENV=production
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 CMD node -e "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 EXPOSE 8080
 CMD ["/bin/start.sh"]

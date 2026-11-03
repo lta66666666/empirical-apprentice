@@ -18,7 +18,9 @@ files.update((
  'scripts/verify-statistical-edges.py','scripts/verify-fixest-reference.R','scripts/preview-experience.mjs',
  'docs/EXPERIENCE_20261022_CHANGES.md','docs/EXPERIENCE_20261022_ACCEPTANCE.md'))
 
-files.update(('ui/package.json','ui/package-lock.json','ui/components.scss','scripts/build-ui.mjs','docs/UI_20261030_ACCEPTANCE.md','docs/FLOW_20261031_ACCEPTANCE.md'))
+files.update(('ui/package.json','ui/package-lock.json','ui/components.scss','scripts/build-ui.mjs','docs/UI_20261030_ACCEPTANCE.md','docs/FLOW_20261031_ACCEPTANCE.md','worker/ai-interpretation.js','drizzle/0010_ai_interpretations.sql','static/ai-interpretation.js'))
+files.update(('scripts/verify-ai-interpretation.mjs','scripts/verify-ai-real-model.mjs','scripts/verify-ai-dispatcher.mjs','scripts/deployment-preflight.mjs','standalone/interpretation-dispatcher.mjs','docs/PUBLIC_20261102_ACCEPTANCE.md'))
+files.update(('worker/textbook-sources.js','static/teaching/textbook-catalog.json','scripts/verify-material-integration.mjs','scripts/verify-material-model.mjs','docs/MATERIALS_20261103_ACCEPTANCE.md'))
 files.update(str(p.relative_to(root)).replace('\\','/') for p in (root/'static/ui').rglob('*') if p.is_file())
 diff=[];manifest=[]
 for name in sorted(files):

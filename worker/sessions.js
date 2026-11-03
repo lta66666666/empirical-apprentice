@@ -200,6 +200,7 @@ async function learningMarkdown(env, state) {
   for(const task of await localTasks(env,state.owner_id,state.session_id)){
     lines.push(`### ${task.id} · ${task.status}`,`- 导出版本 ${task.record_version}；输入哈希 ${task.input_sha256}；代码哈希 ${task.code_sha256||'待批准'}；执行资料版本 ${task.research_revision}`,`- 方案与来源快照：${JSON.stringify(task.evidence_snapshot)}；变量字典：${JSON.stringify(task.dictionary)}`,`- 原始输入及完整日志保存在本机，不包含在网站导出中。`);
     if(task.result)lines.push(sampleEvidenceText(task),`- 实际结果：${JSON.stringify(task.result)}`);
+    if(task.ai_interpretation?.status==='succeeded'){const ai=task.ai_interpretation;lines.push('#### AI辅助解读',ai.summary,...ai.points.map(x=>'- '+x),'解读限制：'+ai.limitations.join('；'));}
     for(const item of task.reflections||[])lines.push(`- 解释：${item.answer}\n  反馈：${JSON.stringify(item.feedback)}`);
   }
   for(const [key,draft]of Object.entries(await readDrafts(env,state.session_id)))if(!['stata-reading','stata-guide','stata-guide-intro'].includes(key)&&Object.keys(draft.value).length&&!draft.value.submitted)lines.push(`- ${key} · 草稿版本 ${draft.version}：${JSON.stringify(draft.value)}`);

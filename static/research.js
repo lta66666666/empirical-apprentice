@@ -209,7 +209,7 @@ async function researchRun({confirmed=false}={}){
     if(!researchContextCurrent(context,false))return;
     researchPendingSubmission=null;
     if(typeof eaResearchStep==='function')eaResearchStep('execute');
-    researchWatch(j.id);if(j.execution_location==='browser_webr')await browserRunJob(j);else researchNotice('任务已提交云端；关闭网页后仍继续执行。');
+    storageSet('ea_auto_ai:'+j.id,'pending');researchWatch(j.id);if(j.execution_location==='browser_webr')await browserRunJob(j);else researchNotice('任务已提交云端；关闭网页后仍继续执行。');
   }catch(e){if(context.session===sessionId)researchNotice(e.uncertain?'提交结果待确认；输入已保留。重新提交同一方案会核对原任务，不会重复计算。':e.message,true);}finally{if(operation===researchOperationEpoch){researchRunning=false;$('researchRun').disabled=!researchPlan||!researchRuntime?.engines?.[$('researchEngine').value]?.ready;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}
 }
 function researchDownload(url,filename){const a=el('a','btn-secondary',filename);a.href=url;a.download=filename;return a;}
@@ -225,7 +225,7 @@ function researchWarning(text){
 }
 function researchDrawJob(j){
   const signature=JSON.stringify([j.id,j.status,j.record_version,j.error,j.sync_error,j.stale,j.verification]);
-  researchJob=j;if(!window.eaSelectedTask||window.eaSelectedTask.id===j.id)window.eaSelectedTask={id:j.id,session_id:j.session_id||sessionId,engine_id:j.engine_id||'browser_webr'};const box=$('researchResult');
+  researchJob=j;window.eaCorrespondingQuestionContext=null;window.eaSelectedTask={id:j.id,session_id:j.session_id||sessionId,engine_id:j.engine_id||'browser_webr'};const box=$('researchResult');
   if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();
   if(box.dataset.signature===signature)return;
   box.dataset.signature=signature;box.replaceChildren();
@@ -262,13 +262,13 @@ function researchDrawJob(j){
   for(const node of [box.querySelector('.research-progress'),box.querySelector(':scope>.workspace-note'),box.querySelector(':scope>.research-formula')])if(node)evidenceBody.append(node);
   box.append(el('p','ea-result-summary',`估计样本 ${r.n_used} 行 · 资料版本 ${j.research_revision??'历史未记录'} · 导出版本 ${j.record_version||1} · ${j.verification?.status==='consistent'?'同引擎复算一致':j.verification?.status==='inconsistent'?'同引擎复算有差异':'尚未独立核对'}`));
   if(j.verification?.differences?.length)evidenceBody.append(el('pre','',JSON.stringify(j.verification.differences,null,2)));
-  let rerunRequestId=null;const rerun=button('从原始输入独立重跑核对','btn-secondary',async()=>{if(researchRunning){researchNotice('当前操作正在处理中，请稍后重跑。',true);return;}const context=researchContext(),operation=++researchOperationEpoch;researchRunning=true;rerun.disabled=true;researchBusyFeedback('正在创建独立重跑任务…');rerunRequestId||=crypto.randomUUID();try{const next=await api(`/api/research/jobs/${j.id}/rerun`,{method:'POST',body:{request_id:rerunRequestId}});if(!researchContextCurrent(context,false))return;rerunRequestId=null;eaResearchStep('execute');await researchWatch(next.id);if(next.execution_location!=='cloud_native')await browserRunJob(next,true);}catch(e){if(context.session===sessionId)researchNotice(e.message,true);}finally{if(operation===researchOperationEpoch){researchRunning=false;rerun.disabled=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}});evidenceBody.append(rerun);
+  let rerunRequestId=null;const rerun=button('从原始输入独立重跑核对','btn-secondary',async()=>{if(researchRunning){researchNotice('当前操作正在处理中，请稍后重跑。',true);return;}const context=researchContext(),operation=++researchOperationEpoch;researchRunning=true;rerun.disabled=true;researchBusyFeedback('正在创建独立重跑任务…');rerunRequestId||=crypto.randomUUID();try{const next=await api(`/api/research/jobs/${j.id}/rerun`,{method:'POST',body:{request_id:rerunRequestId}});if(!researchContextCurrent(context,false))return;rerunRequestId=null;researchNotice('独立重跑任务已创建，正在计算。');storageSet('ea_auto_ai:'+next.id,'pending');eaResearchStep('execute');await researchWatch(next.id);if(next.execution_location!=='cloud_native')await browserRunJob(next,true);}catch(e){if(context.session===sessionId)researchNotice(e.message,true);}finally{if(operation===researchOperationEpoch){researchRunning=false;rerun.disabled=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}});evidenceBody.append(rerun);
   evidenceBody.append(el('p','',`${r.software_version||r.r_version} · ${JSON.stringify(r.package_versions)} · 实际估计 ${r.n_used} 行${r.clusters?' · '+r.clusters+' 个聚类':''}`));
   const wrap=el('div','table-scroll'),table=el('table','research-table'),head=el('tr');
   for(const label of ['变量','系数','标准误','p 值','95% 区间'])head.append(el('th','',label));table.append(head);
   const focus=el('section','ea-coefficient-focus');focus.setAttribute('aria-live','polite');
   function selectCoefficient(c,row){
-    for(const tr of table.querySelectorAll('tr'))tr.classList.remove('ea-selected-coefficient');row.classList.add('ea-selected-coefficient');
+    for(const tr of table.querySelectorAll('tr'))tr.classList.remove('ea-selected-coefficient');row.classList.add('ea-selected-coefficient');const currentSelector=box.querySelector('.ea-coefficient-selector');if(currentSelector)currentSelector.value=c.term;window.eaCorrespondingQuestionContext=null;
     focus.replaceChildren(el('h4','',`${c.term==='(Intercept)'?'截距':c.term}：系数与区间`),el('p','',`估计 ${c.estimate.toPrecision(6)}；95% 区间 [${c.ci_low.toPrecision(6)}, ${c.ci_high.toPrecision(6)}]`),el('p','workspace-note',`结果变量：${j.dictionary?.[j.plan.outcome]||'含义与单位未提供，请核对'}；解释变量：${j.dictionary?.[c.term]||(c.term==='DID effect'?'政策后的处理组额外变化':c.term==='(Intercept)'?'截距（解释依赖变量零点）':'含义与单位未提供，请核对')}`));
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 440 64');svg.setAttribute('role','img');svg.setAttribute('aria-label',`${c.term} 的实际估计及95%区间`);
     const lo=Math.min(0,c.ci_low),hi=Math.max(0,c.ci_high),x=v=>24+(v-lo)/(hi-lo||1)*392;
@@ -279,7 +279,7 @@ function researchDrawJob(j){
   }
   for(const c of r.coefficients){const row=el('tr');row.tabIndex=0;row.setAttribute('aria-label',`选择 ${c.term} 查看区间与单位`);row.onclick=()=>selectCoefficient(c,row);row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectCoefficient(c,row);}};for(const value of [c.term,c.estimate.toPrecision(5),c.std_error.toPrecision(4),c.p_value.toPrecision(4),`[${c.ci_low.toPrecision(4)}, ${c.ci_high.toPrecision(4)}]`])row.append(el('td','',value));table.append(row);}
   wrap.append(table);evidenceBody.append(wrap);
-  box.append(window.eaSampleEvidencePanel(j),focus);selectCoefficient(r.coefficients.find(c=>c.term!=='(Intercept)')||r.coefficients[0],table.querySelectorAll('tr')[r.coefficients.findIndex(c=>c.term!=='(Intercept)')+1]||table.querySelectorAll('tr')[1]);
+  box.append(focus);if(window.eaInterpretationCard)box.append(eaInterpretationCard(j,{onSaved:value=>{const summary=box.querySelector('.ea-result-summary');if(summary)summary.textContent=summary.textContent.replace(/导出版本 \d+/,'导出版本 '+value.record_version);}}));const sampleDetails=el('details');sampleDetails.append(el('summary','','样本处理与核验'),window.eaSampleEvidencePanel(j));box.append(sampleDetails);selectCoefficient(r.coefficients.find(c=>c.term!=='(Intercept)')||r.coefficients[0],table.querySelectorAll('tr')[r.coefficients.findIndex(c=>c.term!=='(Intercept)')+1]||table.querySelectorAll('tr')[1]);
   if(j.engine_id==='statspai_cloud'){
     const teaching=el('details','ea-corresponding-code'),body=el('div');teaching.append(el('summary','','Stata 对应代码'),body);
     let loaded=false;teaching.addEventListener('toggle',async()=>{if(!teaching.open||loaded)return;body.textContent='正在读取对应代码…';
@@ -298,8 +298,6 @@ function researchDrawJob(j){
     const f=el('figure'),im=el('img');im.src=`/api/research/jobs/${j.id}/artifacts/group_trends.svg`;im.alt='本次样本的处理组与对照组均值变化';f.append(im,el('figcaption','muted','组均值变化：描述性图，不是事件研究回归或平行趋势证明。'));evidenceBody.append(f);
   }
   box.append(el('h4','','把结果读懂'),el('p','',j.description.meaning));
-  const first=r.coefficients.find(c=>c.term==='DID effect')||r.coefficients.find(c=>c.term!=='(Intercept)');
-  if(first){const meaning=j.plan.method==='did'?'处理组在政策后的额外变化，单位与结果变量一致':'该解释变量增加一个单位，与结果变量的条件变化相关，单位需要结合变量说明';box.append(el('p','',`${first.term} 的估计系数为 ${first.estimate.toPrecision(5)}：${meaning}。请同时阅读区间，不仅看 p 值。`));}
   const warnings=el('details');warnings.append(el('summary','',`数据处理与方法提醒（${r.warnings.length}）`));for(const w of r.warnings)warnings.append(el('p','',researchWarning(w))); warnings.append(el('p','',`选定变量缺失删除 ${r.audit.missing_removed_csv_lines.length} 行；模型另排除 ${r.audit.model_removed_count||0} 行。缺失与模型排除的原始行号见报告；历史任务可能未记录模型样本索引。`));evidenceBody.append(warnings);
   if(r.warnings.length)box.append(el('p','resource-caution',`${r.warnings.length} 项提醒：${researchWarning(r.warnings[0])} 完整提醒见详细证据。`));
   const trace=el('details');trace.append(el('summary','','查看软件执行记录'));for(const t of j.tool_trace)trace.append(el('p','',`${t.transport} → ${t.tool}`));evidenceBody.append(trace);
@@ -332,7 +330,7 @@ async function researchWatch(id){
     try{
       const j=await api(`/api/research/jobs/${id}`);if(epoch!==researchEpoch||context.session!==sessionId||context.account!==(window.EA_ACCOUNT?.id||'')||j.session_id&&j.session_id!==sessionId)return;researchDrawJob(j);
       if(['queued','running','preparing','estimating','saving'].includes(j.status))researchPoll=setTimeout(poll,1200);
-      else researchRefreshHistory();
+      else {if($('researchNotice').textContent.startsWith('独立重跑任务已创建'))researchNotice(j.status==='succeeded'?'独立重跑已完成，结果已保存。':'独立重跑未完成，请查看任务状态。',j.status!=='succeeded');researchRefreshHistory();}
     }catch(e){if(epoch===researchEpoch)researchNotice(e.message,true);}
   }
   await poll();

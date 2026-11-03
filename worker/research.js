@@ -1,3 +1,4 @@
+import {interpretationEndpoint} from './ai-interpretation.js';
 import {normalizeMethodPlan} from './plan-normalization.js';
 import {methodRegistry,enabledMethods} from './method-registry.js';
 import {handleResearchData,loadResearchData} from './research-data.js';
@@ -172,7 +173,7 @@ async function sha256(value) {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function getJob(env, owner, id, touch=false) {
+export async function getJob(env, owner, id, touch=false) {
   const row = await env.DB.prepare('SELECT body,last_activity,lease_until FROM jobs WHERE id=? AND owner=?').bind(id, owner).first();
   if (!row || row.last_activity + RETENTION <= Date.now()) return null;
   const job = JSON.parse(row.body);
@@ -317,7 +318,7 @@ export async function handleResearch(request, env, owner, path) {
           last_activity: Date.now(), execution_location: plan.execution_location, software:plan.software, engine_id:plan.engine_id, nonce: crypto.randomUUID(),
           input_key: key, input_sha256: inputHash, plan_sha256: planHash, n_rows: data.rows.length,
           filename: String(body.filename || 'data.csv').slice(0, 200), corresponding_code:confirmation.corresponding_code||null, data_id:material?.data_id||null, source_filename:material?.filename||null, source_sha256:material?.source_sha256||inputHash, canonical_sha256:material?.canonical_sha256||null, import_version:material?.import_version||null, plan, description: description(plan),
-          dictionary, metadata, interpretation_warnings:interpretationWarnings(plan,dictionary), csv_lines:data.lines, research_revision:session.research_revision, evidence_snapshot:{...evidenceSnapshot(session),dictionary}, record_version:1,
+          dictionary, metadata, interpretation_warnings:interpretationWarnings(plan,dictionary), csv_lines:data.lines, research_revision:session.research_revision, evidence_snapshot:{...evidenceSnapshot(session),dictionary}, auto_interpretation:true, record_version:1,
           source: String(body.source || '用户提供的数据；来源未核实').slice(0, 1000), question: String(body.question || '').slice(0, 1000),
           simulated: body.simulated === true, missing_lines: missingLines, result: null, reflections: [],
           tool_trace: [{ transport: plan.execution_location, tool: plan.software==='python'?(plan.method==='ols'?'statspai.regress':'statspai.fast.feols'):plan.software==='stata'?'Stata regress/xtreg':'fixest::feols' }],
@@ -343,6 +344,7 @@ export async function handleResearch(request, env, owner, path) {
   const expectedVersion=new URL(request.url).searchParams.get('record_version');if(expectedVersion!==null&&String(job.record_version||1)!==expectedVersion)return fault('报告版本已变化，请重新导出。',409);
   const tail = jobRoute[2] || '';
   try {
+    if(tail==='ai-interpretation')return interpretationEndpoint(request,env,job);
     if (!tail && request.method === 'GET') return resultJson(publicJob(job));
     if (tail === 'stata-code' && request.method === 'GET') {
       if(job.corresponding_code)return resultJson({task_id:job.id,record_version:job.record_version,plan_sha256:job.plan_sha256,...job.corresponding_code});
@@ -425,7 +427,7 @@ export async function handleResearch(request, env, owner, path) {
       const object=await env.FILES.get(job.input_key);if(!object)return fault('原始输入丢失。',404);
       const originalText=await object.text();
       const id=crypto.randomUUID(),key=`jobs/${owner}/${id}/input.csv`;
-      const clone={...job,id,input_key:key,nonce:crypto.randomUUID(),status:'running',created:Date.now()/1000,result:null,reflections:[],reflection:null,verification:null,verification_of_job_id:job.id,record_version:1};
+      const clone={...job,id,input_key:key,nonce:crypto.randomUUID(),status:'running',created:Date.now()/1000,result:null,reflections:[],reflection:null,verification:null,verification_of_job_id:job.id,auto_interpretation:true,ai_interpretation:null,record_version:1};
       delete clone.completed;delete clone.error;delete clone.node_artifacts;delete clone.remote_submitted;delete clone.remote_synced;delete clone.cancel_requested;clone.execution_location=job.execution_location||'browser_webr';clone.engine_id=job.engine_id||'browser_webr';
       await env.FILES.put(key,originalText);
       clone.request_id=identity.id;
@@ -450,6 +452,7 @@ export async function handleResearch(request, env, owner, path) {
         'verification.json': JSON.stringify(job.verification || {status:'not_checked'},null,2),
         'export_version.json':JSON.stringify({task_id:job.id,research_revision:job.research_revision,record_version:job.record_version||1,execution_location:job.execution_location||'browser_webr',engine_id:job.engine_id||'browser_webr',software:job.software||'r',data_id:job.data_id||null,source_sha256:job.source_sha256||null,canonical_sha256:job.canonical_sha256||null,plan_sha256:job.plan_sha256,code_sha256:job.corresponding_code?.sha256||null}),
         'reflections.json':JSON.stringify({record_version:job.record_version||1,reflections:job.reflections||[],reflection:job.reflection||null}),
+        'ai_interpretation.json':JSON.stringify({record_version:job.record_version||1,ai_interpretation:job.ai_interpretation||null}),
         'results.json': JSON.stringify(job.result || { status: job.status, error: job.error || '' }, null, 2),
         'report.md': reportMarkdown(job)+'\n'+modelEvidenceMarkdown(interactions,false), 'agent_interactions.json':JSON.stringify(interactions,null,2),...(job.node_artifacts||{'reproduce.R': reproductionScript(prepared.plan)}),
         'execution.log': job.node_artifacts?.['execution.log'] || `created=${new Date(job.created * 1000).toISOString()}\nstatus=${job.status}\nlocation=${job.execution_location||'browser_webr'}\nR=${job.result?.r_version || 'not completed'}\nfixest=${job.result?.package_versions?.fixest || 'not completed'}\n`,
@@ -502,6 +505,7 @@ export function reportMarkdown(job) {
       `- 模型排除原始 CSV 行：${job.result.audit?.model_removed_csv_lines?.join(', ') || (job.result.audit?.used_indices ? '无' : '历史执行未记录')}`,
       '## 警告与局限', ...job.result.warnings.map((item) => `- ${item}`), `- ${job.description.checks}`);
   } else lines.push(`状态：${job.status}；${job.error || '尚无执行结果。'}`);
+  lines.push('', '## AI辅助解读');const ai=job.ai_interpretation;if(ai?.status==='succeeded')lines.push(ai.summary,...ai.points.map(x=>'- '+x),'### 解读限制',...ai.limitations.map(x=>'- '+x),'模型：'+ai.model+'；解读版本：'+ai.prompt_version);else lines.push('尚无已保存的AI辅助解读；不影响本次计算结果。');
   lines.push('', '## 学生解释与修订');
   if(!job.reflections.length)lines.push('- 解释练习待完成；分析结果可以下载，学习成果尚未提交。');
   for (const [index, item] of job.reflections.entries()) lines.push(`### 第 ${index + 1} 次`, item.answer, '', `反馈：${item.feedback}`);

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { openStorage } from './storage.mjs';
 import worker from '../dist/server/index.js';
 import { cleanupExpired } from '../dist/server/retention.js';
+import {startInterpretationDispatcher} from './interpretation-dispatcher.mjs';
 
 const port=Number(process.env.PORT||8766),origin=new URL(process.env.PUBLIC_ORIGIN||`http://127.0.0.1:${port}`);
 if(!['https:','http:'].includes(origin.protocol)||origin.pathname!=='/')throw Error('PUBLIC_ORIGIN must be an origin');
@@ -14,8 +15,10 @@ const storage=await openStorage(process.env.EA_DATA_DIR||fileURLToPath(new URL('
 const env={...process.env,DB:storage.DB,FILES:storage.FILES};let cleaning=false;
 async function clean(){if(cleaning)return;cleaning=true;try{const result=await cleanupExpired(env);await appendFile(join(storage.root,'cleanup.jsonl'),JSON.stringify(result)+'\n');}catch{console.error('Retention cleanup failed; retry scheduled.');}finally{cleaning=false;}}
 const timer=setInterval(clean,15*60*1000);timer.unref();
+const stopInterpretations=startInterpretationDispatcher(env);
 const server=http.createServer(async(req,res)=>{
   try{
+    if(req.url==='/healthz'&&['GET','HEAD'].includes(req.method)){try{await storage.DB.prepare('SELECT 1').first();res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(req.method==='HEAD'?'':JSON.stringify({status:'ok'}));}catch{res.writeHead(503);res.end();}return;}
     if(!req.url?.startsWith('/')){res.writeHead(400);res.end();return;}
     const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>4_500_000){res.writeHead(413);res.end('Request too large');return;}chunks.push(chunk);}
     const headers=new Headers();for(const [key,value]of Object.entries(req.headers)){if(value!==undefined)headers.set(key,Array.isArray(value)?value.join(','):value);}
@@ -34,4 +37,4 @@ const server=http.createServer(async(req,res)=>{
 });
 server.listen(port,process.env.BIND_ADDRESS||'127.0.0.1',()=>console.log(`Local: ${origin.origin} · persistent data enabled`));
 if(process.env.EA_CLEANUP_ON_START==='true')await clean();
-for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{clearInterval(timer);server.close(()=>{storage.close();process.exit(0);});});
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{clearInterval(timer);server.close(async()=>{await stopInterpretations();storage.close();process.exit(0);});});

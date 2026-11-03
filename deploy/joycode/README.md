@@ -1,6 +1,6 @@
 # JoyCode 独立整站候选：部署与资源门槛
 
-2026-10-21。当前是候选源码，**尚未部署到 JoyCode**。旧 Sites V46 保持不变。
+更新于2026-11-02。当前是候选源码，**尚未部署到 JoyCode**。旧 Sites 保持不变。最新结果与AI解读验收见 [本轮报告](../../docs/PUBLIC_20261102_ACCEPTANCE.md)。
 
 ## 当前已完成
 
@@ -52,12 +52,29 @@ Python依赖见`requirements-linux.txt`；不复制Windows虚拟环境或pywin32
 监督程序预加载依赖，待签名健康检查成功才开放网站。任一服务退出将停止另一服务，交给平台重启。
 新站独立注册，不复制旧账号、Cookie或密钥。`.openai/hosting.json`没有旧站project_id。
 
+镜像仅暴露8080；`GET /healthz`返回不包含配置的就绪状态。先运行`node scripts/deployment-preflight.mjs`检查源码资产，不能把该检查当作Linux镜像验收。网站后台定期处理新任务AI解读；只读取摘要，和页面共享持久去重记录。
+
+样式可复现：`npm ci --prefix ui --ignore-scripts`后运行`node scripts/build-ui.mjs`。编译好的`static/ui`已纳入镜像，不在运行时下载CDN资产。Linux构建命令为`docker build -t empirical-apprentice:<版本> .`；构建和三方法运行尚待平台实测。
+
+不要把模型地址、密钥或签名密钥作为Docker构建参数。独立签名密钥可在受控终端生成：`python -c "import secrets; print(secrets.token_hex(32))"`，只填入平台运行配置；不要贴入聊天或提交仓库。
+
 ## 持久性与回退实测步骤
 
 隔离环境注册账号、创建模拟任务、保存结果→记录任务和版本→重启→验证登录及结果→部署同镜像新版本→再次核对→备份恢复到隔离卷。
 备份必须一致地保存网站SQLite／文件与计算队列；不得只复制运行中的单个SQLite文件而忽略WAL。
 沿用账号持续保存、练习最后活动七天到期；账号不是实名认证。必须再验七天删除及备份恢复。
 关键归属、保存或结果绑定失败时撤回新入口；旧Sites保持原样。
+
+离线配套快照：先停止网站与执行器，挂载同一持久卷的维护环境运行：
+
+```sh
+python deploy/joycode/snapshot.py backup --web /data/web --executor /data/executor --snapshot /backup/release-snapshot --services-stopped
+python deploy/joycode/snapshot.py restore --web /restore/web --executor /restore/executor --snapshot /backup/release-snapshot --services-stopped
+```
+
+备份路径必须为新目录，恢复目标必须不存在；不覆盖原卷。工具对两个SQLite使用备份接口、关闭连接后生成SHA256清单，恢复时验证哈希与完整性。`--services-stopped`是运维人员对两服务已停止的确认，工具不负责停服务；不能对运行中目录宣称跨服务一致。
+
+更新前记录镜像版本并离线备份，在新卷验证迁移；通过后才切换正式实例。回退优先恢复旧镜像到隔离恢复卷核对数据，确认旧版可读后再切换，不能直接覆盖新数据库。保留旧镜像与原始快照，恢复核对失败时停留维护状态。
 
 ## 对照与推断
 

@@ -4,6 +4,7 @@ import {mkdir,writeFile,readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {fixtures} from '../worker/fixtures.js';
+const executorPort='8000';
 const root=resolve('.'),origin='http://127.0.0.1:18810',secret=randomBytes(32).toString('hex');
 const folder=resolve('outputs/site-acceptance-'+Date.now());await mkdir(folder,{recursive:true});
 const python=resolve('../empirical_apprentice_sites/local_stata/.venv/Scripts/python.exe');
@@ -20,9 +21,9 @@ async function waitReady(){for(let i=0;i<100;i++){try{if((await call('/api/healt
 async function waitJob(id){for(let i=0;i<100;i++){const r=await call(`/api/research/jobs/${id}`);assert.equal(r.status,200);if(['succeeded','failed','interrupted','cancelled'].includes(r.value.status))return r.value;await new Promise(r=>setTimeout(r,250));}throw Error('Task did not finish');}
 let node;
 try{
- start(python,['-m','uvicorn','executor.app:app','--host','127.0.0.1','--port','8000','--no-access-log'],{
+ start(python,['-m','uvicorn','executor.app:app','--host','127.0.0.1','--port',executorPort,'--no-access-log'],{
   PYTHONPATH:resolve('outputs/api-deps')+';'+root,EA_NODE_DATA:resolve(folder,'executor'),EA_NODE_SECRET:secret});
- const nodeEnv={PORT:'18810',PUBLIC_ORIGIN:origin,EA_DATA_DIR:resolve(folder,'web'),EXECUTOR_URL:'http://127.0.0.1:8000',EXECUTOR_SECRET:secret,EXECUTOR_INTERNAL_HOST:'loopback'};
+ const nodeEnv={PORT:'18810',PUBLIC_ORIGIN:origin,EA_DATA_DIR:resolve(folder,'web'),EXECUTOR_URL:'http://127.0.0.1:'+executorPort,EXECUTOR_SECRET:secret,EXECUTOR_INTERNAL_HOST:'loopback'};
  node=start('node',['standalone/server.mjs'],nodeEnv);await waitReady();
  const username='cloud_'+Date.now(),password=randomBytes(20).toString('hex');
  assert.equal((await call('/api/auth/register',{username,password,password_confirmation:'different'})).status,422);
