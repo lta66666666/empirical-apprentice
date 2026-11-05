@@ -9,7 +9,7 @@ const cards=['question','sample','outcome','predictor','data_source','access','p
 const methods=['ols','panel_fe','did'],steps=['prepare','data','health','plan','execute','explain','reports'];
 const labels={prepare:'整理研究准备',data:'载入数据',health:'检查数据与变量',plan:'核对完整方案',execute:'确认并执行',explain:'解释与修订',reports:'下载并核验报告'};
 const fail=(detail,status=422)=>Object.assign(Error(detail),{status});
-export function workspace(state){return state.analysis_workspace||{view:'overview',mode:'analysis',guide:{status:'idle',index:0},applied:[]};}
+export function workspace(state){return state.analysis_workspace||{view:'data',mode:'analysis',guide:{status:'idle',index:0},applied:[]};}
 export async function selectedResult(env,owner,state,id){
  const rows=await Promise.all(['jobs','local_stata_tasks'].map(t=>env.DB.prepare('SELECT body,created_at FROM '+t+" WHERE session_id=? AND owner=? AND status='succeeded' AND (? IS NULL OR id=?) ORDER BY created_at DESC LIMIT 1").bind(state.session_id,owner,id||null,id||null).first()));
  const row=rows.filter(Boolean).sort((a,b)=>b.created_at-a.created_at)[0];return row?JSON.parse(row.body):null;

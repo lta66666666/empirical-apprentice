@@ -8,7 +8,7 @@
  const overview=el('section','analysis-overview');primary.prepend(overview);
  const current=el('section','analysis-current-turn');current.setAttribute('aria-label','当前一轮对话');dock.querySelector('.dock-shortcuts').after(current);
  const guideBar=el('section','analysis-guide');primary.prepend(guideBar);
- let lastTaskView='overview',localView='overview',localMode='analysis',lastSession='',reflection=null,busy=false,latestReply=null,pendingAction=null;
+ let lastTaskView='data',localView='data',localMode='analysis',lastSession='',reflection=null,busy=false,latestReply=null,pendingAction=null;
  let answerOpening=false,answerSubmitting=false,answerSequence=0;
  const names={overview:'当前练习',prepare:'研究准备',data:'数据',health:'数据体检',plan:'方案确认',execute:'执行状态',explain:'结果解释',reports:'记录与报告'};
  const cardNames={question:'研究问题',sample:'对象与时期',outcome:'结果与单位',predictor:'解释变量',data_source:'数据来源',access:'获取条件'};
@@ -19,7 +19,7 @@
  function setView(view,mode=localMode){
  if(view!=='reports')lastTaskView=view;localView=view;localMode=mode;window.eaCurrentAnalysisView=view;top.dataset.mode=mode;
  overview.hidden=view!=='overview';
- for(const pane of primary.querySelectorAll(':scope > [role=tabpanel]'))pane.hidden=true;
+ for(const pane of primary.querySelectorAll(':scope > [role=tabpanel]'))pane.hidden=true;$('pane-preparation').hidden=true;
  if(view==='prepare'){$('pane-preparation').hidden=false;}
  else if(['data','health','plan','execute','explain'].includes(view)){$('pane-research').hidden=false;eaResearchStep(view);}
  if($('pcLocalStata'))$('pcLocalStata').hidden=!['data','plan','execute'].includes(view);
@@ -136,11 +136,11 @@
  for(const v of ['overview','prepare','data','health','plan','execute','explain'])manual.append(button(names[v],'btn-secondary',()=>navigate(v)));dock.append(manual);
  const formula=el('details','analysis-formula');formula.append(el('summary','','编辑公式并预览'));const formulaInput=el('textarea'),formulaPreview=el('output');formulaInput.setAttribute('aria-label','公式表达式');formulaInput.placeholder='例如 y = β₀ + β₁x + ε';formulaInput.oninput=()=>{formulaPreview.textContent=formulaInput.value;eaQueueDraft('analysis-formula',{formula:formulaInput.value},null);};formula.append(formulaInput,formulaPreview);dock.append(formula);
  const taskChanged=window.eaTaskChanged;window.eaTaskChanged=task=>{taskChanged?.(task);if(task!=='records')setView(localView==='reports'?lastTaskView:localView,localMode);};
- const restore=eaRestoreTask;eaRestoreTask=function(data,previous){const out=restore(data,previous);const changed=lastSession!==data.session_id;if(changed){dock.querySelectorAll('.resume-reflection').forEach(n=>n.remove());parts.submit.textContent='发送';lastSession=data.session_id;answerSequence++;answerOpening=false;answerSubmitting=false;reflection=null;window.eaReflectionMode=null;exitMode.hidden=true;modeLabel.textContent='普通问答 · 发送不会提交解释成果';parts.input.placeholder='告诉我你想研究什么，或继续回答上一个问题…';const wb=data.research_drafts?.workbench;localView=wb?.updated_at>(data.analysis_workspace?.updated_at||0)?wb.value.ui_view||'overview':data.analysis_workspace?.view||'overview';localMode=data.analysis_workspace?.mode||'analysis';}else if(data.analysis_workspace){localView=data.analysis_workspace.view;localMode=data.analysis_workspace.mode;}
+ const restore=eaRestoreTask;eaRestoreTask=function(data,previous){const out=restore(data,previous);const changed=lastSession!==data.session_id;if(changed){dock.querySelectorAll('.resume-reflection').forEach(n=>n.remove());parts.submit.textContent='发送';lastSession=data.session_id;answerSequence++;answerOpening=false;answerSubmitting=false;reflection=null;window.eaReflectionMode=null;exitMode.hidden=true;modeLabel.textContent='普通问答 · 发送不会提交解释成果';parts.input.placeholder='告诉我你想研究什么，或继续回答上一个问题…';const wb=data.research_drafts?.workbench;localView=wb?.updated_at>(data.analysis_workspace?.updated_at||0)?wb.value.ui_view||'data':data.analysis_workspace?.view||'data';localMode=data.analysis_workspace?.mode||'analysis';}else if(data.analysis_workspace){localView=data.analysis_workspace.view;localMode=data.analysis_workspace.mode;}
  if(eaTask!=='records')setView(localView,localMode);renderGuide();window.eaConversationHistory(data.practical_messages||[]);
  formulaInput.value=eaDraftEntry('analysis-formula').value.formula||'';formulaPreview.textContent=formulaInput.value;if(changed&&data.analysis_workspace?.answer_task){const pending=data.analysis_workspace.answer_task;dock.querySelector('.resume-reflection')?.remove();const resume=button('继续解释草稿','btn-secondary coach-exit resume-reflection',async()=>{await openAnswer(pending);if(reflection)resume.remove();});parts.input.before(resume);}return out;};
  // Resources belong in the upper knowledge area, not an independent drawer.
  for(const b of document.querySelectorAll('.module-toolbar button'))if(b.textContent==='资料与手册')b.onclick=()=>{localMode='knowledge';top.dataset.mode='knowledge';aux.open=true;teaching(latestReply);};
  window.eaOpenAnswer=openAnswer;const previousStep=eaResearchStep;eaResearchStep=function(v){previousStep(v);localView=v;lastTaskView=v;overview.hidden=true;window.eaCurrentAnalysisView=v;for(const pane of primary.querySelectorAll(':scope > [role=tabpanel]'))pane.hidden=pane.id!=='pane-research';eaSaveWorkbenchDraft();};
- renderOverview();setView(latestState?.analysis_workspace?.view||'overview');if(latestState)eaRestoreTask(latestState,null);
+ renderOverview();setView(latestState?.analysis_workspace?.view||'data');if(latestState)eaRestoreTask(latestState,null);
 })();

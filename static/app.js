@@ -348,6 +348,7 @@ function selectTab(tab) {
   document.querySelector('.layout').classList.toggle('tutorial-focus',tab==='tutorial');
   document.querySelector('.layout').classList.toggle('research-focus',tab==='research');
   document.querySelectorAll("[data-tab]").forEach(b => { const on=b.dataset.tab===tab; b.setAttribute("aria-selected",String(on)); b.tabIndex=on ? 0 : -1; $("pane-"+b.dataset.tab).hidden=!on; });
+  $("pane-preparation").hidden=tab!=="preparation";
   document.querySelector(`[data-tab="${tab}"]`)?.scrollIntoView({block:"nearest",inline:"nearest"});
 }
 function setView(work) { if(!work&&['tutorial','research'].includes(activeTab))selectTab('blueprint'); document.querySelector(".layout").classList.toggle("work-view",work); $("workViewBtn").classList.toggle("active",work); $("learnViewBtn").classList.toggle("active",!work); $("workViewBtn").setAttribute("aria-pressed",String(work)); $("learnViewBtn").setAttribute("aria-pressed",String(!work)); }

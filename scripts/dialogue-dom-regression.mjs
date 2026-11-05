@@ -22,7 +22,7 @@ try{
  env.MODEL_BASE_URL='https://model.test/v1';env.MODEL_NAME='test';env.MODEL_API_KEY='test-only';
  const native=globalThis.fetch;globalThis.fetch=async()=>Response.json({choices:[{message:{content:JSON.stringify({method:null,reason:'请核对研究问题',questions:['变量单位是什么？'],proposed_cards:{question:'教育与收入'}})}}]});
  const dom=await open('/analysis'),w=dom.window,d=w.document;
- assert.equal(d.querySelector('.analysis-top').children.length,2);assert.equal(d.querySelector('#pane-research').hidden,true);assert.equal(d.querySelector('.analysis-overview').hidden,false);pass('初始简洁概览与固定两个上部容器');
+ assert.equal(d.querySelector('.analysis-top').children.length,2);assert.equal(d.querySelector('#pane-research').hidden,false);assert.equal(d.querySelector('.analysis-overview').hidden,true);pass('初始直接进入数据步骤与固定两个上部容器');
  const input=w.eaConversation.input;input.value='我想研究教育和收入';input.dispatchEvent(new w.Event('input'));w.eaConversation.submit.click();
  await until(()=>d.querySelector('.analysis-proposal'),'proposal');assert.match(d.querySelector('.analysis-current-turn').textContent,/教育/);assert.equal(w.eval('latestState.preparation.cards.question'),undefined);
  const edit=d.querySelector('.analysis-proposal textarea');edit.value='学生核对后的问题';d.querySelector('.analysis-proposal .btn-primary').click();

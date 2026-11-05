@@ -14,7 +14,7 @@
   <script defer src="/static/vendor/marked.umd.js"></script>
   <script defer src="/static/vendor/lucide.min.js"></script>
   <script defer src="/static/teaching.js?v=20260930i"></script>
-  <script defer src="/static/app.js?v=20260930i"></script>
+  <script defer src="/static/app.js?v=20261105"></script>
 <link rel="stylesheet" href="/static/ui/components.css"><link rel="stylesheet" href="/static/ui/theme.css"></head>
 <body class="ea-ui">
   <div role="status" style="padding:10px 18px;background:#fff1ce;color:#4f3a08;font:14px/1.5 system-ui,sans-serif">试用版 · 云端计算已上线，执行前请核对方案。</div>
@@ -82,10 +82,10 @@
     </section>
     <aside id="sidePanel" class="side-panel" aria-label="研究工作区">
       <div class="workspace-heading"><h2>研究工作区</h2><button id="workspaceCloseBtn" type="button" class="workspace-toggle" title="收起研究工作区" aria-label="收起研究工作区" aria-expanded="true" aria-controls="sidePanel"><i data-lucide="panel-right-close"></i></button></div>
-      <div class="workspace-tabs" role="tablist" aria-label="研究资料"><button id="tab-blueprint" role="tab" aria-selected="true" aria-controls="pane-blueprint" data-tab="blueprint">蓝图 <span id="blueprintCount">0</span></button><button id="tab-preparation" role="tab" aria-selected="false" aria-controls="pane-preparation" tabindex="-1" data-tab="preparation">准备清单</button><button id="tab-materials" role="tab" aria-selected="false" aria-controls="pane-materials" tabindex="-1" data-tab="materials">资料</button><button id="tab-records" role="tab" aria-selected="false" aria-controls="pane-records" tabindex="-1" data-tab="records">记录</button></div>
+      <div class="workspace-tabs" role="tablist" aria-label="研究资料"><button id="tab-blueprint" role="tab" aria-selected="true" aria-controls="pane-blueprint" data-tab="blueprint">蓝图 <span id="blueprintCount">0</span></button><button id="tab-materials" role="tab" aria-selected="false" aria-controls="pane-materials" tabindex="-1" data-tab="materials">资料</button><button id="tab-records" role="tab" aria-selected="false" aria-controls="pane-records" tabindex="-1" data-tab="records">记录</button></div>
       <div class="workspace-body">
         <section id="pane-blueprint" role="tabpanel" aria-labelledby="tab-blueprint"><div class="workspace-note">仅记录你的研究想法；确认表述不代表事实已核实。</div><div id="blueprintContent"></div></section>
-        <section id="pane-preparation" role="tabpanel" aria-labelledby="tab-preparation" hidden><div id="preparationContent"></div></section>
+        <section id="pane-preparation" role="region" aria-label="研究准备清单" hidden><div id="preparationContent"></div></section>
         <section id="pane-materials" role="tabpanel" aria-labelledby="tab-materials" hidden>
           <section class="resource-section"><span class="eyebrow">可下载 · 可复算</span><h3>4 城市 DID 小实验</h3><p>模拟原始数据、数据字典、注释脚本和核对值。无需 API 密钥。</p><a class="resource-download" href="/static/teaching/empirical_lab.zip" download>下载完整实验包 ↓</a><a class="source-link" href="/static/teaching/handbook.html" target="_blank" rel="noopener">打开图文学习手册（可打印）</a></section>
           <section class="resource-section"><h3>进阶案例解读</h3><p>沿用 V9 的五张现有教学案例；先写自己的解释，再对照原有参考要点，可保存修订。</p><button id="startPracticeCase" type="button" class="btn-secondary">开始一张进阶案例</button></section>
