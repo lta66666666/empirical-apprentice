@@ -6,7 +6,7 @@ let eaRuntimeGeneration=0,eaInitializingRuntime=null,eaRunEpoch=0,eaExecution=nu
 const eaBrowserPending=new Map();
 function eaAbort(message='本次浏览器执行已停止。'){const error=Error(message);error.name='AbortError';return error;}
 function eaCheckExecution(context){if(context&&(context.cancelled||context.epoch!==eaRunEpoch||context.session!==sessionId))throw eaAbort();}
-async function eaLoadWebR(){return import('https://webr.r-wasm.org/v0.6.0/webr.mjs');}
+async function eaLoadWebR(){return import('/static/webr/webr.mjs');}
 function eaResetWebR(){eaRuntimeGeneration++;const instances=new Set([eaWebR,eaInitializingRuntime].filter(Boolean));eaWebR=null;eaInitializingRuntime=null;eaWebRPromise=null;for(const runtime of instances){try{runtime.interrupt?.();Promise.resolve(runtime.close()).catch(()=>{});}catch{}}}
 async function eaDeadline(work,limit,message,stop){let timer;try{return await Promise.race([work,new Promise((_,reject)=>{timer=setTimeout(()=>{stop?.();const error=Error(message);error.code='execution_timeout';reject(error);},limit);})]);}finally{clearTimeout(timer);}}
 function eaPersistPending(){try{storageSet('ea_browser_pending',JSON.stringify([...eaBrowserPending.values()]));}catch{}}
@@ -24,7 +24,7 @@ async function eaInitWebR(context=null) {
     researchNotice('正在初始化浏览器 webR，并安装已核对的 fixest 0.14.2…');
     const { WebR } = await eaLoadWebR();
     if(generation!==eaRuntimeGeneration)throw eaAbort();
-    const runtime = new WebR();
+    const runtime = new WebR({ baseUrl: '/static/webr/' });
     eaInitializingRuntime=runtime;
     await runtime.init();
     if(generation!==eaRuntimeGeneration){runtime.close();throw eaAbort();}
