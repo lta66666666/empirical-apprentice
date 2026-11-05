@@ -16,17 +16,43 @@ const fail=(detail,status=422)=>json({detail},status);
 const hash=async text=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))].map(x=>x.toString(16).padStart(2,'0')).join('');
 const terminal=new Set(['succeeded','failed','cancelled','interrupted']);
 const active=['queued','awaiting_approval','running','awaiting_upload','cancel_requested'];
+// 本机助手掉线判定：running 期间超过 90 秒没有心跳即视为中断，避免任务永久卡住。
+const STALE_RUN_MS=90000;
+function supportedMcpVersion(env,version){
+  const allowed=String(env.STATA_MCP_VERSIONS||'').split(',').map(v=>v.trim()).filter(Boolean);
+  return !allowed.length||allowed.includes(String(version||''));
+}
+async function interruptStaleRun(env,pair,row){
+  const task=JSON.parse(row.body);
+  if(task.status!=='running'||Date.now()-(pair.last_seen||0)<=STALE_RUN_MS)return null;
+  task.error='本机 Stata 助手超过 90 秒无心跳，任务已中断；可重新提交。';
+  task.interrupted_reason='heartbeat_timeout';
+  await updateTask(env,task,'interrupted',row.body);
+  return task;
+}
 export function cleanProfile(value){
   if(!value||!Number.isInteger(value.row_count)||value.row_count<1||value.row_count>20000||!Array.isArray(value.columns)||value.columns.length<1||value.columns.length>60||!value.columns.every(c=>typeof c.name==='string'&&c.name.length>0&&c.name.length<=100&&typeof c.numeric==='boolean'&&Number.isInteger(c.missing)&&c.missing>=0&&c.missing<=value.row_count)||new Set(value.columns.map(c=>c.name)).size!==value.columns.length)throw Error('无效列摘要；最多20000行、60列。');
   return {row_count:value.row_count,columns:value.columns.map(({name,numeric,missing})=>({name,numeric,missing}))};
 }
 function cleanEngines(value){return Object.fromEntries(['stata_mcp','stata_code','statspai_local'].map(id=>[id,{available:value?.[id]?.available===true,version:String(value?.[id]?.version||'').slice(0,100),acceptance:'experimental'}]));}
-function publicPair(pair){const body=JSON.parse(pair.body);return {id:pair.id,session_id:pair.session_id,online:Date.now()-pair.last_seen<45000,last_seen:pair.last_seen,mcp_available:body.mcp_available===true,mcp_version:body.mcp_version||null,engines:cleanEngines(body.engines),input_sha256:body.input_sha256||null,profile:body.profile||null,metadata:body.metadata||null,revoked:!!pair.revoked};}
+function publicPair(pair){const body=JSON.parse(pair.body);return {id:pair.id,session_id:pair.session_id,online:Date.now()-pair.last_seen<45000,last_seen:pair.last_seen,mcp_available:body.mcp_available===true,mcp_version:body.mcp_version||null,mcp_supported:body.mcp_supported!==false,engines:cleanEngines(body.engines),input_sha256:body.input_sha256||null,profile:body.profile||null,metadata:body.metadata||null,revoked:!!pair.revoked};}
 async function browserPair(env,owner,session){return env.DB.prepare('SELECT * FROM local_pairings WHERE session_id=? AND owner=? AND revoked=0 ORDER BY created_at DESC LIMIT 1').bind(session,owner).first();}
 async function fixturePreparation(env,id){const row=await env.DB.prepare('SELECT body FROM local_fixture_preparations WHERE pairing_id=?').bind(id).first();return row?JSON.parse(row.body):null;}
 async function authenticatedPair(request,env,id){const token=request.headers.get('Authorization')?.replace(/^Bearer /,'')||'';if(!/^[0-9a-f]{64}$/.test(token))return null;const pair=await env.DB.prepare('SELECT * FROM local_pairings WHERE id=? AND token_hash=? AND revoked=0').bind(id,await hash(token)).first();if(!pair||pair.expires_at<=Date.now())return null;if(pair.owner){const session=await loadOwnedSession(env,pair.owner,pair.session_id);if(!session||session==='expired')return null;}return pair;}
 async function updateTask(env,task,status,expectedBody){const previous=task.status;task.status=status;task.updated_at=Date.now();const changed=await env.DB.prepare('UPDATE local_stata_tasks SET status=?,body=?,updated_at=? WHERE id=? AND pairing_id=? AND status=? AND body=?').bind(status,JSON.stringify(task),task.updated_at,task.id,task.pairing_id,previous,expectedBody).run();if(!changed.meta.changes){const error=Error('任务状态已变化，请重新读取。');error.status=409;throw error;}}
-export async function localTasks(env,owner,session){const rows=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE session_id=? AND owner=? ORDER BY created_at DESC LIMIT 30').bind(session,owner).all();return rows.results.map(r=>{const {owner,...task}=JSON.parse(r.body);if(task.result&&task.engine_id!=='statspai_local'&&['panel_fe','did'].includes(task.plan?.method)&&task.result.statistic_export_version!==2)task.statistical_validation={status:'requires_revalidation',reason:'旧版标量导出可能受变量缩写影响；原结果保留，p值、区间及自由度需重新执行核对'};return {...task,sample_evidence:sampleEvidence(task)};});}
+export async function localTasks(env,owner,session){
+  const pair=await browserPair(env,owner,session);
+  const rows=await env.DB.prepare('SELECT body FROM local_stata_tasks WHERE session_id=? AND owner=? ORDER BY created_at DESC LIMIT 30').bind(session,owner).all();
+  const tasks=[];
+  for(const row of rows.results){
+    let task=JSON.parse(row.body);
+    if(pair&&task.status==='running'){try{const updated=await interruptStaleRun(env,pair,row);if(updated)task=updated;}catch{}}
+    const {owner:ignored,...rest}=task;
+    if(rest.result&&rest.engine_id!=='statspai_local'&&['panel_fe','did'].includes(rest.plan?.method)&&rest.result.statistic_export_version!==2)rest.statistical_validation={status:'requires_revalidation',reason:'旧版标量导出可能受变量缩写影响；原结果保留，p值、区间及自由度需重新执行核对'};
+    tasks.push({...rest,sample_evidence:sampleEvidence(rest)});
+  }
+  return tasks;
+}
 export function validResult(value,task,secondary=false){
   if(!value||typeof value!=='object'||typeof value.summary!=='string'||value.summary.length>6000||typeof value.software_version!=='string'||value.software_version.length>100)throw Error('结果摘要或软件版本无效。');
   if((value.input_sha256&&value.input_sha256!==task.input_sha256)||(value.plan_sha256&&value.plan_sha256!==task.plan_sha256))throw Error('结果不属于批准的输入或方案。');
@@ -75,7 +101,7 @@ export async function handleLocalStata(request,env,owner,path){
         const previous=JSON.parse(pair.body),profile=body.profile?cleanProfile(body.profile):previous.profile;
         const inputHash=body.input_sha256||previous.input_sha256;if(inputHash&&!/^[a-f0-9]{64}$/.test(inputHash))return fail('输入哈希无效。');
         const metadata=profile?await datasetMetadata(inputHash,profile,body.dictionary):null;
-        const next={metadata,profile:profile||null,input_sha256:inputHash||null,mcp_available:body.mcp_available===true,mcp_version:String(body.mcp_version||'').slice(0,100),engines:cleanEngines(body.engines),fixture_preparation_version:body.fixture_preparation_version===1?1:0};
+        const next={metadata,profile:profile||null,input_sha256:inputHash||null,mcp_available:body.mcp_available===true,mcp_version:String(body.mcp_version||'').slice(0,100),mcp_supported:supportedMcpVersion(env,body.mcp_version),engines:cleanEngines(body.engines),fixture_preparation_version:body.fixture_preparation_version===1?1:0};
         if(pair.owner){const state=await loadOwnedSession(env,pair.owner,pair.session_id);pair.expires_at=Math.round((state.last_activity+604800)*1000);}
         await env.DB.prepare('UPDATE local_pairings SET body=?,last_seen=?,expires_at=? WHERE id=? AND revoked=0').bind(JSON.stringify(next),Date.now(),pair.expires_at,pair.id).run();
         let preparation=pair.owner?await fixturePreparation(env,pair.id):null;
@@ -90,7 +116,12 @@ export async function handleLocalStata(request,env,owner,path){
       }
       if(!pair.owner)return fail('请先在网页完成配对。',409);
       if(agent[2]==='claim'){
-        const running=await env.DB.prepare("SELECT body FROM local_stata_tasks WHERE pairing_id=? AND status IN ('awaiting_approval','running','awaiting_upload','cancel_requested') ORDER BY created_at LIMIT 1").bind(pair.id).first();if(running)return json({task:JSON.parse(running.body)});
+        const running=await env.DB.prepare("SELECT body FROM local_stata_tasks WHERE pairing_id=? AND status IN ('awaiting_approval','running','awaiting_upload','cancel_requested') ORDER BY created_at LIMIT 1").bind(pair.id).first();
+        if(running){
+          let activeTask=JSON.parse(running.body);
+          if(activeTask.status==='running'){try{const updated=await interruptStaleRun(env,pair,running);if(updated)activeTask=updated;}catch{}}
+          if(activeTask.status!=='interrupted')return json({task:activeTask});
+        }
         const row=await env.DB.prepare("SELECT body FROM local_stata_tasks WHERE pairing_id=? AND status='queued' ORDER BY created_at LIMIT 1").bind(pair.id).first();if(!row)return json({task:null});
         const task=JSON.parse(row.body);task.status='awaiting_approval';task.updated_at=Date.now();
         const changed=await env.DB.prepare("UPDATE local_stata_tasks SET status='awaiting_approval',body=?,updated_at=? WHERE id=? AND status='queued'").bind(JSON.stringify(task),task.updated_at,task.id).run();return json({task:changed.meta.changes?task:null});
@@ -109,10 +140,17 @@ export async function handleLocalStata(request,env,owner,path){
         if(body.status==='running'){
           if(!/^[a-f0-9]{64}$/.test(body.code_sha256||'')||body.input_sha256!==task.input_sha256)return fail('批准的代码或输入哈希无效。',409);
           const state=await loadOwnedSession(env,pair.owner,pair.session_id);if(state.research_revision!==task.research_revision)return fail('资料已变化，需重新提交和批准。',409);
-          if(task.teaching_preview&&task.teaching_preview.code_sha256!==body.code_sha256)return fail('批准代码与教学预览不一致，请重新提交任务。',409);
+          if(!supportedMcpVersion(env,body.mcp_version))return fail('本机 Stata 助手版本不受支持，请升级后重试。',409);
+          if(!task.teaching_preview)return fail('请先生成并确认教学预览，再批准执行。',409);
+          if(task.teaching_preview.code_sha256!==body.code_sha256)return fail('批准代码与教学预览不一致，请重新提交任务。',409);
           task.code_sha256=body.code_sha256;task.approved_at=new Date().toISOString();task.mcp_version=String(body.mcp_version||'').slice(0,100);
           if(body.bridge_id&&body.bridge_id!==(task.bridge_id||'stata_mcp'))return fail('批准桥接器与任务不一致。',409);
           task.bridge_version=String(body.bridge_version||'').slice(0,100);
+        }
+        if(['failed','interrupted'].includes(body.status)){
+          if(typeof body.error==='string')task.error=body.error.slice(0,500);
+          if(typeof body.log==='string')task.failure_log=body.log.slice(-20000);
+          if(body.status==='interrupted')task.interrupted_reason=String(body.reason||'agent_interrupted').slice(0,80);
         }
         await updateTask(env,task,body.status,row.body);return json({task});
       }

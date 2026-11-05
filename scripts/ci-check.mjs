@@ -24,7 +24,7 @@ const python = process.platform === 'win32' ? 'python' : 'python3';
 run('python compile', python, ['-m', 'compileall', '-q', 'executor']);
 
 run('deployment preflight', process.execPath, ['scripts/deployment-preflight.mjs']);
-for (const script of ['verify-novice-contracts.mjs', 'verify-dialogue-intake.mjs', 'verify-material-integration.mjs']) {
+for (const script of ['verify-novice-contracts.mjs', 'verify-dialogue-intake.mjs', 'verify-material-integration.mjs', 'verify-stata-logic.mjs']) {
   run(script, process.execPath, [join('scripts', script)]);
 }
 

@@ -19,6 +19,8 @@ services:
       EA_MAX_QUEUE: "10"
       EA_DAILY_LIMIT: "30"
       EA_JOB_TIMEOUT: "120"
+      # 可选：填写后仅允许列表内的本机 Stata 助手版本（逗号分隔），留空表示不限制。
+      # STATA_MCP_VERSIONS: "1.4.0"
     ports:
       - "127.0.0.1:18000:8080"
     volumes:
