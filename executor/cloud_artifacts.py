@@ -2,7 +2,73 @@
 import hashlib
 import json
 
+def specialty_teaching(plan):
+    method=plan['method']; outcome=plan['outcome']; rhs=' '.join(plan['predictors'])
+    lines=['version 18.0','* 对应代码模板：本脚本未在 Stata 中实际运行；复现前需安装 reghdfe/ivreghdfe。',
+           '* 输入为复现包 normalized.csv；字段映射见对应代码说明。',
+           'clear all','set more off','set varabbrev off','capture log close _all','log using stata-replay.log, text replace',
+           'import delimited using normalized.csv, varnames(1) stringcols(_all) clear','generate long ea_row = _n']
+    if method=='event_study':
+        selected=[outcome,*plan['predictors'],plan['unit'],plan['time'],plan['treated'],plan['cluster']]
+        numeric=[outcome,*plan['predictors'],plan['time'],plan['treated']]
+    else:
+        selected=[outcome,*plan['predictors'],plan['endogenous'],*plan['instruments']]
+        if plan.get('unit'):selected += [plan['unit'],plan['time']]
+        if plan['vcov']=='cluster':selected.append(plan['cluster'])
+        numeric=[outcome,*plan['predictors'],plan['endogenous'],*plan['instruments']]+([plan['time']] if plan.get('unit') else [])
+    selected=list(dict.fromkeys(v for v in selected if v));numeric=list(dict.fromkeys(v for v in numeric if v))
+    for name in selected:lines.append(f'replace {name} = "" if inlist({name},"NA","N/A","null","NaN")')
+    for name in numeric:lines.append(f'destring {name}, replace')
+    lines.append('assert !missing('+','.join(selected)+')' if plan['missing']=='block' else 'drop if missing('+','.join(selected)+')')
+    lines.append('assert _N >= 8')
+    if method=='event_study':
+        lines += [f'assert {plan["time"]} == floor({plan["time"]})',f'isid {plan["unit"]} {plan["time"]}',f'egen long ea_panel = group({plan["unit"]})',f'xtset ea_panel {plan["time"]}',f'egen long ea_cluster = group({plan["cluster"]})',f'generate int ea_event = {plan["time"]} - {plan["policy_year"]}']
+        pre,post=plan['window'];reference=plan['reference_period'];dummies=[]
+        for period in range(-pre,post+1):
+            if period==reference:continue
+            name=f'ea_m{-period}' if period<0 else ('ea_0' if period==0 else f'ea_p{period}')
+            lines.append(f'generate byte {name} = ({plan["treated"]} == 1 & ea_event == {period})');dummies.append(name)
+        command=(f'reghdfe {outcome} {" ".join(dummies)} {rhs}, absorb(ea_panel {plan["time"]}) vce(cluster ea_cluster)').replace('  ',' ').strip()
+        lines.append(command)
+        pre_dummies=[f'ea_m{-period}' for period in range(-pre,0) if period!=reference]
+        if pre_dummies:lines.append('test '+' '.join(pre_dummies))
+    else:
+        if plan.get('unit'):
+            lines += [f'assert {plan["time"]} == floor({plan["time"]})',f'isid {plan["unit"]} {plan["time"]}',f'egen long ea_panel = group({plan["unit"]})',f'xtset ea_panel {plan["time"]}']
+        if plan['vcov']=='cluster':lines += [f'egen long ea_cluster = group({plan["cluster"]})']
+        instruments=' '.join(plan['instruments'])
+        if plan.get('unit'):
+            command=f'ivreghdfe {outcome} {rhs} ({plan["endogenous"]} = {instruments}), absorb(ea_panel {plan["time"]}) cluster(ea_cluster)'
+        else:
+            command=f'ivreg2 {outcome} {rhs} ({plan["endogenous"]} = {instruments}), robust'+(' cluster(ea_cluster)' if plan['vcov']=='cluster' else '')
+        lines.append(command.replace('  ',' ').strip())
+        lines.append('estat firststage')
+        if len(plan['instruments'])>1:lines.append('estat overid')
+    lines += ['generate byte ea_sample = e(sample)','preserve','keep if ea_sample','keep ea_row','export delimited using stata-sample.csv, replace','restore','log close _all']
+    main_line=next(index for index,line in enumerate(lines,1) if line.startswith(('reghdfe ','ivreghdfe ','ivreg2 ')))
+    def topic(index,line):
+        if index==main_line:return 'estimate'
+        if line.startswith('import '):return 'import'
+        if line.startswith('destring '):return 'numeric'
+        if line.startswith(('drop if missing','assert !missing','replace ')):return 'missing'
+        if line.startswith(('xtset ','isid ','egen long ea_panel')):return 'panel'
+        if line.startswith('egen long ea_cluster'):return 'cluster'
+        if line.startswith('generate int ea_event'):return 'post'
+        if line.startswith(('assert _N','assert r(N)')):return 'sample'
+        return None
+    commands=[{'id':'line-'+str(index),'line':index,'text':line,'topic':topic(index,line)} for index,line in enumerate(lines,1) if topic(index,line)]
+    differences=['对应模型结构；云端内核与 Stata 的有限样本、聚类与缺失处理必须分别核对。','本模板未在 Stata 中实际运行；需要 reghdfe/ivreghdfe，数值不承诺逐位相同。']
+    if method=='iv_2sls':differences.append('工具外生性不可由数据自动检验；弱工具诊断需在 Stata 端重新核对。')
+    text='\n'.join(lines)+'\n'
+    return text,{'schema_version':1,'artifact_kind':'stata_corresponding_code','executed':False,'template_version':'joycode-linear-3',
+                 'sha256':hashlib.sha256(text.encode()).hexdigest(),'labels':plan['labels'],
+                 'commands':commands,'mapping':[{'alias':k,'name':v} for k,v in plan['labels'].items()],
+                 'derived':[],'core_command_id':'line-'+str(main_line),'core_command':lines[main_line-1],'differences':differences}
+
+
 def teaching(plan):
+    if plan['method'] in ('event_study','iv_2sls'):
+        return specialty_teaching(plan)
     method=plan['method']; rhs=' '.join(plan['predictors'])
     vce={'iid':'','hetero':'vce(robust)','cluster':f"vce(cluster {plan.get('cluster','')})"}[plan['vcov']]
     lines=['version 18.0','* 对应代码：本任务已由云端计算执行；本脚本本身未在云端运行。',

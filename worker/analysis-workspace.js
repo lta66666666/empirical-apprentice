@@ -6,7 +6,7 @@ import {readDrafts} from './drafts.js';
 import {applyUnderstanding,researchSummary} from './research-understanding.js';
 import {inputIdentity} from './input-identity.js';
 const cards=['question','sample','outcome','predictor','data_source','access','policy_name','policy_doc','effective_date','treated_list','comparison'];
-const methods=['ols','panel_fe','did'],steps=['prepare','data','health','plan','execute','explain','reports'];
+const methods=['ols','panel_fe','did','event_study','iv_2sls'],steps=['prepare','data','health','plan','execute','explain','reports'];
 const labels={prepare:'整理研究准备',data:'载入数据',health:'检查数据与变量',plan:'核对完整方案',execute:'确认并执行',explain:'解释与修订',reports:'下载并核验报告'};
 const fail=(detail,status=422)=>Object.assign(Error(detail),{status});
 export function workspace(state){return state.analysis_workspace||{view:'data',mode:'analysis',guide:{status:'idle',index:0},applied:[]};}

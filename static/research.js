@@ -1,6 +1,6 @@
 /* R execution workbench: textContent only for user data, no arbitrary code editor. */
 let researchData=null,researchPlan=null,researchSession=null,researchJob=null,researchPoll=null,researchEpoch=0,researchRunning=false,researchProfileCache=null;
-const researchNames={ols:'线性回归',panel_fe:'面板固定效应',did:'同批 DID'};
+const researchNames={ols:'线性回归',panel_fe:'面板固定效应',did:'同批 DID',event_study:'事件研究',iv_2sls:'工具变量 2SLS'};
 let researchRuntime=null;
 let researchInputEpoch=0,researchConfigEpoch=0,researchOperationEpoch=0,researchInputBusy=false,researchPendingSubmission=null;
 function researchContext(){return {session:sessionId,account:window.EA_ACCOUNT?.id||'',input:researchInputEpoch,config:researchConfigEpoch,revision:latestState?.research_revision};}
@@ -55,20 +55,30 @@ function researchCandidate(){
   const method=$('researchMethod').value;
   return {method,engine_id:$('researchEngine').value,outcome:$('researchOutcome').value,predictors:[...document.querySelectorAll('#researchPredictors input:checked')].map(n=>n.value),
     unit:method==='ols'?'':$('researchUnit').value,time:method==='ols'?'':$('researchTime').value,
-    treated:method==='did'?$('researchTreated').value:'',policy_year:method==='did'&&$('researchYear').value?Number($('researchYear').value):null,
-    vcov:$('researchVcov').value,cluster:$('researchVcov').value==='cluster'?$('researchCluster').value:'',missing:$('researchMissing').value,same_batch:method==='did'&&$('researchSameBatch').checked};
+    treated:['did','event_study'].includes(method)?$('researchTreated').value:'',policy_year:['did','event_study'].includes(method)&&$('researchYear').value?Number($('researchYear').value):null,
+    endogenous:method==='iv_2sls'?$('researchEndogenous').value:'',instruments:method==='iv_2sls'?[...document.querySelectorAll('#researchInstrumentFields input:checked')].map(n=>n.value):[],
+    window:method==='event_study'?[Math.max(1,Number($('researchWindowPre').value||3))*-1,Math.max(1,Number($('researchWindowPost').value||3))]:null,
+    reference_period:method==='event_study'?Number($('researchReference').value||-1):null,
+    vcov:$('researchVcov').value,cluster:$('researchVcov').value==='cluster'?$('researchCluster').value:'',missing:$('researchMissing').value,same_batch:['did','event_study'].includes(method)&&$('researchSameBatch').checked};
 }
+
 function researchSetFields(profile,preset={}){
   researchProfileCache=profile;
-  for(const id of ['researchOutcome','researchUnit','researchTime','researchTreated','researchCluster']){
+  for(const id of ['researchOutcome','researchUnit','researchTime','researchTreated','researchCluster','researchEndogenous']){
     const n=$(id);n.replaceChildren(new Option('请选择',''));for(const c of profile.columns)n.append(new Option(c.name,c.name));
   }
   const predictors=$('researchPredictors');predictors.replaceChildren();
-  for(const c of profile.columns){const label=el('label','research-check'),input=el('input');input.type='checkbox';input.value=c.name;label.append(input,document.createTextNode(c.name));predictors.append(label);}
+  for(const c of profile.columns){const label=el('label','research-check'),input=el('input');input.type='checkbox';input.value=c.name;label.append(input, document.createTextNode(c.name));predictors.append(label);}
+  const instruments=$('researchInstrumentFields');instruments.replaceChildren(el('legend','','工具变量（1–4 个）'));
+  for(const c of profile.columns){const label=el('label','research-check'),input=el('input');input.type='checkbox';input.value=c.name;label.append(input, document.createTextNode(c.name));instruments.append(label);}
   for(const [key,id] of Object.entries({engine_id:'researchEngine',method:'researchMethod',outcome:'researchOutcome',unit:'researchUnit',time:'researchTime',treated:'researchTreated',cluster:'researchCluster',vcov:'researchVcov',missing:'researchMissing'}))if(preset[key]!=null)$(id).value=preset[key];
   if(preset.policy_year)$('researchYear').value=preset.policy_year;
   $('researchSameBatch').checked=Boolean(preset.same_batch);
   for(const n of predictors.querySelectorAll('input'))n.checked=(preset.predictors||[]).includes(n.value);
+  if(preset.endogenous)$('researchEndogenous').value=preset.endogenous;
+  for(const n of instruments.querySelectorAll('input'))n.checked=(preset.instruments||[]).includes(n.value);
+  if(Array.isArray(preset.window)){$('researchWindowPre').value=Math.abs(preset.window[0])||3;$('researchWindowPost').value=preset.window[1]||3;}
+  if(preset.reference_period!=null)$('researchReference').value=String(preset.reference_period);
   $('researchProfile').replaceChildren(el('strong','',`${profile.row_count} 行 · ${profile.columns.length} 列`));
   for(const c of profile.columns)$('researchProfile').append(el('span','research-chip',`${c.name} · ${c.numeric?'数值':'文本'} · 缺失 ${c.missing}`));
   researchMethodChange(false);researchInvalidate();researchOfferPreparation();
@@ -76,9 +86,10 @@ function researchSetFields(profile,preset={}){
 }
 function researchMethodChange(invalidate=true,methodChanged=false){
   const m=$('researchMethod').value;
-  $('researchPanelFields').hidden=m==='ols';$('researchDidFields').hidden=m!=='did';
-  if(methodChanged){$('researchVcov').value=m==='ols'?'hetero':'cluster';if(m!=='ols')$('researchCluster').value=$('researchUnit').value;}
-  for(const option of $('researchVcov').options)option.disabled=m!=='ols'&&option.value!=='cluster';
+  $('researchPanelFields').hidden=m==='ols';$('researchDidFields').hidden=!['did','event_study'].includes(m);
+  $('researchIvFields').hidden=m!=='iv_2sls';$('researchEventFields').hidden=m!=='event_study';
+  if(methodChanged){$('researchVcov').value=m==='iv_2sls'||m==='ols'?'hetero':'cluster';if(!['ols','iv_2sls'].includes(m))$('researchCluster').value=$('researchUnit').value;}
+  for(const option of $('researchVcov').options)option.disabled=['panel_fe','did','event_study'].includes(m)&&option.value!=='cluster';
   $('researchClusterWrap').hidden=$('researchVcov').value!=='cluster';
   if(invalidate)researchInvalidate();
   researchRenderLesson();
@@ -125,6 +136,14 @@ function researchRenderLesson(data=latestState){
   const root=$('researchLesson');if(!root)return;
   const method=$('researchMethod')?.value||'ols';
   root.replaceChildren();
+  if(method==='event_study'){
+    root.append(el('span','section-kicker','执行前短课'),el('h3','','事件研究：看政策前后的动态变化'),el('p','','事件期系数是相对基期（默认 -1）的变化。政策前系数用于检查预趋势，政策后系数用于观察动态效应。'),el('p','workspace-note','同批实施、双向固定效应、单向聚类；预趋势检验不显著不等于平行趋势成立。分批实施需改用异质性稳健估计，本工具暂未接入。'));
+    return;
+  }
+  if(method==='iv_2sls'){
+    root.append(el('span','section-kicker','执行前短课'),el('h3','','工具变量：先论证相关性，再论证外生性'),el('p','','第一阶段用工具预测内生变量；2SLS 系数解释为工具变量识别下的局部平均效应（LATE），不是全体平均效应。'),el('p','workspace-note','工具必须与内生变量相关，且只通过内生变量影响结果。外生性不能由数据自动检验；弱工具会放大偏误。'));
+    return;
+  }
   if(method==='did'){
     researchDidLesson(root);
     return;
@@ -272,6 +291,39 @@ function researchEvidenceChain(j){
   chain.append(el('span','ea-evidence-version','导出版本 v'+(j.record_version||1)));
   return chain;
 }
+function researchEventStudyFigure(j,r){
+  const fmt=value=>Number(value).toPrecision(4);
+  const points=(r.coefficients||[]).map(c=>{const match=/事件期\s*([+-]?\d+)/.exec(c.term);return match?{period:Number(match[1]),...c}:null;}).filter(Boolean);
+  if(!points.length)return el('p','workspace-note','事件期系数未返回，无法绘制动态图。');
+  const reference=j.result?.event_study?.reference_period??-1;
+  const periods=[...new Set([...points.map(point=>point.period),reference])].sort((a,b)=>a-b);
+  const lo=Math.min(0,...points.map(point=>point.ci_low)),hi=Math.max(0,...points.map(point=>point.ci_high));
+  const W=640,H=320,left=60,right=600,top=50,bottom=250;
+  const x=period=>left+(periods.indexOf(period)/Math.max(1,periods.length-1))*(right-left);
+  const y=value=>bottom-(value-lo)/Math.max(.001,hi-lo)*(bottom-top);
+  const svg=(tag,attrs,text)=>{const node=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,String(value));if(text)node.textContent=text;return node;};
+  const chart=svg('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'事件研究动态系数与95%区间'});
+  chart.append(svg('rect',{width:'100%',height:'100%',fill:'#fff'}),svg('line',{x1:left,y1:y(0),x2:right,y2:y(0),stroke:'#a0aaa7','stroke-dasharray':'4 4'}),svg('line',{x1:x(0),y1:top,x2:x(0),y2:bottom,stroke:'#cfd8dc','stroke-dasharray':'3 5'}),svg('text',{x:x(0),y:top-10,'text-anchor':'middle','font-size':11,fill:'#567079'},'政策时点'));
+  for(const period of periods)chart.append(svg('text',{x:x(period),y:bottom+20,'text-anchor':'middle','font-size':12,fill:'#567079'},period>0?`+${period}`:String(period)));
+  for(const point of points){chart.append(svg('line',{x1:x(point.period),y1:y(point.ci_low),x2:x(point.period),y2:y(point.ci_high),stroke:'#087e75','stroke-width':3}),svg('circle',{cx:x(point.period),cy:y(point.estimate),r:5,fill:'#0b645e'}),svg('text',{x:x(point.period),y:y(point.ci_high)-8,'text-anchor':'middle','font-size':10,fill:'#567079'},fmt(point.estimate)));}
+  chart.append(svg('circle',{cx:x(reference),cy:y(0),r:5,fill:'#fff',stroke:'#8a9a96'}),svg('text',{x:x(reference),y:y(0)-10,'text-anchor':'middle','font-size':10,fill:'#8a9a96'},'基期'));
+  chart.append(svg('text',{x:left,y:H-8,'font-size':11,fill:'#586765'},'横轴：事件期；纵轴：系数。基期不进入表中。'));
+  const box=el('section','ea-event-study');box.append(el('h4','','动态系数与预趋势'),chart);
+  const pretrend=j.result?.event_study?.pretrend;
+  if(pretrend&&Number.isFinite(pretrend.statistic))box.append(el('p','',`预趋势联合检验：F=${fmt(pretrend.statistic)}，p=${pretrend.p_value==null?'未记录':fmt(pretrend.p_value)}。不显著不等于平行趋势成立。`));
+  if(r.att)box.append(el('p','',`ATT = ${fmt(r.att.estimate)}（95% 区间 [${fmt(r.att.ci_low)}, ${fmt(r.att.ci_high)}]）。`));
+  return box;
+}
+function researchIvDiagnostics(j,r){
+  const fmt=value=>value==null?'未记录':Number(value).toPrecision(4);
+  const box=el('section','ea-iv-diagnostics');box.append(el('h4','','工具变量诊断'));
+  const d=r.iv_diagnostics;
+  if(!d||d.status==='unavailable'){box.append(el('p','resource-caution','诊断未返回：'+(d?.reason||'未知原因')));return box;}
+  for(const [label,value] of [['第一阶段 F',fmt(d.first_stage_f)],['有效 F（Olea–Pflueger）',fmt(d.effective_f)],['KP rk LM',fmt(d.kp_rk_lm)],['AR 95% 置信集',d.ar_ci?`[${fmt(d.ar_ci[0])}, ${fmt(d.ar_ci[1])}]`:'未记录']]){const row=el('div','ea-iv-row');row.append(el('span','',label),el('strong','',value));box.append(row);}
+  if(d.effective_f!=null&&d.effective_f<10)box.append(el('p','resource-caution','有效 F 小于 10，工具变量可能偏弱。'));
+  box.append(el('p','workspace-note','外生性不可由数据检验；2SLS 系数解释为工具变量识别下的局部效应。'));
+  return box;
+}
 function researchDrawJob(j){
   const signature=JSON.stringify([j.id,j.status,j.record_version,j.error,j.sync_error,j.stale,j.verification]);
   researchJob=j;window.eaCorrespondingQuestionContext=null;window.eaSelectedTask={id:j.id,session_id:j.session_id||sessionId,engine_id:j.engine_id||'browser_webr'};const box=$('researchResult');
@@ -334,6 +386,8 @@ function researchDrawJob(j){
   for(const c of r.coefficients){const row=el('tr');row.tabIndex=0;row.setAttribute('aria-label',`选择 ${c.term} 查看区间与单位`);row.onclick=()=>selectCoefficient(c,row);row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectCoefficient(c,row);}};for(const value of [c.term,stataNum(c.estimate),stataNum(c.std_error),c.std_error>0?(c.estimate/c.std_error).toFixed(2):'—',stataP(c.p_value),`[${stataNum(c.ci_low)}, ${stataNum(c.ci_high)}]`])row.append(el('td','',value));table.append(row);}
   scroll.append(table);log.append(scroll,el('p','ea-stata-note','按 Stata 输出格式整理；数值来自本次云端执行，本机无需安装 Stata。'));wrap.append(bar,log);box.append(wrap);
   if(j.plan.method==='did'){const figure=el('figure','ea-did-contrast'),image=el('img');image.src=`/api/research/jobs/${j.id}/artifacts/did_contrast.svg`;image.alt='处理组与对照组前后均值及原始 DID 对照';figure.append(image,el('figcaption','muted','原始 DID 由已确认样本的四格均值计算；模型系数可能因控制变量与固定效应不同。'));box.append(figure);}
+  if(j.plan.method==='event_study')box.append(researchEventStudyFigure(j,r));
+  if(j.plan.method==='iv_2sls')box.append(researchIvDiagnostics(j,r));
   box.append(focus);if(window.eaInterpretationCard)box.append(eaInterpretationCard(j,{onSaved:value=>{const summary=box.querySelector('.ea-result-summary');if(summary)summary.textContent=summary.textContent.replace(/导出版本 \d+/,'导出版本 '+value.record_version);}}));const sampleDetails=el('details');sampleDetails.append(el('summary','','样本处理与核验'),window.eaSampleEvidencePanel(j));box.append(sampleDetails);selectCoefficient(r.coefficients.find(c=>c.term!=='(Intercept)')||r.coefficients[0],table.querySelectorAll('tr')[r.coefficients.findIndex(c=>c.term!=='(Intercept)')+1]||table.querySelectorAll('tr')[1]);
   if(j.engine_id==='statspai_cloud'){
     const teaching=el('details','ea-corresponding-code'),body=el('div');teaching.append(el('summary','','Stata 对应代码'),body);
@@ -421,7 +475,7 @@ function setupResearch(){
   pane.append(el('span','section-kicker','从学到做'),el('h2','','核对方案，再交给计算软件'),el('p','research-lead','选择数据 → 核对方法、软件与执行位置 → 查看真实结果 → 自己解释并复算。'));
   pane.append(el('p','workspace-note','匿名浏览器记录和上传文件保存在服务器，最近活动 7 天后拒绝访问，物理清理接口已实现，云端定时调度待恢复；到期后一小时内删除尚未验收。请避免上传个人敏感数据；可在历史练习中手动删除，并提前导出。'));
   const runtime=el('details','research-runtime');runtime.open=false;runtime.id='researchRuntime';runtime.append(el('summary','','正在检测执行环境…'));pane.append(runtime);
-  const cases=el('div','research-cases');for(const [id,label] of Object.entries(researchNames))cases.append(button(`体验案例 · ${label}`,'research-case',()=>researchSample(id)));pane.append(cases);
+  const cases=el('div','research-cases');for(const [id,label] of Object.entries(researchNames).filter(([id])=>['ols','panel_fe','did'].includes(id)))cases.append(button(`体验案例 · ${label}`,'research-case',()=>researchSample(id)));pane.append(cases);
   const lesson=el('section','research-method-lesson');lesson.id='researchLesson';pane.append(lesson);
   const grid=el('div','research-grid'),form=el('section','research-input'),output=el('section','research-output');
   form.append(el('span','section-kicker','01 准备数据'),el('h3','','数据与研究问题'));
@@ -454,6 +508,14 @@ function setupResearch(){
   const panel=el('div');panel.id='researchPanelFields';panel.hidden=true;panel.append(researchField('researchUnit','个体编号'),researchField('researchTime','年份'));params.append(panel);
   const did=el('div');did.id='researchDidFields';did.hidden=true;did.append(researchField('researchTreated','固定处理组（0/1，身份不能随年份变化）'),researchField('researchYear','政策实施年份','input'));did.querySelector('input').type='number';
   const same=el('label','research-check'),sameCheck=el('input');sameCheck.id='researchSameBatch';sameCheck.type='checkbox';same.append(sameCheck,document.createTextNode('我已核实：同批实施，对照组研究期内未受此政策。'));did.append(same);params.append(did);
+  const eventFields=el('div');eventFields.id='researchEventFields';eventFields.hidden=true;
+  const windowPre=researchField('researchWindowPre','政策前窗口（1–5 期）','input');windowPre.querySelector('input').type='number';windowPre.querySelector('input').min=1;windowPre.querySelector('input').max=5;windowPre.querySelector('input').value=3;
+  const windowPost=researchField('researchWindowPost','政策后窗口（1–5 期）','input');windowPost.querySelector('input').type='number';windowPost.querySelector('input').min=1;windowPost.querySelector('input').max=5;windowPost.querySelector('input').value=3;
+  const reference=researchField('researchReference','基期（政策前，如 -1）','input');reference.querySelector('input').type='number';reference.querySelector('input').min=-5;reference.querySelector('input').max=-1;reference.querySelector('input').value=-1;
+  eventFields.append(windowPre,windowPost,reference,el('p','muted','事件期系数表示相对基期的变化；基期不进入系数表。'));params.append(eventFields);
+  const ivFields=el('div');ivFields.id='researchIvFields';ivFields.hidden=true;
+  ivFields.append(researchField('researchEndogenous','内生解释变量'),el('fieldset','research-instruments',null),el('p','muted','工具变量 2SLS：结果 = 内生 + 控制 + 工具。工具须与内生相关、且满足排除限制；外生性不能由数据自动检验。'));
+  const instrumentFieldset=ivFields.querySelector('.research-instruments');instrumentFieldset.id='researchInstrumentFields';params.append(ivFields);
   const vcov=researchField('researchVcov','标准误设置');vcov.querySelector('select').replaceChildren(new Option('异方差稳健','hetero'),new Option('聚类稳健','cluster'),new Option('同方差（需依据）','iid'));params.append(vcov);
   const cluster=researchField('researchCluster','聚类列');cluster.id='researchClusterWrap';cluster.hidden=true;params.append(cluster);
   const missing=researchField('researchMissing','选定变量缺失时');missing.querySelector('select').replaceChildren(new Option('停止，先核查数据','block'),new Option('明确允许删除不完整行并记录','drop'));params.append(missing);

@@ -41,7 +41,7 @@ async def capabilities():
     from .statspai_runner import pinned_versions
     try:
         versions=pinned_versions()
-        stats={'ready':True,'status':'可执行','reason':'云端计算（Stata 命令语法），受控执行','versions':versions,'methods':['ols','panel_fe','did']}
+        stats={'ready':True,'status':'可执行','reason':'云端计算（Stata 命令语法），受控执行','versions':versions,'methods':['ols','panel_fe','did','event_study','iv_2sls']}
     except Exception as error:
         stats={'ready':False,'status':'依赖待验收','reason':f'依赖检查失败：{type(error).__name__}: {error}'}
     r={'ready':False,'status':'未配置','reason':'尚未安装原生 R'}

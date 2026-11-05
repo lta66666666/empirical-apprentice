@@ -27,6 +27,7 @@ run('deployment preflight', process.execPath, ['scripts/deployment-preflight.mjs
 for (const script of ['verify-novice-contracts.mjs', 'verify-dialogue-intake.mjs', 'verify-material-integration.mjs', 'verify-stata-logic.mjs']) {
   run(script, process.execPath, [join('scripts', script)]);
 }
+run('verify-new-methods', python, [join('scripts', 'verify-new-methods.py')]);
 
 console.log('');
 if (failures.length) {

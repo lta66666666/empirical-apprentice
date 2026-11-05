@@ -1,8 +1,10 @@
 // Method roles are semantic: irrelevant columns must never affect the sample.
 export function normalizeMethodPlan(input={}) {
- const plan={...input,predictors:Array.isArray(input.predictors)?[...input.predictors]:[]};
+ const plan={...input,predictors:Array.isArray(input.predictors)?[...input.predictors]:[],instruments:Array.isArray(input.instruments)?[...input.instruments]:[]};
  if(plan.method==='ols'){plan.unit='';plan.time='';}
- if(plan.method!=='did'){plan.treated='';plan.policy_year=null;plan.same_batch=false;}
+ if(!['did','event_study'].includes(plan.method)){plan.treated='';plan.policy_year=null;plan.same_batch=false;}
+ if(plan.method!=='event_study'){plan.window=null;plan.reference_period=null;}
+ if(plan.method!=='iv_2sls'){plan.endogenous='';plan.instruments=[];}
  if(plan.vcov!=='cluster')plan.cluster='';
  return plan;
 }

@@ -95,6 +95,8 @@ function validatePlan(input, data, blueprint, session) {
     method: input.method || 'ols', outcome: input.outcome || '',
     predictors: Array.isArray(input.predictors) ? input.predictors : [], unit: input.unit || '',
     time: input.time || '', treated: input.treated || '', policy_year: input.policy_year ?? null,
+    endogenous: input.endogenous || '', instruments: Array.isArray(input.instruments) ? input.instruments : [],
+    window: Array.isArray(input.window) ? input.window : null, reference_period: input.reference_period ?? null,
     vcov: input.vcov || 'hetero', cluster: input.cluster || '', missing: input.missing || 'block',
     same_batch: input.same_batch === true, engine_id: input.engine_id || 'statspai_cloud',
   };
@@ -103,33 +105,49 @@ function validatePlan(input, data, blueprint, session) {
   Object.assign(plan,engineMetadata[plan.engine_id]); delete plan.label;
   if (!enabledMethods.includes(plan.method)) throw new Error(methodRegistry[plan.method]?.reason||'该方法尚未接入。');
   if (!['iid', 'hetero', 'cluster'].includes(plan.vcov) || !['block', 'drop'].includes(plan.missing)) throw new Error('标准误或缺失处理设置无效。');
-  if(plan.method!=='ols'&&plan.vcov!=='cluster')throw new Error('本轮固定效应和DID仅开放单向聚类标准误，请选择聚类列。');
+  const panelMethods=['panel_fe','did','event_study'];
+  if (panelMethods.includes(plan.method) && plan.vcov !== 'cluster') throw new Error('固定效应、DID 与事件研究仅开放单向聚类标准误，请选择聚类列。');
   if (!data.headers.includes(plan.outcome)) throw new Error('请选择数据中的结果变量。');
   if (plan.predictors.length > 12 || new Set(plan.predictors).size !== plan.predictors.length || plan.predictors.includes(plan.outcome)) throw new Error('解释变量不能重复或包含结果变量，最多 12 列。');
-  if (plan.method !== 'did' && !plan.predictors.length) throw new Error('请至少选择一个解释变量。');
-  if (plan.method !== 'ols' && (!plan.unit || !plan.time || plan.unit === plan.time)) throw new Error('面板分析需要不同的个体列和年份列。');
+  if (['panel_fe','event_study'].includes(plan.method) && !plan.predictors.length) throw new Error('请至少选择一个解释变量。');
+  if (panelMethods.includes(plan.method) && (!plan.unit || !plan.time || plan.unit === plan.time)) throw new Error('面板分析需要不同的个体列和年份列。');
   if (plan.method === 'did' && (!plan.treated || !Number.isInteger(plan.policy_year) || plan.policy_year < 1800 || plan.policy_year > 2200 || !plan.same_batch)) {
     throw new Error('本版 DID 仅支持同批实施：需核对组别、政策年份和适用条件。');
   }
+  if (plan.method === 'event_study') {
+    if (!plan.treated || !Number.isInteger(plan.policy_year) || plan.policy_year < 1800 || plan.policy_year > 2200 || !plan.same_batch) throw new Error('事件研究仅支持同批实施：需核对组别、政策年份和适用条件。');
+    const range = plan.window;
+    if (!Array.isArray(range) || range.length !== 2 || !Number.isInteger(range[0]) || !Number.isInteger(range[1]) || range[0] < 1 || range[0] > 5 || range[1] < 1 || range[1] > 5) throw new Error('事件研究窗口须为：政策前 1–5 期、政策后 1–5 期。');
+    if (!Number.isInteger(plan.reference_period) || plan.reference_period > -1 || plan.reference_period < -range[0]) throw new Error('基期必须位于政策前窗口内且不晚于 -1。');
+  }
+  if (plan.method === 'iv_2sls') {
+    if (!plan.endogenous || !data.headers.includes(plan.endogenous)) throw new Error('请选择数据中的内生解释变量。');
+    if (plan.endogenous === plan.outcome || plan.predictors.includes(plan.endogenous)) throw new Error('内生变量不能同时作为结果变量或控制变量。');
+    if (!plan.instruments.length || plan.instruments.length > 4 || new Set(plan.instruments).size !== plan.instruments.length) throw new Error('工具变量需为 1–4 个互不重复的列。');
+    if (plan.instruments.some(name => name === plan.endogenous || name === plan.outcome || plan.predictors.includes(name))) throw new Error('工具变量不能与内生变量、结果变量或控制变量重复。');
+    if ((plan.unit && !plan.time) || (!plan.unit && plan.time) || (plan.unit && plan.unit === plan.time)) throw new Error('工具变量加入固定效应时，需同时选择不同的个体列和年份列。');
+    if (plan.unit && (plan.vcov !== 'cluster' || !plan.cluster)) throw new Error('带固定效应的工具变量需单向聚类标准误。');
+  }
   const batches = blueprint?.policy_batches?.value || '';
-  if (plan.method === 'did' && session && didConflict(session)) throw new Error(didConflict(session));
-  if (plan.method === 'did' && /分批/.test(batches) && !/没有分批|不是分批|非分批/.test(batches)) throw new Error('蓝图记录了分批实施，本版同批 DID 不适用。');
-  if (plan.method !== 'ols' && (plan.vcov !== 'cluster' || !plan.cluster)) throw new Error('固定效应和 DID 需指定聚类标准误。');
+  if ((plan.method === 'did' || plan.method === 'event_study') && session && didConflict(session)) throw new Error(didConflict(session));
+  if ((plan.method === 'did' || plan.method === 'event_study') && /分批/.test(batches) && !/没有分批|不是分批|非分批/.test(batches)) throw new Error('蓝图记录了分批实施，本版同批 DID 与事件研究不适用。');
+  if (panelMethods.includes(plan.method) && (plan.vcov !== 'cluster' || !plan.cluster)) throw new Error('固定效应、DID 与事件研究需指定聚类标准误。');
   if (plan.vcov === 'cluster' && !plan.cluster) throw new Error('聚类标准误需要聚类列。');
-  const required = [plan.outcome, ...plan.predictors, plan.unit, plan.time, plan.treated, plan.cluster].filter(Boolean);
+  const required = [plan.outcome, ...plan.predictors, plan.unit, plan.time, plan.treated, plan.cluster, plan.endogenous, ...plan.instruments].filter(Boolean);
   const absent = required.filter((name) => !data.headers.includes(name));
   if (absent.length) throw new Error('数据中没有这些列：' + absent.join(', '));
-  for (const name of [plan.outcome, ...plan.predictors]) {
-    if (!data.profile.columns.find((column) => column.name === name).numeric) throw new Error(`${name} 不是可用数值列。`);
+  for (const name of [plan.outcome, ...plan.predictors, plan.endogenous, ...plan.instruments]) {
+    if (!data.profile.columns.find((column) => column.name === name)?.numeric) throw new Error(`${name} 不是可用数值列。`);
   }
   const selected = [...new Set(required)];
   const incomplete = (row) => selected.some((name) => MISSING.has(row[data.headers.indexOf(name)]));
   const missingLines = data.rows.flatMap((row, index) => incomplete(row) ? [data.lines[index]] : []);
   if (missingLines.length && plan.missing === 'block') throw new Error(`选定列存在 ${missingLines.length} 行缺失；请核查或明确允许删除。`);
   const usableRows = data.rows.filter((row) => !incomplete(row));
-  if (usableRows.length < Math.max(8, plan.predictors.length+(plan.method==='did'?1:0)+2)) throw new Error('选定变量完整样本不足，至少需要 max(8,解释项数量＋2) 行。');
+  const minimum = Math.max(8, plan.predictors.length + (plan.method === 'did' ? 1 : 0) + plan.instruments.length + 2);
+  if (usableRows.length < minimum) throw new Error('选定变量完整样本不足，至少需要 max(8,解释项数量＋2) 行。');
   if(plan.vcov==='cluster'&&new Set(usableRows.map(r=>r[data.headers.indexOf(plan.cluster)])).size<2)throw new Error('至少需要两个聚类组。');
-  if (plan.method !== 'ols') {
+  if (plan.unit && plan.time) {
     const ui = data.headers.indexOf(plan.unit), ti = data.headers.indexOf(plan.time), seen = new Set();
     for (const row of usableRows) {
       const year=Number(row[ti]);if(!Number.isInteger(year))throw new Error('年份必须为整数。');
@@ -156,11 +174,46 @@ function validatePlan(input, data, blueprint, session) {
     if(incompleteUnits)throw new Error(`完整样本中有 ${incompleteUnits} 个个体缺少政策前或政策后观测；请检查年份与缺失处理。未自动删除个体。`);
     if(cells.size!==4)throw new Error('完整样本缺少处理组×政策前后四格中的观测，请核对样本。');
   }
+  if (plan.method === 'event_study') {
+    const ui = data.headers.indexOf(plan.unit), ti = data.headers.indexOf(plan.time), gi = data.headers.indexOf(plan.treated);
+    const groups = new Map(), treatedUnits = new Set(), controlUnits = new Set();
+    let before = 0, after = 0;
+    for (const row of usableRows) {
+      const group = row[gi], year = Number(row[ti]);
+      if (!['0', '1'].includes(group) || !Number.isFinite(year)) throw new Error('事件研究组别须为 0/1，年份须为数值。');
+      if (groups.has(row[ui]) && groups.get(row[ui]) !== group) throw new Error('同一单位的处理组身份随时间变化。');
+      groups.set(row[ui], group);
+      if (group === '1') treatedUnits.add(row[ui]); else controlUnits.add(row[ui]);
+      if (year < plan.policy_year) before++; else after++;
+    }
+    if (!treatedUnits.size || !controlUnits.size) throw new Error('事件研究需要处理组与对照组。');
+    if (before < plan.window[0] || after < plan.window[1]) throw new Error(`样本未覆盖完整窗口：需要政策前 ${plan.window[0]} 个年度与政策后 ${plan.window[1]} 个年度。`);
+    for (let period = -plan.window[0]; period <= plan.window[1]; period++) {
+      if (period === plan.reference_period) continue;
+      if (!usableRows.some((row) => row[gi] === '1' && Number(row[ti]) - plan.policy_year === period)) throw new Error(`事件期 ${period} 没有处理组观测，请缩小窗口。`);
+    }
+    if (![...treatedUnits].every((unit) => usableRows.some((row) => row[ui] === unit && Number(row[ti]) === plan.policy_year + plan.reference_period))) throw new Error('部分处理单位缺少基期观测，请调整窗口或样本。');
+  }
   return { plan, missingLines };
 }
 
 function description(plan) {
-  const labels = { ols: 'OLS／多元线性回归', panel_fe: '个体与年份固定效应', did: '同批 DID' };
+  const labels = { ols: 'OLS／多元线性回归', panel_fe: '个体与年份固定效应', did: '同批 DID', event_study: '事件研究（同批）', iv_2sls: '工具变量 2SLS' };
+  if (plan.method === 'iv_2sls') {
+    const rhs = `(${plan.endogenous} ~ ${plan.instruments.join(' + ')})` + (plan.predictors.length ? ' + ' + plan.predictors.join(' + ') : '');
+    const fe = plan.unit ? ` | ${plan.unit} + ${plan.time}` : '';
+    return { label: labels.iv_2sls, formula: `${plan.outcome} ~ ${rhs}${fe}`,
+      meaning: '2SLS 系数是在工具变量识别下的局部平均效应（LATE）；外生性不能由数据自动检验。',
+      checks: '工具相关性、排除限制、弱工具、过度识别、聚类层级与样本。',
+      quiz: '请解释一个系数及其单位，并指出工具变量仍需哪些外部论证。' };
+  }
+  if (plan.method === 'event_study') {
+    const [pre, post] = plan.window;
+    return { label: labels.event_study, formula: `${plan.outcome} ~ 事件期(-${pre}…+${post}，基期 ${plan.reference_period}) + ${plan.predictors.join(' + ')} | ${plan.unit} + ${plan.time}`,
+      meaning: '事件期系数是相对基期的动态变化；ATT 与预趋势检验只提供识别证据。',
+      checks: '同批实施、基期设置、窗口覆盖、政策前趋势与同期冲击。',
+      quiz: '请解释一个事件期系数及其单位，并指出预趋势仍需哪些证据。' };
+  }
   const rhs = plan.method === 'did' ? ['处理组 × 政策后', ...plan.predictors].join(' + ') : plan.predictors.join(' + ');
   return { label: labels[plan.method], formula: `${plan.outcome} ~ ${rhs}${plan.method === 'ols' ? '' : ` | ${plan.unit} + ${plan.time}`}`,
     meaning: plan.method === 'did' ? '交互项表示处理组在政策后的相对变化；因果解释仍需识别假设证据。' : '系数表示条件关联，单位须结合变量定义解释；显著性不等于因果。',
@@ -241,7 +294,7 @@ export async function handleResearch(request, env, owner, path) {
   if(teachingRoute&&request.method==='GET')try{const state=await loadOwnedSession(env,owner,teachingRoute[1]);if(!state||state==='expired')return fault('练习不可读取。',404);const ref=Object.fromEntries(new URL(request.url).searchParams),lesson=await correspondingReference(env,owner,state,ref);return resultJson({card:lesson.card,reference:lesson.reference});}catch(e){return fault(e.message,e.status||422);}
   if (path === '/api/research/status' && request.method === 'GET') {
     const engines=await engineCapabilities(env,owner);
-    return resultJson({r:engines.browser_webr,engines,default_engine:'statspai_cloud',software:[{id:'statspai_cloud',label:'云端计算',...engines.statspai_cloud},{id:'r',label:'云端原生 R',...engines.r_native},{id:'browser_webr',label:'浏览器 webR',...engines.browser_webr},{id:'stata',label:'Stata',...engines.stata_native},{id:'eviews',label:'EViews',...engines.eviews_native}],methods:enabledMethods,method_registry:methodRegistry,unsupported:['分批 DID','IV','RDD','事件研究回归'],planner_mode:env.MODEL_API_KEY&&env.MODEL_NAME&&env.MODEL_BASE_URL?'online':'rules',model_capabilities:modelCapabilities(env)});
+    return resultJson({r:engines.browser_webr,engines,default_engine:'statspai_cloud',software:[{id:'statspai_cloud',label:'云端计算',...engines.statspai_cloud},{id:'r',label:'云端原生 R',...engines.r_native},{id:'browser_webr',label:'浏览器 webR',...engines.browser_webr},{id:'stata',label:'Stata',...engines.stata_native},{id:'eviews',label:'EViews',...engines.eviews_native}],methods:enabledMethods,method_registry:methodRegistry,unsupported:['分批 DID','RDD','PSM'],planner_mode:env.MODEL_API_KEY&&env.MODEL_NAME&&env.MODEL_BASE_URL?'online':'rules',model_capabilities:modelCapabilities(env)});
   }
   if (path === '/api/research/candidate' && request.method === 'POST') {
     try {
@@ -321,7 +374,7 @@ export async function handleResearch(request, env, owner, path) {
           dictionary, metadata, interpretation_warnings:interpretationWarnings(plan,dictionary), csv_lines:data.lines, research_revision:session.research_revision, evidence_snapshot:{...evidenceSnapshot(session),dictionary}, auto_interpretation:true, record_version:1,
           source: String(body.source || '用户提供的数据；来源未核实').slice(0, 1000), question: String(body.question || '').slice(0, 1000),
           simulated: body.simulated === true, missing_lines: missingLines, result: null, reflections: [],
-          tool_trace: [{ transport: plan.execution_location, tool: plan.software==='python'?(plan.method==='ols'?'statspai.regress':'statspai.fast.feols'):plan.software==='stata'?'Stata regress/xtreg':'fixest::feols' }],
+          tool_trace: [{ transport: plan.execution_location, tool: plan.software==='python'?(plan.method==='ols'?'statspai.regress':plan.method==='event_study'?'statspai.event_study':plan.method==='iv_2sls'?'statspai.iv（2SLS）':'statspai.fast.feols'):plan.software==='stata'?'Stata regress/xtreg':'fixest::feols' }],
         };
         await env.FILES.put(key, body.text);
         try {
@@ -487,8 +540,17 @@ export function reportMarkdown(job) {
   lines.push(`- 执行资料版本：${job.research_revision ?? '历史未记录'}；导出版本：${job.record_version || 1}`,`- 重跑核对：${job.verification?.status || 'not_checked'}`);
   lines.push(`- 原始文件 SHA-256：${job.source_sha256||'历史未记录'}`,`- 规范化数据 SHA-256：${job.canonical_sha256||job.input_sha256}`,`- 导入版本：${job.import_version||'历史未记录'}`,`- 对应代码 SHA-256：${job.corresponding_code?.sha256||'历史未记录'}`);
   if(job.result){
-    const main=job.result.coefficients.find(row=>row.term!=='(Intercept)')||job.result.coefficients[0];
-    lines.push('', '## 本案例能证明什么', `- 在已确认样本与模型下，${main.term} 的估计为 ${main.estimate}（95% 区间 [${main.ci_low}, ${main.ci_high}]）；实际估计样本 ${job.result.n_used} 行。${job.plan.method==='did'?'该系数表示处理组相对对照组在政策后的额外变化。':''}`, '- 输入、方案、对应代码和执行版本都有哈希记录，可按复现包独立核对。', '', '## 本案例不能证明什么', '- 不能仅凭该系数断言政策因果效应：平行趋势、同期冲击、无提前反应等识别条件尚未验证。', '- 不能把结果外推到样本外单位、其他时期或其他政策环境。', '- 统计显著不等于经济显著，也不等于政策有效。');
+    const main=job.result.att?{term:'ATT',...job.result.att}:(job.result.coefficients.find(row=>row.term!=='(Intercept)')||job.result.coefficients[0]);
+    lines.push('', '## 本案例能证明什么', `- 在已确认样本与模型下，${main.term} 的估计为 ${main.estimate}（95% 区间 [${main.ci_low}, ${main.ci_high}]）；实际估计样本 ${job.result.n_used} 行。${job.plan.method==='did'?'该系数表示处理组相对对照组在政策后的额外变化。':''}`, '- 输入、方案、对应代码和执行版本都有哈希记录，可按复现包独立核对。', '', '## 本案例不能证明什么', '- 不能仅凭该系数断言政策因果效应：识别条件尚未全部验证。', '- 不能把结果外推到样本外单位、其他时期或其他政策环境。', '- 统计显著不等于经济显著，也不等于政策有效。');
+    if(job.result.event_study){
+      const pre=job.result.event_study.pretrend||{};
+      lines.push('', '## 事件研究与预趋势', `- ATT：${job.result.att.estimate}（95% 区间 [${job.result.att.ci_low}, ${job.result.att.ci_high}]）。`, `- 预趋势联合检验：F=${pre.statistic}，p=${pre.p_value}。`, '- 基期不进入系数表；预趋势不显著不等于平行趋势成立。');
+    }
+    if(job.result.iv_diagnostics){
+      const d=job.result.iv_diagnostics;
+      if(d.status==='unavailable')lines.push('', '## 工具变量诊断', `- 诊断未返回：${d.reason||'未知原因'}。`, '- 工具外生性仍需由研究设计论证。');
+      else lines.push('', '## 工具变量诊断', `- 第一阶段 F：${d.first_stage_f}；有效 F：${d.effective_f}。`, `- KP rk LM：${d.kp_rk_lm}；AR 95% 置信集：${d.ar_ci?`[${d.ar_ci[0]}, ${d.ar_ci[1]}]`:'未记录'}。`, '- 外生性不可由数据检验；2SLS 系数解释为工具变量识别下的局部效应（LATE）。');
+    }
   }
   if(job.stale)lines.push('> 当前研究资料已修改；以下为历史方案与执行结果。');
   lines.push('', '## 执行前资料与来源状态');
@@ -647,6 +709,11 @@ export async function syncCloudJob(env,job,session){
       if(job.corresponding_code&&remote.artifacts?.['stata-corresponding.do']!==job.corresponding_code.code)throw new Error('计算后的教学代码与核对方案时不一致。');
       if(!Number.isInteger(r.n_used)||r.n_used<1||r.n_used>job.n_rows||!Array.isArray(r.coefficients)||!r.coefficients.length||r.coefficients.length>15||r.coefficients.some(c=>!['estimate','std_error','p_value','ci_low','ci_high'].every(k=>Number.isFinite(c[k]))))throw new Error('执行节点结果格式无效。');
       if(!Array.isArray(r.used_indices)||r.used_indices.length!==r.n_used||new Set(r.used_indices).size!==r.n_used||r.used_indices.some(i=>!Number.isInteger(i)||i<1||i>job.n_rows))throw new Error('执行节点样本索引无效。');
+      if(job.plan.method==='event_study'){
+        if(!r.att||!['estimate','std_error','p_value','ci_low','ci_high'].every(k=>Number.isFinite(r.att[k])))throw new Error('执行节点未返回可用的 ATT。');
+        if(!r.event_study?.pretrend||!Number.isFinite(r.event_study.pretrend.statistic)||!(r.event_study.pretrend.p_value===null||Number.isFinite(r.event_study.pretrend.p_value)))throw new Error('执行节点未返回预趋势检验。');
+      }
+      if(job.plan.method==='iv_2sls'&&r.iv_diagnostics&&r.iv_diagnostics.status!=='unavailable'&&!Number.isFinite(r.iv_diagnostics.effective_f))throw new Error('执行节点工具变量诊断无效。');
       r.audit={missing_removed_csv_lines:job.missing_lines,used_indices:r.used_indices,model_removed_count:job.n_rows-job.missing_lines.length-r.n_used,model_removed_csv_lines:job.csv_lines.filter((line,i)=>!r.used_indices.includes(i+1)&&!job.missing_lines.includes(line))};
       job.result=r;job.completed=remote.completed;job.node_artifacts=Object.fromEntries(Object.entries(remote.artifacts||{}).filter(([k,v])=>/^(estimate\.(R|do|py)|stata-corresponding\.(do|json)|parameters\.json|execution\.log|session-info\.txt|full-coefficients\.csv|sample\.csv)$/.test(k)&&typeof v==='string'));
       job.result_origin=`${locationLabel(job)}执行节点返回；网站校验归属、快照与格式，未另行复算。`;
