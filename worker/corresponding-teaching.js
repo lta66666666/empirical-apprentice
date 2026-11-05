@@ -17,7 +17,7 @@ export async function correspondingReference(env,owner,state,ref){
   vce:plan.vcov==='cluster'?'本方案采用单向聚类标准误，聚类字段为 '+plan.cluster+'。':plan.vcov==='hetero'?'此OLS的vce(robust)是异方差稳健标准误。':'本方案采用常规方差估计。',
   command:command.topic==='estimate'?'这条命令对应当前已核对的模型结构；它不会因阅读而执行。':({import:'读取复现包中的规范化CSV。',numeric:'把选定数值字段转换成数值；异常字符会报错，不会猜作零。',missing:'按方案处理选定变量的缺失；无关字段不影响样本。',sample:'检查可用样本数量。',xtset:'声明个体和年度结构，不会自动估计模型。',post:'按已确认年份定义政策后时期。',interaction:'生成处理组与政策后的交互项。',cluster:'生成数值聚类编号，不改变原组别含义。',panel:'生成数值个体编号，原编号含义不变。'}[command.topic]||'本条属于对应代码的数据准备步骤。')};
  const dictionary=task?.dictionary||state.variable_dictionary||{};
- const engine=task?.engine_id||plan.engine_id;const software=engine==='browser_webr'?'浏览器 R / fixest':engine==='statspai_cloud'?'Python / StatsPAI':task?.software||plan.software||'软件未记录';
+ const engine=task?.engine_id||plan.engine_id;const software=engine==='browser_webr'?'浏览器 R / fixest':engine==='statspai_cloud'?'云端计算（Stata 命令语法）':task?.software||plan.software||'软件未记录';
  const execution=task?(task.status==='succeeded'?'本次由 '+software+' 完成计算。':task.status==='failed'?'本次 '+software+' 计算未完成。':'本次任务使用 '+software+'，尚无完成结果。'):'本方案拟使用 '+software+'，尚未执行。';
  let summary=definitions[part];
  if(focus==='sample')summary='本次估计使用 '+result.n_used+' 行。输入行数与估计样本可能不同，删除原因见样本记录。';

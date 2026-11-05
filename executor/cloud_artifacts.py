@@ -5,7 +5,7 @@ import json
 def teaching(plan):
     method=plan['method']; rhs=' '.join(plan['predictors'])
     vce={'iid':'','hetero':'vce(robust)','cluster':f"vce(cluster {plan.get('cluster','')})"}[plan['vcov']]
-    lines=['version 18.0','* Stata 对应代码：本任务由 Python/StatsPAI 计算；本脚本未在云端执行。',
+    lines=['version 18.0','* 对应代码：本任务已由云端计算执行；本脚本本身未在云端运行。',
            '* 输入为复现包 normalized.csv；字段映射见对应代码说明。',
            'clear all','set more off','set varabbrev off','capture log close _all','log using stata-replay.log, text replace',
            'import delimited using normalized.csv, varnames(1) stringcols(_all) clear','generate long ea_row = _n']
@@ -51,8 +51,8 @@ def teaching(plan):
                  'sha256':hashlib.sha256(text.encode()).hexdigest(),'labels':plan['labels'],
                  'commands':commands,'mapping':[{'alias':k,'name':v} for k,v in plan['labels'].items()],
                  'derived':[{'alias':'policy_post','sources':[plan.get('time')]},{'alias':'policy_effect','sources':[plan.get('treated'),'policy_post']}] if method=='did' else [],
-                 'core_command_id':'line-'+str(main_line),'core_command':command,'differences':['对应模型结构；Python 与 Stata 的有限样本调整、共线项及缺失处理必须分别核对。',
-                   '固定效应使用 StatsPAI native feols ssc=fixest；聚类推断采用 t(G−1)，不承诺与 xtreg 数值完全相同。']}
+                 'core_command_id':'line-'+str(main_line),'core_command':command,'differences':['对应模型结构；云端内核与 Stata 的有限样本调整、共线项及缺失处理必须分别核对。',
+                   '固定效应聚类推断采用 t(G−1) 自由度；与 xtreg 可能存在的细微差异需在报告中对核。']}
 
 def artifacts(plan,script,result,log):
     text,manifest=teaching(plan)

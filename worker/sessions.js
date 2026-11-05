@@ -196,7 +196,7 @@ async function learningMarkdown(env, state) {
   lines.push('', '## 自动保存草稿（未提交，不作为已完成成果）');
   lines.push('', '## 边分析边学习 · 持久对话');
   for(const message of await practicalMessages(env,state.owner_id,state.session_id))lines.push(`- ${message.role}：${message.content}\n  检索材料：${JSON.stringify(message.retrieval||[])}`);
-  lines.push('', '## 本机计算（Stata / StatsPAI） · 本机批准执行，云端未独立复算');
+  lines.push('', '## 本机计算（Stata） · 本机批准执行，云端未独立复算');
   for(const task of await localTasks(env,state.owner_id,state.session_id)){
     lines.push(`### ${task.id} · ${task.status}`,`- 导出版本 ${task.record_version}；输入哈希 ${task.input_sha256}；代码哈希 ${task.code_sha256||'待批准'}；执行资料版本 ${task.research_revision}`,`- 方案与来源快照：${JSON.stringify(task.evidence_snapshot)}；变量字典：${JSON.stringify(task.dictionary)}`,`- 原始输入及完整日志保存在本机，不包含在网站导出中。`);
     if(task.result)lines.push(sampleEvidenceText(task),`- 实际结果：${JSON.stringify(task.result)}`);

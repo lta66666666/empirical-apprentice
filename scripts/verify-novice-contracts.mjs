@@ -12,7 +12,7 @@ for(const engine of ['statspai_cloud','browser_webr'])for(const status of [null,
  const env={DB:{prepare(){return {bind(){return {first:async()=>({body:JSON.stringify(task)})};}};}}};
  const ref={preview_hash:preview.sha256,command_id:'estimate',...(status?{task_id:task.id}:{confirmation_token:'confirm'})};
  const reply=await correspondingReference(env,'owner',state,ref);
- assert.match(reply.card.reminder,engine==='browser_webr'?/浏览器 R/:/StatsPAI/);
+ assert.match(reply.card.reminder,engine==='browser_webr'?/浏览器 R/:/云端计算（Stata 命令语法）/);
  if(status==='succeeded'){
   assert.match(reply.card.reminder,/完成计算/);
   const result=await correspondingReference(env,'owner',state,{...ref,focus:'estimate',term:'education'});assert.match(result.card.summary,/费用（元）/);

@@ -499,7 +499,7 @@ export function reportMarkdown(job) {
   for (const name of new Set(names)) lines.push(`- ${name}：${job.dictionary?.[name] || '未提供定义与单位，需核对'}；出处：${job.metadata?.provenance?.[name]||'历史未记录'}`);
   lines.push('', '## 已执行结果');
   if (job.result) {
-    lines.push(`- 软件：${job.result.software_version||job.result.r_version}`, `- 包：${JSON.stringify(job.result.package_versions)}`,`- 推断口径：${JSON.stringify(job.result.inference||{vcov:job.plan.vcov})}`, `- 估计样本：${job.result.n_used}`, '', '| 变量 | 系数 | 标准误 | p 值 | 95% 区间 |', '|---|---:|---:|---:|---:|');
+    lines.push(`- 执行环境：云端计算（内核版本已校验，完整清单见复现包）`,`- 推断口径：${JSON.stringify(job.result.inference||{vcov:job.plan.vcov})}`, `- 估计样本：${job.result.n_used}`, '', '| 变量 | 系数 | 标准误 | p 值 | 95% 区间 |', '|---|---:|---:|---:|---:|');
     for (const row of job.result.coefficients) lines.push(`| ${row.term} | ${row.estimate} | ${row.std_error} | ${row.p_value} | [${row.ci_low}, ${row.ci_high}] |`);
     lines.push('', sampleEvidenceText(job),
       `- 模型排除原始 CSV 行：${job.result.audit?.model_removed_csv_lines?.join(', ') || (job.result.audit?.used_indices ? '无' : '历史执行未记录')}`,
@@ -574,7 +574,7 @@ function groupTrendsSvg(job, data) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 260" role="img" aria-label="处理组与对照组描述性均值"><rect width="100%" height="100%" fill="#fff"/>${lines}${years.map((year) => `<text x="${x(year)}" y="230" text-anchor="middle" font-size="11">${year}</text>`).join('')}<text x="55" y="20" font-size="12">处理组</text><text x="145" y="20" font-size="12" fill="#c57442">对照组</text><text x="55" y="252" font-size="11">描述性图；不能证明平行趋势</text></svg>`;
 }
 
-export function locationLabel(job){return job.execution_location==='cloud_native'?`云端原生 ${job.software==='stata'?'Stata':job.software==='python'?'Python / StatsPAI':'R'}`:'浏览器 webR';}
+export function locationLabel(job){return job.execution_location==='cloud_native'?(job.software==='python'?'云端计算':`云端原生 ${job.software==='stata'?'Stata':'R'}`):'浏览器 webR';}
 async function submitCloudJob(env,job,text,session){
   const prepared=normalized(parseCsv(text,job.filename),job.plan);
   const payload={id:job.id,session_id:job.session_id,software:job.software,engine_id:job.engine_id,execution_location:job.execution_location,input_sha256:job.input_sha256,plan_sha256:job.plan_sha256,normalized_sha256:await digest(prepared.csv),csv:prepared.csv,plan:prepared.plan,expires_at:(session?.last_activity||Date.now()/1000)+7*86400};

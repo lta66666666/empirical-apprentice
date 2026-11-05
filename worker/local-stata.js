@@ -82,7 +82,7 @@ export function validResult(value,task,secondary=false){
 export async function handleLocalStata(request,env,owner,path){
   if(!path.startsWith('/api/local-stata/'))return null;
   // 教学专用模式：保留既有任务与代码的只读能力，关闭配对与助手执行入口。
-  if(env.STATA_TEACHING_ONLY==='true'&&(/^\/api\/local-stata\/agent\//.test(path)||path==='/api/local-stata/pairings/claim'))return fail('本站仅保留对应 Stata 代码教学，不执行 Stata；请改用云端 Python 计算。',403);
+  if(env.STATA_TEACHING_ONLY==='true'&&(/^\/api\/local-stata\/agent\//.test(path)||path==='/api/local-stata/pairings/claim'))return fail('本站仅保留对应 Stata 代码教学，不执行 Stata；请改用云端 Stata 教学环境计算。',403);
   try{
     const limit=path.endsWith('/publish')?512000:100000;
     if(Number(request.headers.get('Content-Length')||0)>limit)return fail('请求过大。',413);

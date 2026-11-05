@@ -1,5 +1,5 @@
 export const engineMetadata = {
-  statspai_cloud:{software:'python',execution_location:'cloud_native',label:'云端计算'},
+  statspai_cloud:{software:'python',execution_location:'cloud_native',label:'云端计算（Stata 命令语法）'},
   r_native:{software:'r',execution_location:'cloud_native',label:'云端原生 R'},
   browser_webr:{software:'r',execution_location:'browser_webr',label:'浏览器 webR'},
   stata_native:{software:'stata',execution_location:'cloud_native',label:'云端 Stata'},

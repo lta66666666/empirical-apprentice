@@ -41,7 +41,7 @@ async def capabilities():
     from .statspai_runner import pinned_versions
     try:
         versions=pinned_versions()
-        stats={'ready':True,'status':'可执行','reason':'StatsPAI 受控云端计算','versions':versions,'methods':['ols','panel_fe','did']}
+        stats={'ready':True,'status':'可执行','reason':'云端计算（Stata 命令语法），受控执行','versions':versions,'methods':['ols','panel_fe','did']}
     except Exception as error:
         stats={'ready':False,'status':'依赖待验收','reason':f'依赖检查失败：{type(error).__name__}: {error}'}
     r={'ready':False,'status':'未配置','reason':'尚未安装原生 R'}
@@ -54,7 +54,7 @@ async def capabilities():
             ready=versions=={'r':R_VERSION_PIN,'fixest':FIXEST_VERSION_PIN}
             r={'ready':ready,'status':'可执行' if ready else '环境待验收','reason':f'原生 R {R_VERSION_PIN} / fixest {FIXEST_VERSION_PIN}' if ready else f'必须安装 R {R_VERSION_PIN} 与 fixest {FIXEST_VERSION_PIN}','versions':versions}
         except Exception: r={'ready':False,'status':'环境待验收','reason':'原生 R 运行检查失败'}
-    stata={'ready':False,'status':'仅教学','reason':'仅提供对应 Stata 代码，不在本站执行；计算请使用云端 Python'}
+    stata={'ready':False,'status':'仅教学','reason':'仅提供对应 Stata 代码，不在本站执行；计算请使用云端计算（Stata 命令语法）'}
     return {'statspai_cloud':stats,'r_native':r,'stata_native':stata,'eviews_native':{'ready':False,'status':'未接入','reason':'尚无适用的网站集成方案'}}
 
 def stata_script(p):

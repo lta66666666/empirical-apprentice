@@ -123,7 +123,7 @@ async function eaDownloadPdf(markdownUrl, filename, sourceTarget=null) {
       const imageUrl=URL.createObjectURL(await blobResponse.blob());
       try{await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(new Error('图表渲染失败'));image.src=imageUrl;});
         const canvas=document.createElement('canvas');canvas.width=794;canvas.height=1123;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,794,1123);ctx.fillStyle='#17333d';ctx.font='20px "Microsoft YaHei",sans-serif';ctx.fillText(name==='coefficients.svg'?'系数与95%置信区间':'处理组与对照组描述性均值',58,90);
-        const width=678,height=Math.min(850,width*image.height/image.width);ctx.drawImage(image,58,120,width,height);ctx.font='14px "Microsoft YaHei",sans-serif';ctx.fillText(`${job.execution_location==='cloud_native'?'云端原生 '+(job.software==='stata'?'Stata':job.software==='python'?'StatsPAI / Python':'R'):'浏览器 webR 提交'} · 导出版本 ${job.record_version||1} · 报告未另行复算`,58,1040);pages.push(canvas);
+        const width=678,height=Math.min(850,width*image.height/image.width);ctx.drawImage(image,58,120,width,height);ctx.font='14px "Microsoft YaHei",sans-serif';ctx.fillText(`${job.execution_location==='cloud_native'?'云端计算 '+(job.software==='stata'?'Stata':job.software==='python'?'（Stata 命令语法）':'R'):'浏览器 webR 提交'} · 导出版本 ${job.record_version||1} · 报告未另行复算`,58,1040);pages.push(canvas);
       }finally{URL.revokeObjectURL(imageUrl);}
     }
     const finalCheck=await fetch(`/api/research/jobs/${match[1]}?record_version=${job.record_version||1}`,{credentials:'same-origin'});if(!finalCheck.ok)throw new Error('报告在生成图表期间更新，未导出混合版本，请重试。');
