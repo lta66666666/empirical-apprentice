@@ -8,6 +8,18 @@
  const overview=el('section','analysis-overview');primary.prepend(overview);
  const current=el('section','analysis-current-turn');current.setAttribute('aria-label','当前一轮对话');dock.querySelector('.dock-shortcuts').after(current);
  const guideBar=el('section','analysis-guide');primary.prepend(guideBar);
+ const startCard=el('section','analysis-start');
+ startCard.append(el('span','eyebrow','零基础也能开始'),el('h2','','不用数据，先跑一遍'),el('p','','用 4 城市 DID 示范数据走完：看字段 → 核对方案 → 执行 → 读结果。不需要先懂模型。'),el('div','analysis-start-actions',
+   button('用示范数据跑一次','btn-primary',async()=>{
+     if(!sessionId)await newSession();
+     if(latestState?.stage==='entry')await mutate('entry',{path:'data'});
+     eaSetTask('research');info('正在载入 4 城市 DID 示范数据…');
+     await researchSample('did');eaResearchStep('plan');await researchMakePlan();
+     info('示范数据和方案已准备好。请核对方案，勾选确认后点“确认方案并开始计算”。');
+   }),
+   button('我想用自己的问题，分步带我走','btn-secondary',()=>action({action_id:'guide',command:'start'}))),
+   el('p','workspace-note','也可以直接上传 CSV / TSV，或在下方输入你的研究问题。'));
+ primary.prepend(startCard);
  let lastTaskView='data',localView='data',localMode='analysis',lastSession='',reflection=null,busy=false,latestReply=null,pendingAction=null;
  let answerOpening=false,answerSubmitting=false,answerSequence=0;
  const names={overview:'当前练习',prepare:'研究准备',data:'数据',health:'数据体检',plan:'方案确认',execute:'执行状态',explain:'结果解释',reports:'记录与报告'};
@@ -16,9 +28,12 @@
  const scope=()=>({session:sessionId,account:window.EA_ACCOUNT?.id});
  const same=c=>c.session===sessionId&&c.account===window.EA_ACCOUNT?.id;
  function info(text){status.textContent=text;}
+ function refreshStart(){startCard.hidden=!(localView==='data'&&!researchData&&!researchJob);}
+ window.eaRefreshAnalysisStart=refreshStart;
  function setView(view,mode=localMode){
  if(view!=='reports')lastTaskView=view;localView=view;localMode=mode;window.eaCurrentAnalysisView=view;top.dataset.mode=mode;
  overview.hidden=view!=='overview';
+ refreshStart();
  for(const pane of primary.querySelectorAll(':scope > [role=tabpanel]'))pane.hidden=true;$('pane-preparation').hidden=true;
  if(view==='prepare'){$('pane-preparation').hidden=false;}
  else if(['data','health','plan','execute','explain'].includes(view)){$('pane-research').hidden=false;eaResearchStep(view);}
@@ -141,6 +156,6 @@
  formulaInput.value=eaDraftEntry('analysis-formula').value.formula||'';formulaPreview.textContent=formulaInput.value;if(changed&&data.analysis_workspace?.answer_task){const pending=data.analysis_workspace.answer_task;dock.querySelector('.resume-reflection')?.remove();const resume=button('继续解释草稿','btn-secondary coach-exit resume-reflection',async()=>{await openAnswer(pending);if(reflection)resume.remove();});parts.input.before(resume);}return out;};
  // Resources belong in the upper knowledge area, not an independent drawer.
  for(const b of document.querySelectorAll('.module-toolbar button'))if(b.textContent==='资料与手册')b.onclick=()=>{localMode='knowledge';top.dataset.mode='knowledge';aux.open=true;teaching(latestReply);};
- window.eaOpenAnswer=openAnswer;const previousStep=eaResearchStep;eaResearchStep=function(v){previousStep(v);localView=v;lastTaskView=v;overview.hidden=true;window.eaCurrentAnalysisView=v;for(const pane of primary.querySelectorAll(':scope > [role=tabpanel]'))pane.hidden=pane.id!=='pane-research';eaSaveWorkbenchDraft();};
+ window.eaOpenAnswer=openAnswer;const previousStep=eaResearchStep;eaResearchStep=function(v){previousStep(v);localView=v;lastTaskView=v;overview.hidden=true;window.eaCurrentAnalysisView=v;for(const pane of primary.querySelectorAll(':scope > [role=tabpanel]'))pane.hidden=pane.id!=='pane-research';refreshStart();eaSaveWorkbenchDraft();};
  renderOverview();setView(latestState?.analysis_workspace?.view||'data');if(latestState)eaRestoreTask(latestState,null);
 })();

@@ -106,6 +106,12 @@
 .research-case{position:relative;background:linear-gradient(165deg,#fff 0%,#f3f9f6 100%);border:1px solid #dbe8e4;border-radius:14px;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
 .research-case:hover{transform:translateY(-2px);border-color:#9ccdc2;box-shadow:0 12px 26px #0b3d3a12}
 @media(prefers-reduced-motion:reduce){.ea-ui .course-card,.research-case{transition:none}.ea-ui .course-card:hover,.research-case:hover{transform:none}}
+.analysis-start{margin:0 0 16px;padding:18px 20px;border:1px solid #cfe8e2;border-radius:16px;background:linear-gradient(150deg,#f2faf7,#e8f5f0);box-shadow:0 10px 24px #0b3d3a0a}
+.analysis-start h2{margin:6px 0 8px;font-size:clamp(22px,2.4vw,28px);letter-spacing:-.02em}
+.analysis-start p{margin:0;font-size:14px;line-height:1.75;color:#44615f}
+.analysis-start-actions{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 10px}
+.analysis-start[hidden]{display:none!important}
+.ea-plan-recovery{margin:8px 0 12px}
 .research-actions{display:flex;flex-wrap:wrap;gap:8px}.research-actions a{text-decoration:none;font-size:12px;padding:10px}.research-progress{display:grid;grid-template-columns:repeat(4,1fr);padding:0;list-style:none;gap:5px;font-size:11px;margin:14px 0}.research-progress li{padding:8px 3px;background:#edf0e9;text-align:center;border-radius:5px;color:#718074}.research-progress li.done{background:#d9eee2;color:#155b41}.research-history{margin-top:24px;border-top:1px solid #e2e8e2;padding-top:12px}.research-history-item{display:block;text-align:left;width:100%;border:0;border-radius:8px;background:#f2f6f0;padding:10px;margin:6px 0;font-size:12px;cursor:pointer}.research-reflection{border-top:1px solid #dce8df;padding-top:18px;margin-top:22px}
 @media(max-width:1100px){.layout.research-focus{grid-template-columns:170px minmax(0,1fr)}.research-grid{grid-template-columns:1fr}.research-cases{grid-template-columns:1fr 1fr 1fr}.research-input,.research-output{padding:16px}}
 @media(max-width:980px){.layout.research-focus{grid-template-columns:minmax(0,1fr)}.layout.research-focus .side-panel{grid-column:1}}

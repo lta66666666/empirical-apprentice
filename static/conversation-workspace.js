@@ -32,21 +32,22 @@
  let history=[],shown=8,lastReply=null,lastRendered='',queryBusy=false,dataEpoch=0,lastSession='',knowledgeSignature='',paintedIds=[],rows=new Map(),staleQuestions=new Set();
  let workspaceNavigation=0;let restoredViewSession=null;let demoRequest=null,demoBusy=false,contextCard=null,contextIdentity='',autoOperationKey='';
  const demoPanel=el('section','coach-demo');
- async function startDemo(fixtureId='did'){
+ async function startDemo(fixtureId='did',force=false){
   if(demoBusy)return;demoBusy=true;const previous=sessionId,account=window.EA_ACCOUNT?.id;demoButton.disabled=true;parts.status.textContent='正在保存当前草稿并准备独立示范…';
-  try{if(window.eaBeforeLeave&&!await window.eaBeforeLeave())return;window.eaPreserveInputs?.();window.eaRememberResearchInput?.();if(window.eaFlushAllDrafts&&!await eaFlushAllDrafts(previous))throw Error('当前草稿未保存，请先处理保存错误；原研究保留。');
+  try{if(!force){if(window.eaBeforeLeave&&!await window.eaBeforeLeave())return;window.eaPreserveInputs?.();window.eaRememberResearchInput?.();if(window.eaFlushAllDrafts&&!await eaFlushAllDrafts(previous))throw Error('当前草稿未保存，请先处理保存错误；原研究保留。');}
    if(demoRequest?.fixture_id!==fixtureId)demoRequest={fixture_id:fixtureId,request_id:crypto.randomUUID()};const data=await api('/api/sessions',{method:'POST',body:{...demoRequest,fixture_version:'teaching-fixtures-v1'}});
    if(sessionId!==previous||window.EA_ACCOUNT?.id!==account)return;
    window.eaAnalysisEngine='statspai_cloud';renderState(data);await window.eaWorkbenchRestoration;eaSetTask('research');demoRequest=null;paintFeed();paintMaterials();parts.status.textContent=researchNames[fixtureId]+'示范已完整载入；请先核对方案，尚未执行。';
   }catch(error){parts.status.textContent='示范未就绪：'+error.message+'。原练习与输入保留，请重试。';}finally{demoBusy=false;demoButton.disabled=false;}
  }
  const demoButton=button('一键体验同批 DID','btn-primary',()=>startDemo('did'));
+ window.eaStartDemo=startDemo;
  async function reviewDemo(){if(!researchData){parts.status.textContent='正在恢复模拟数据，请稍候再核对。';return;}window.eaAnalysisEngine='statspai_cloud';openController('plan','核对模拟方案');await researchMakePlan();}
  function showDemo(){demoPanel.replaceChildren();const f=latestState?.demo_fixture;
   const task=!['stata_local_mcp','statspai_local'].includes(window.eaAnalysisEngine)?researchJob:(window.eaCurrentLocalTasks||[]).find(t=>t.id===window.eaSelectedTask?.id);
   if(f&&task?.session_id===sessionId){if(autoOperationKey!==sessionId+task.id&&!latestState?.research_drafts?.['workspace-view']?.value?.collapsed){autoOperationKey=sessionId+task.id;const current=sessionId;queueMicrotask(()=>{if(sessionId===current&&review.hidden)openController('execute','分析结果与对应代码');});}demoPanel.append(el('h1','','本次模拟分析'),el('p','muted',task.status==='succeeded'?'计算已完成，请对照真实结果继续学习。':['running','queued'].includes(task.status)?'任务正在处理，请查看实际状态；没有自动开始另一任务。':'请按当前任务提示继续；不会自动执行或上传。'));if(!['stata_local_mcp','statspai_local'].includes(window.eaAnalysisEngine))demoPanel.append(button('查看当前任务','text-btn',()=>openController('execute','分析结果与对应代码')));return;}
-  if(f){demoPanel.append(el('h1','',researchNames[f.fixture_id]+' · 完整模拟示范'),el('p','',f.fixture_id==='ols'?'160个模拟观察对象':f.fixture_id==='did'?'48个模拟城市 · 2014–2021年 · 2018年同批实施':'48个模拟城市 · 2014–2021年'),el('p','muted','数据、字段、字典和方案已填入；仅用于教学，不对应真实个人、城市或政策，尚未执行。'),button('核对方案','btn-primary',reviewDemo),button('改用本机 Stata','text-btn',()=>openController('data','连接本机 Stata，准备模拟数据',true)));}
-  else demoPanel.append(el('h1','','你想研究什么？'),el('p','coach-welcome','直接告诉我你的目标；也可以先用完整模拟案例体验。'),demoButton,el('p','muted','新建独立示范，保留你的当前研究；核对后才会计算。'));
+  if(f){demoPanel.append(el('h1','',researchNames[f.fixture_id]+' · 完整模拟示范'),el('p','',f.fixture_id==='ols'?'160个模拟观察对象':f.fixture_id==='did'?'48个模拟城市 · 2014–2021年 · 2018年同批实施':'48个模拟城市 · 2014–2021年'),el('p','muted','数据、字段、字典和方案已填入；仅用于教学，不对应真实个人、城市或政策，尚未执行。'),button('核对方案','btn-primary',reviewDemo),button('改用本机 Stata','text-btn',()=>openController('data','连接本机 Stata，准备模拟数据',true)),el('p','coach-steps','下一步：点“核对方案” → 勾选确认 → 点“确认方案并开始计算”。'));}
+  else demoPanel.append(el('h1','','你想研究什么？'),el('p','coach-welcome','直接告诉我你的目标；也可以先用完整模拟案例体验。'),demoButton,el('p','muted','新建独立示范，保留你的当前研究；核对后才会计算。'),el('p','coach-steps','零基础路径：点示范 → 核对方案 → 确认后计算'),button('分步带我走','text-btn',async()=>{await window.eaPerformAnalysisAction?.({action_id:'guide',command:'start'});paintGuide();}));
  }
  const earlier=button('更早对话','text-btn coach-earlier',()=>{const height=stream.scrollHeight,position=stream.scrollTop;shown+=10;paintFeed({older:true,height,position});});
  const newest=button('查看最新回复','text-btn coach-newest',()=>{stream.scrollTop=stream.scrollHeight;newest.hidden=true;});newest.hidden=true;center.insertBefore(newest,dock);

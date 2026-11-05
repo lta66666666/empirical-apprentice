@@ -50,7 +50,7 @@ function researchField(id,title,type='select'){
   l.append(n);return l;
 }
 function researchNotice(text,error=false){$('researchNotice').textContent=text;$('researchNotice').classList.toggle('is-error',error);$('researchNotice').classList.toggle('ea-restore-note',text.startsWith('已恢复'));}
-function researchInvalidate(){researchConfigEpoch++;researchPendingSubmission=null;researchPlan=null;$('researchConfirm').checked=false;$('researchRun').disabled=true;$('researchPlanCard').replaceChildren(el('p','muted','参数或数据已变化，请重新整理方案。'));if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}
+function researchInvalidate(){researchConfigEpoch++;researchPendingSubmission=null;researchPlan=null;$('researchConfirm').checked=false;$('researchRun').disabled=true;$('eaPlanRecovery')?.remove();$('researchPlanCard').replaceChildren(el('p','muted','参数或数据已变化，请重新整理方案。'));if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}
 function researchCandidate(){
   const method=$('researchMethod').value;
   return {method,engine_id:$('researchEngine').value,outcome:$('researchOutcome').value,predictors:[...document.querySelectorAll('#researchPredictors input:checked')].map(n=>n.value),
@@ -82,6 +82,7 @@ function researchSetFields(profile,preset={}){
   $('researchProfile').replaceChildren(el('strong','',`${profile.row_count} 行 · ${profile.columns.length} 列`));
   for(const c of profile.columns)$('researchProfile').append(el('span','research-chip',`${c.name} · ${c.numeric?'数值':'文本'} · 缺失 ${c.missing}`));
   researchMethodChange(false);researchInvalidate();researchOfferPreparation();
+  if(typeof window.eaRefreshAnalysisStart==='function')window.eaRefreshAnalysisStart();
   if(typeof eaRenderDictionary==='function')eaRenderDictionary();
 }
 function researchMethodChange(invalidate=true,methodChanged=false){
@@ -205,6 +206,7 @@ async function researchSample(name){
   finally{if(researchContextCurrent(context,false)){researchInputBusy=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}
 }
 function researchRenderPlan(answer){
+  $('eaPlanRecovery')?.remove();
   researchPlan=answer;const box=$('researchPlanCard');box.replaceChildren(el('span','section-kicker','02 核对方案'),el('h3','',answer.description.label),el('code','research-formula',answer.description.formula),el('p','',answer.description.meaning),el('p','',`请核实：${answer.description.checks}`),el('p','muted',answer.note));
   if(answer.confirmation?.corresponding_code&&window.eaCorrespondingCard)box.append(eaCorrespondingCard(answer.confirmation.corresponding_code,{confirmation_token:answer.confirmation.token}));
   const p=answer.plan;box.append(el('p','workspace-note',`执行软件与位置：${p.engine_id==='browser_webr'?'浏览器 webR':p.software==='stata'?'云端原生 Stata':p.software==='python'?'云端计算（Stata 命令语法）':'云端原生 R'}；切换引擎须重新确认。`));box.append(el('p','',`标准误：${p.vcov}${p.cluster?'；聚类列：'+p.cluster:''}。缺失处理：${p.missing==='drop'?'删除选定变量不完整的行，并记录行号':'有缺失则停止'}。`));
@@ -232,7 +234,20 @@ async function researchMakePlan(){
     const a=await api(`/api/sessions/${context.session}/research/plan`,{method:'POST',body:snapshot});
     if(!researchContextCurrent(context)){if(context.session===sessionId)researchNotice('参数、数据或资料已经变化，旧方案回复已丢弃。请重新整理。');return;}
     researchRenderPlan(a);researchPlan.context=researchContext();
-  }catch(e){if(context.session===sessionId)researchNotice(e.message,true);}finally{if(operation===researchOperationEpoch){researchRunning=false;$('researchMakePlan').disabled=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}
+  }catch(e){
+    if(context.session===sessionId)researchNotice(e.message,true);
+    if(context.session===sessionId&&latestState?.demo_fixture){
+      let recovery=$('eaPlanRecovery');
+      if(!recovery){recovery=el('div','ea-plan-recovery');recovery.id='eaPlanRecovery';$('researchNotice').after(recovery);}
+      recovery.replaceChildren(button('恢复示范方案并重新整理','btn-secondary',async()=>{
+        if(researchRunning)return;const fixture=latestState?.demo_fixture;if(!fixture)return;recovery.remove();
+        if(typeof window.eaStartDemo==='function'){await window.eaStartDemo(fixture.fixture_id,true);return;}
+        if(researchProfileCache&&researchData){researchSetFields(researchProfileCache,{...fixture.plan,engine_id:'statspai_cloud'});researchInvalidate();}
+        else await researchSample(fixture.fixture_id);
+        eaResearchStep('plan');await researchMakePlan();
+      }));
+    }
+  }finally{if(operation===researchOperationEpoch){researchRunning=false;$('researchMakePlan').disabled=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}
 }
 async function researchAskModel(){
   if(!researchData||!sessionId){researchNotice('请先载入数据，在线模型只会收到列摘要。',true);return;}

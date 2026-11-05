@@ -96,3 +96,6 @@ body.coach-minimal>div[role=status]{display:none!important}
 
 /* Current operation stays beside the conversation input, without a modal layer. */
 .coach-current-operation{box-sizing:border-box;width:100%;max-width:100%;max-height:58dvh;min-height:0;flex:0 1 auto;border:0;border-top:1px solid #dce8e4;border-radius:0;padding:16px;overflow:auto}.coach-current-operation[hidden]{display:none!important}.coach-current-operation:not([hidden])~.analysis-dock{flex-shrink:0}.coach-current-operation h2{font-size:18px;margin:0 0 8px}.coach-current-operation .researchRuntime{display:none}.coach-current-operation .ea-inline-lesson{background:#f5f9f7;padding:12px}.coach-center:has(.coach-current-operation:not([hidden])) .coach-feed{min-height:70px;flex:1 1 100px}@media(max-width:959px){.coach-current-operation{padding:12px;max-height:52dvh}}
+
+/* Zero-basis path hint in the coach welcome/demo card. */
+.coach-steps{font-size:12px;line-height:1.65;color:#6b8781;letter-spacing:.01em;margin:4px 0 2px}
