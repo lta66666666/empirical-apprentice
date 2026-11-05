@@ -83,7 +83,7 @@ function eaResearchStep(step){
   stepper.querySelectorAll('button').forEach(b=>b.setAttribute('aria-current',b.dataset.step===step?'step':'false'));
   const allowed={data:['data'],health:['health'],plan:['plan'],execute:['execute'],explain:['explain']}[step];
   document.querySelectorAll('[data-research-stage]').forEach(n=>n.classList.toggle('ea-stage-hidden',!allowed.includes(n.dataset.researchStage)));
-  if(step==='health'){eaRenderDictionary();eaRenderDataExplorer();}
+  if(step==='health'){eaRenderDictionary();eaRenderDataExplorer();eaRenderDataHealth();}
   eaUpdateStepAction();
   if(eaTask==='research'&&previousStep!==step)stepper.scrollIntoView({block:'start',behavior:learningMotionReduced()?'auto':'smooth'});
 }
@@ -145,5 +145,42 @@ function eaRenderDataExplorer(){
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 420 200');svg.setAttribute('role','img');svg.setAttribute('aria-label','现有模拟数据的观测点，无拟合线');
     for(const [vx,vy]of pairs){const c=document.createElementNS(svg.namespaceURI,'circle');c.setAttribute('cx',String(25+(vx-xmin)/(xmax-xmin||1)*370));c.setAttribute('cy',String(175-(vy-ymin)/(ymax-ymin||1)*150));c.setAttribute('r','4');c.setAttribute('fill','#087e75');svg.append(c);}plot.append(svg);
     info.textContent=`横轴：${method==='panel_fe'?'year':select.value}；纵轴：${headers[y]}。${method==='panel_fe'?`城市 ${select.value} 的 ${pairs.length} 个观测点；固定效应仍不能排除随时间变化的混杂。`:'仅展示前 40 行观测，未控制其他变量，不能由散点推断因果。'}`;};select.onchange=draw;draw();
+}
+const healthPanel=el('section','ea-data-health');healthPanel.id='eaDataHealth';mark(healthPanel,'health');document.querySelector('.research-input').append(healthPanel);
+function eaRenderDataHealth(){
+  const root=$('eaDataHealth');if(!root)return;
+  root.replaceChildren();
+  const profile=researchProfileCache;
+  if(!profile){root.append(el('p','workspace-note','载入数据后，这里会显示缺失率与面板覆盖。'));return;}
+  const p=researchCandidate(),selected=[...new Set([p.outcome,...p.predictors,p.unit,p.time,p.treated,p.cluster].filter(Boolean))];
+  root.append(el('h3','','数据体检图'),el('p','workspace-note','缺失率按当前选定变量统计；面板覆盖只表示观测是否存在，不代表数值质量。'));
+  const bars=el('div','ea-missing-bars');
+  for(const name of selected){
+    const column=profile.columns.find(item=>item.name===name);if(!column)continue;
+    const rate=profile.row_count?column.missing/profile.row_count:0;
+    const row=el('div','ea-missing-row'),label=el('span','ea-missing-name',name),track=el('span','ea-missing-track'),fill=el('span','ea-missing-fill');
+    fill.style.width=`${rate?Math.max(2,rate*100).toFixed(1):0}%`;track.append(fill);
+    row.append(label,track,el('span','ea-missing-value',`${column.missing} 缺失 · ${(rate*100).toFixed(1)}%`));bars.append(row);
+  }
+  root.append(bars);
+  if(p.method==='ols'){root.append(el('p','workspace-note','面板覆盖图只在固定效应或 DID 方案下生成。'));return;}
+  if(!p.unit||!p.time){root.append(el('p','resource-caution','请先选择个体列与年份列，才能生成面板覆盖图。'));return;}
+  if(!researchData?.text){root.append(el('p','workspace-note','当前数据没有可读的原始文本，未生成面板覆盖图。'));return;}
+  if(typeof window.eaParseCsv!=='function'){root.append(el('p','workspace-note','数据解析组件尚未就绪，请刷新后重试。'));return;}
+  let parsed;try{parsed=window.eaParseCsv(researchData.text,researchData.filename);}catch(error){root.append(el('p','resource-caution','面板覆盖图未生成：'+error.message));return;}
+  const ui=parsed.headers.indexOf(p.unit),ti=parsed.headers.indexOf(p.time);
+  if(ui<0||ti<0){root.append(el('p','resource-caution','数据中找不到所选个体列或年份列。'));return;}
+  const units=new Set(),years=new Set(),present=new Set();
+  for(const row of parsed.rows){const unit=String(row[ui]).trim(),year=String(row[ti]).trim();if(!unit||!year)continue;units.add(unit);years.add(year);present.add(unit+'|'+year);}
+  const yearList=[...years].sort((a,b)=>(Number(a)-Number(b))||a.localeCompare(b));
+  const unitList=[...units].sort().slice(0,30);
+  const total=units.size*yearList.length,shown=present.size;
+  const complete=[...units].filter(unit=>yearList.every(year=>present.has(unit+'|'+year))).length;
+  root.append(el('p','',`面板覆盖：${units.size} 个单位 × ${yearList.length} 个年份；已观测 ${shown} 格（${total?(shown/total*100).toFixed(1):'0.0'}%），缺格 ${Math.max(0,total-shown)} 个；完整覆盖单位 ${complete} / ${units.size}。`));
+  const wrap=el('div','ea-panel-grid'),table=el('table'),head=el('tr');head.append(el('th','','个体 \\ 年份'));
+  for(const year of yearList)head.append(el('th','',year));table.append(head);
+  for(const unit of unitList){const row=el('tr');row.append(el('th','',unit));for(const year of yearList){const cell=el('td'),dot=el('span','ea-panel-cell '+(present.has(unit+'|'+year)?'present':'absent'));dot.title=`${unit} · ${year}：${present.has(unit+'|'+year)?'有观测':'无观测'}`;cell.append(dot);row.append(cell);}table.append(row);}
+  wrap.append(table);root.append(wrap);
+  root.append(el('p','workspace-note',`${units.size>30?`仅显示前 30 个单位（共 ${units.size} 个）；`:''}缺格可能是尚未实施或未采集，需结合研究设计判断，不能自动当作错误。`));
 }
 eaSetTask('learn');eaResearchStep('data');

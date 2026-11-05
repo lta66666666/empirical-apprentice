@@ -82,6 +82,7 @@ function researchMethodChange(invalidate=true,methodChanged=false){
   $('researchClusterWrap').hidden=$('researchVcov').value!=='cluster';
   if(invalidate)researchInvalidate();
   researchRenderLesson();
+  if(typeof eaRenderDataHealth==='function')eaRenderDataHealth();
 }
 
 function researchDidLesson(root){
