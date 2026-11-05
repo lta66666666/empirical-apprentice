@@ -27,14 +27,20 @@ const server=http.createServer(async(req,res)=>{
       if(!/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/.test(name)){res.writeHead(404);res.end();return;}
       const file=resolve(WEBR_DIR,name);
       if(!file.startsWith(WEBR_DIR)){res.writeHead(404);res.end();return;}
+      let served=file,encoding=null;
+      if(name.endsWith('.wasm')&&(req.headers['accept-encoding']||'').includes('gzip')){
+        try{const info=await stat(file+'.gz');if(info.isFile()){served=file+'.gz';encoding='gzip';}}catch{}
+      }
       try{
-        const info=await stat(file);if(!info.isFile())throw Error('not a file');
+        const info=await stat(served);if(!info.isFile())throw Error('not a file');
         const type=name.endsWith('.mjs')||name.endsWith('.js')?'text/javascript':name.endsWith('.wasm')?'application/wasm':'application/octet-stream';
-        res.writeHead(200,{'Content-Type':type,'Content-Length':info.size,'Cache-Control':'public, max-age=86400',
+        const headers={'Content-Type':type,'Content-Length':info.size,'Cache-Control':'public, max-age=86400',
           'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp',
-          'Cross-Origin-Resource-Policy':'same-origin','X-Content-Type-Options':'nosniff'});
+          'Cross-Origin-Resource-Policy':'same-origin','X-Content-Type-Options':'nosniff'};
+        if(encoding){headers['Content-Encoding']='gzip';headers['Vary']='Accept-Encoding';}
+        res.writeHead(200,headers);
         if(req.method==='HEAD'){res.end();return;}
-        createReadStream(file).pipe(res);return;
+        createReadStream(served).pipe(res);return;
       }catch{res.writeHead(404);res.end();return;}
     }
     if(!req.url?.startsWith('/')){res.writeHead(400);res.end();return;}

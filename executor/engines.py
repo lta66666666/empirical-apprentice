@@ -10,6 +10,11 @@ import sys
 from pathlib import Path
 
 TEMPLATES=Path(__file__).parent/'templates'
+# 单个分析任务的最长运行时间，可通过环境变量按部署环境调整。
+JOB_TIMEOUT=float(os.getenv('EA_JOB_TIMEOUT','120'))
+# 原生 R 的版本验收基线，可配置以便升级前先在测试环境验证。
+R_VERSION_PIN=os.getenv('EA_R_VERSION','4.6.1')
+FIXEST_VERSION_PIN=os.getenv('EA_FIXEST_VERSION','0.14.2')
 
 def child_env():
     allowed=('PATH','SYSTEMROOT','WINDIR','LD_LIBRARY_PATH','R_HOME','R_LIBS','R_LIBS_USER','LANG','LC_ALL','TMPDIR','HOME')
@@ -37,8 +42,8 @@ async def capabilities():
     try:
         versions=pinned_versions()
         stats={'ready':True,'status':'可执行','reason':'StatsPAI 受控云端计算','versions':versions,'methods':['ols','panel_fe','did']}
-    except Exception:
-        stats={'ready':False,'status':'依赖待验收','reason':'锁定的 StatsPAI 及科学计算依赖尚未安装'}
+    except Exception as error:
+        stats={'ready':False,'status':'依赖待验收','reason':f'依赖检查失败：{type(error).__name__}: {error}'}
     r={'ready':False,'status':'未配置','reason':'尚未安装原生 R'}
     executable=os.getenv('EA_RSCRIPT') or shutil.which('Rscript')
     if executable:
@@ -46,8 +51,8 @@ async def capabilities():
             code,out=await process([executable,'--vanilla','-e',"cat(jsonlite::toJSON(list(r=as.character(getRversion()),fixest=as.character(packageVersion('fixest'))),auto_unbox=TRUE))"],timeout=15)
             match=re.search(r'\{"r":"[^"]+","fixest":"[^"]+"\}',out)
             versions=json.loads(match.group()) if code==0 and match else {}
-            ready=versions=={'r':'4.6.1','fixest':'0.14.2'}
-            r={'ready':ready,'status':'可执行' if ready else '环境待验收','reason':'原生 R 4.6.1 / fixest 0.14.2' if ready else '必须安装 R 4.6.1 与 fixest 0.14.2','versions':versions}
+            ready=versions=={'r':R_VERSION_PIN,'fixest':FIXEST_VERSION_PIN}
+            r={'ready':ready,'status':'可执行' if ready else '环境待验收','reason':f'原生 R {R_VERSION_PIN} / fixest {FIXEST_VERSION_PIN}' if ready else f'必须安装 R {R_VERSION_PIN} 与 fixest {FIXEST_VERSION_PIN}','versions':versions}
         except Exception: r={'ready':False,'status':'环境待验收','reason':'原生 R 运行检查失败'}
     stata_path=os.getenv('EA_STATA_EXECUTABLE','')
     licensed=os.getenv('EA_STATA_WEB_AUTHORIZED')=='true'
@@ -87,8 +92,8 @@ async def execute(payload,directory,development=False):
         from .cloud_artifacts import artifacts as cloud_artifacts
         script=(Path(__file__).parent/'statspai_runner.py').read_text(encoding='utf-8')
         (directory/'estimate.py').write_text(script,encoding='utf-8')
-        try:code,log=await process([sys.executable,directory/'estimate.py',directory],cwd=directory)
-        except asyncio.TimeoutError:raise TimeoutError('StatsPAI exceeded 120 seconds; process tree terminated')
+        try:code,log=await process([sys.executable,directory/'estimate.py',directory],cwd=directory,timeout=JOB_TIMEOUT)
+        except asyncio.TimeoutError:raise TimeoutError(f'StatsPAI exceeded {JOB_TIMEOUT:g} seconds; process tree terminated')
         (directory/'execution.log').write_text(log,encoding='utf-8')
         if code or not (directory/'result.json').exists():raise ValueError('StatsPAI calculation failed; '+log[-500:])
         result=json.loads((directory/'result.json').read_text(encoding='utf-8'))
@@ -102,8 +107,8 @@ async def execute(payload,directory,development=False):
         if not cap['ready']:raise ValueError(cap['reason'])
         script=(TEMPLATES/'estimate.R').read_text(encoding='utf-8')
         (directory/'estimate.R').write_text(script,encoding='utf-8')
-        try:code,log=await process([os.getenv('EA_RSCRIPT') or shutil.which('Rscript'),'--vanilla',directory/'estimate.R',directory])
-        except asyncio.TimeoutError:raise TimeoutError('R exceeded 120 seconds; process tree terminated')
+        try:code,log=await process([os.getenv('EA_RSCRIPT') or shutil.which('Rscript'),'--vanilla',directory/'estimate.R',directory],timeout=JOB_TIMEOUT)
+        except asyncio.TimeoutError:raise TimeoutError(f'R exceeded {JOB_TIMEOUT:g} seconds; process tree terminated')
         (directory/'execution.log').write_text(log,encoding='utf-8')
         result=json.loads((directory/'result.json').read_text(encoding='utf-8')) if (directory/'result.json').exists() else {}
         if code or result.get('status')!='succeeded':raise ValueError(result.get('error',log[-500:] or 'R did not produce output'))
@@ -116,8 +121,8 @@ async def execute(payload,directory,development=False):
         exe=os.getenv('EA_STATA_EXECUTABLE','')
         if not Path(exe).is_file():raise ValueError('Stata executable not configured')
         args=[exe,'/e','do','estimate.do'] if os.name=='nt' else [exe,'-b','do','estimate.do']
-        try:code,out=await process(args,cwd=directory)
-        except asyncio.TimeoutError:raise TimeoutError('Stata exceeded 120 seconds; process tree terminated')
+        try:code,out=await process(args,cwd=directory,timeout=JOB_TIMEOUT)
+        except asyncio.TimeoutError:raise TimeoutError(f'Stata exceeded {JOB_TIMEOUT:g} seconds; process tree terminated')
         log=(directory/'execution.log').read_text(encoding='utf-8',errors='replace') if (directory/'execution.log').exists() else out
         if code or not (directory/'metadata.csv').exists() or not (directory/'coefficients.csv').exists():raise ValueError('Stata failed; inspect execution.log: '+log[-500:])
         meta=next(csv.DictReader((directory/'metadata.csv').open(encoding='utf-8')))

@@ -74,13 +74,18 @@ async function eaEstimate(payload,context=null) {
     return { term: alias === 'policy_effect' ? 'DID effect' : p.labels[alias] || alias,
       estimate: values[0], std_error: values[1], p_value: values[2], ci_low: values[3], ci_high: values[4] };
   });
+  const returnedAliases=rowText.split('\n').filter(Boolean).map(line=>line.split('\t')[0]);
+  const requested=[...(p.method==='did'?['policy_effect']:[]),...p.predictors];
+  const droppedVars=requested.filter(name=>!returnedAliases.includes(name));
+  const warnings=[
+    '浏览器提交结果；服务器未独立重新估计数值，请使用复现包核对。',
+    'p 值和置信区间不自动证明因果关系；模型选择不应以显著性为目标。',
+    ...(p.method === 'did' ? ['组均值图是描述性信息，不是平行趋势证明。'] : []),
+  ];
+  if(p.vcov==='cluster'&&Number.isFinite(clusters)&&clusters<30)warnings.push('聚类数少于30，常规聚类稳健推断可能不稳定；30只是教学提醒阈值。');
+  if(droppedVars.length)warnings.push('以下变量可能因共线或不可识别未出现在结果中：'+droppedVars.join('、')+'。');
   return { r_version: rVersion, package_versions: { fixest: fixestVersion }, n_used: Number(used),
-    coefficients, clusters, used_indices:usedIndices,
-    warnings: [
-      '浏览器提交结果；服务器未独立重新估计数值，请使用复现包核对。',
-      'p 值和置信区间不自动证明因果关系；模型选择不应以显著性为目标。',
-      ...(p.method === 'did' ? ['组均值图是描述性信息，不是平行趋势证明。'] : []),
-    ] };
+    coefficients, clusters, used_indices:usedIndices, warnings };
 }
 
 async function browserRunJob(job, fresh=false) {
@@ -142,13 +147,14 @@ function eaPrewarmWebR(){
   if(window.EA_MODULE!=='analysis')return;
   if(navigator.connection&&navigator.connection.saveData)return;
   if(navigator.deviceMemory&&navigator.deviceMemory<=2)return;
+  if(navigator.hardwareConcurrency&&navigator.hardwareConcurrency<=2)return;
   const start=()=>{if(!eaWebR&&!eaWebRPromise)eaInitWebR(null,true).catch(()=>{});};
   if(document.visibilityState!=='visible'){
     const once=()=>{document.removeEventListener('visibilitychange',once);start();};
     document.addEventListener('visibilitychange',once);return;
   }
-  if('requestIdleCallback' in window)requestIdleCallback(start,{timeout:10000});
-  else setTimeout(start,5000);
+  if('requestIdleCallback' in window)requestIdleCallback(start,{timeout:30000});
+  else setTimeout(start,30000);
 }
 window.eaPrewarmWebR=eaPrewarmWebR;
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(eaPrewarmWebR,2000));

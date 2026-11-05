@@ -31,6 +31,10 @@ db.commit()
 active = {}
 IMPORT_LOCK=asyncio.Lock()
 TERMINAL = {'succeeded', 'failed', 'interrupted', 'cancelled'}
+# 运行限额可配置：默认值保持原有行为，便于不同赛事/演示环境调整。
+MAX_QUEUE = int(os.getenv('EA_MAX_QUEUE', '10'))
+DAILY_LIMIT = int(os.getenv('EA_DAILY_LIMIT', '30'))
+QUEUE_WAIT = float(os.getenv('EA_QUEUE_WAIT', '1200'))
 
 def update(task):
     db.execute('UPDATE tasks SET body=?,status=? WHERE id=?', (json.dumps(task, ensure_ascii=False, allow_nan=False), task['status'], task['id']))
@@ -137,9 +141,9 @@ async def worker():
             await asyncio.sleep(.3)
             continue
         task = json.loads(row['body'])
-        if time.time()-row['created']>1200:
+        if time.time()-row['created']>QUEUE_WAIT:
             task.pop('payload',None)
-            task.update(status='failed', error='Queue wait exceeded 20 minutes; reconfirm and resubmit')
+            task.update(status='failed', error=f'Queue wait exceeded {int(QUEUE_WAIT // 60)} minutes; reconfirm and resubmit')
             update(task)
             continue
         directory = ROOT / task['id']
@@ -229,8 +233,8 @@ async def gateway(route,request:Request):
             return public(load(body['id'],owner))
         cap=(await capabilities())[body['engine_id']]
         if not cap['ready']: raise HTTPException(503,cap['reason'])
-        if db.execute("SELECT COUNT(*) FROM tasks WHERE status='queued'").fetchone()[0]>=10: raise HTTPException(429,'Queue full')
-        if db.execute('SELECT COUNT(*) FROM usage WHERE owner=? AND created>?',(owner,time.time()-86400)).fetchone()[0]>=30: raise HTTPException(429,'Daily analysis limit reached')
+        if db.execute("SELECT COUNT(*) FROM tasks WHERE status='queued'").fetchone()[0]>=MAX_QUEUE: raise HTTPException(429,'Queue full')
+        if db.execute('SELECT COUNT(*) FROM usage WHERE owner=? AND created>?',(owner,time.time()-86400)).fetchone()[0]>=DAILY_LIMIT: raise HTTPException(429,'Daily analysis limit reached')
         expires=min(expires_from(body),time.time()+7*86400)
         if expires<=time.time(): raise HTTPException(410,'Session expired')
         task={k:body[k] for k in ('id','session_id','software','engine_id','execution_location','input_sha256','plan_sha256')}

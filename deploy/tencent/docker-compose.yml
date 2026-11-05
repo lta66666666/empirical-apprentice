@@ -1,0 +1,30 @@
+services:
+  joycode:
+    build: .
+    image: empirical-apprentice-joycode:20261105
+    container_name: empirical-apprentice-joycode
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      EA_DEPLOYMENT_APPROVED: "true"
+      EA_DATA_DIR: /data/web
+      EA_NODE_DATA: /data/executor
+      # 对外只有 HTTPS 域名；内网容器只绑定回环，由 nginx 反向代理。
+      PUBLIC_ORIGIN: https://ea-demo.duckdns.org:8000
+      EA_ALLOW_INSECURE_HTTP: "false"
+      EA_TRUSTED_PROXY_ADDRESSES: "127.0.0.1"
+      EA_CLIENT_IP_HEADER: x-real-ip
+      # 以下限额均可在不重建镜像的情况下调整。
+      EA_MAX_QUEUE: "10"
+      EA_DAILY_LIMIT: "30"
+      EA_JOB_TIMEOUT: "120"
+    ports:
+      - "127.0.0.1:18000:8080"
+    volumes:
+      - ./data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
