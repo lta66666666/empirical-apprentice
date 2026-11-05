@@ -12,7 +12,6 @@ $('researchRuntime').addEventListener('click',e=>{const selected=e.target.closes
 for(const id of ['researchMakePlan','researchRun'])$(id).hidden=true;
 const confirmation=$('researchConfirm').closest('label');document.querySelector('.ea-step-actions').prepend(confirmation);
 eaUpdateStepAction();
-const dictionaryShortcut=button('查看或补充变量单位','btn-secondary',()=>{eaResearchStep('health');$('eaDictionaryEditor').scrollIntoView({block:'start'});$('eaDictionaryEditor').querySelector('input')?.focus();});dictionaryShortcut.dataset.researchStage='plan';dictionaryShortcut.classList.add('ea-stage-hidden');document.querySelector('.research-input').append(dictionaryShortcut);
 function eaReportOverview(data){
   let section=$('eaReportOverview');if(!section){section=el('section','ea-report-overview');section.id='eaReportOverview';$('pane-records').prepend(section);}
   const jobs=data.research_jobs||[],done=jobs.filter(j=>j.status==='succeeded');

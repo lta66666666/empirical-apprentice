@@ -6,9 +6,8 @@
   const returnButton=button('返回当前任务','btn-secondary',()=>eaSetTask(returnTask));returnButton.hidden=true;
   window.eaOpenRecords=()=>showRecords();
   const reportButton=button('记录与报告','btn-secondary',()=>showRecords());
-  toolbar.append(button('新练习','btn-secondary',()=>leave(()=>newSessionDialog())),reportButton,returnButton,button('历史练习','btn-secondary',()=>leave(()=>pastDialog())),button('资料与手册','btn-secondary',()=>selectTab('materials')));
+  toolbar.append(button('新练习','btn-secondary',()=>leave(()=>newSessionDialog())),reportButton,returnButton,button('历史练习','btn-secondary',()=>leave(()=>pastDialog())));
   const moduleLink=el('a','',mode==='learn'?'边分析边学':'定向导学');moduleLink.href=mode==='learn'?'/analysis':'/learn';moduleLink.onclick=e=>{e.preventDefault();leave(()=>location.assign(moduleLink.href));};toolbar.append(moduleLink);
-  const sourceLibrary=el('a','text-btn','教材与来源');sourceLibrary.href='/static/teaching/source-index.html';sourceLibrary.target='_blank';sourceLibrary.rel='noopener';toolbar.append(sourceLibrary);
   toolbar.append(button('减少动画','btn-secondary',()=>{document.documentElement.classList.toggle('motion-reduced');storageSet('ea_motion_reduced',document.documentElement.classList.contains('motion-reduced')?'1':'0');if(document.documentElement.classList.contains('motion-reduced'))window.stopLearningAnimation?.();}),button('退出','text-btn',()=>leave(async()=>{try{await api('/api/auth/logout',{method:'POST',body:{}});location.replace('/login');}catch(e){toast('退出未完成：'+e.message);}})));document.body.prepend(toolbar);const operationStatus=el('span','module-operation-status');operationStatus.id='eaOperationStatus';operationStatus.setAttribute('role','status');toolbar.append(operationStatus);
   function showRecords(){if(eaTask!=='records')returnTask=eaTask;eaSetTask('records');}
   const directory=el('section','course-directory');directory.id='eaCourseDirectory';directory.hidden=mode!=='learn';

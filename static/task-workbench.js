@@ -74,7 +74,7 @@ async function downloadPersistentRecord(format){
   }catch(e){toast(e.message);}
 }
 const stepper=el('nav','ea-stepper');stepper.setAttribute('aria-label','R 实操步骤');
-for(const [step,label]of [['data','1 数据'],['health','2 体检'],['plan','3 方案'],['execute','4 执行'],['explain','5 解释']]){const b=button(label,'',()=>eaResearchStep(step));b.dataset.step=step;stepper.append(b);}
+for(const [step,label]of [['data','1 数据'],['plan','2 方案'],['explain','3 解释']]){const b=button(label,'',()=>eaResearchStep(step));b.dataset.step=step;stepper.append(b);}
 $('researchRuntime').before(stepper);
 function eaResearchStep(step){
   eaSaveWorkbenchDraft();

@@ -2,7 +2,7 @@
 (()=>{
  if(window.EA_MODULE!=='analysis'||!window.eaConversation)return;
  const parts=window.eaConversation,top=document.querySelector('.analysis-top'),dock=document.querySelector('.analysis-dock');
- const primary=el('div','analysis-primary'),aux=el('details','analysis-aux');aux.open=true;aux.append(el('summary','','知识与当前状态'));
+ const primary=el('div','analysis-primary'),aux=el('details','analysis-aux');aux.open=false;aux.append(el('summary','','知识与当前状态'));
  const mounted=[...top.children];top.replaceChildren(primary,aux);
  for(const n of mounted)if(n===parts.lesson)aux.append(n);else primary.append(n);
  const overview=el('section','analysis-overview');primary.prepend(overview);

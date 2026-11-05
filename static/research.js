@@ -242,7 +242,6 @@ function researchDrawJob(j){
   if(j.sync_error)box.append(el('p','resource-caution',`云端状态暂未同步：${j.sync_error}。任务记录保留，请稍后刷新。`));
   if(['failed','interrupted','cancelled'].includes(j.status)){
     box.append(el('p','resource-caution',j.error||'执行中断。没有产生可用回归结果。'));
-    box.append(button('检查执行环境','btn-secondary',()=>{eaResearchStep('data');$('researchRuntime').open=true;$('researchRuntime').scrollIntoView({block:'start'});}));
     box.append(button('载入已保存输入，重新核对方案','btn-secondary',async()=>{
       if(researchRunning){researchNotice('请等待当前操作完成。',true);return;}const context=researchBeginInput();
       try{
