@@ -12,7 +12,7 @@ async function eaDeadline(work,limit,message,stop){let timer;try{return await Pr
 function eaPersistPending(){try{storageSet('ea_browser_pending',JSON.stringify([...eaBrowserPending.values()]));}catch{}}
 function eaQueueExecutionSync(context,event,body){const {nonce,...safe}=body||{};eaBrowserPending.set(context.job,{job:context.job,session:context.session,event,body:safe});eaPersistPending();}
 
-async function eaInitWebR(context=null) {
+async function eaInitWebR(context=null,silent=false) {
   eaCheckExecution(context);
   if (eaWebR) return eaWebR;
   if (eaWebRPromise) return eaWebRPromise;
@@ -21,7 +21,7 @@ async function eaInitWebR(context=null) {
     if (!window.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined') {
       throw new Error('浏览器未启用跨源隔离，无法可靠运行或中断 webR。');
     }
-    researchNotice('正在初始化浏览器 webR，并安装已核对的 fixest 0.14.2…');
+    if(!silent)researchNotice('正在初始化浏览器 webR，并安装已核对的 fixest 0.14.2…');
     const { WebR } = await eaLoadWebR();
     if(generation!==eaRuntimeGeneration)throw eaAbort();
     const runtime = new WebR({ baseUrl: '/static/webr/' });
@@ -135,3 +135,21 @@ window.addEventListener('pagehide', () => {
     fetch(`/api/research/jobs/${eaActiveJob}/interrupt`, { method: 'POST', credentials: 'same-origin', keepalive: true }).catch(() => {});
   }
 });
+
+// 分析页空闲预热：把 30–60 秒的 wasm 编译与 fixest 安装挪到用户点击之前。
+// 仅在可见、非省流、内存足够的桌面环境触发；失败时静默复位，等待用户主动重试。
+function eaPrewarmWebR(){
+  if(window.EA_MODULE!=='analysis')return;
+  if(navigator.connection&&navigator.connection.saveData)return;
+  if(navigator.deviceMemory&&navigator.deviceMemory<=2)return;
+  const start=()=>{if(!eaWebR&&!eaWebRPromise)eaInitWebR(null,true).catch(()=>{});};
+  if(document.visibilityState!=='visible'){
+    const once=()=>{document.removeEventListener('visibilitychange',once);start();};
+    document.addEventListener('visibilitychange',once);return;
+  }
+  if('requestIdleCallback' in window)requestIdleCallback(start,{timeout:10000});
+  else setTimeout(start,5000);
+}
+window.eaPrewarmWebR=eaPrewarmWebR;
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(eaPrewarmWebR,2000));
+else setTimeout(eaPrewarmWebR,2000);
