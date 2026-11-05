@@ -19,7 +19,7 @@ export async function nodeRequest(env,owner,path,body,method=body===undefined?'G
 }
 export async function engineCapabilities(env,owner){
   const unavailable={ready:false,status:'未配置',reason:'云端执行节点尚未配置'};
-  let remote={statspai_cloud:unavailable,r_native:unavailable,stata_native:{ready:false,status:'授权待确认',reason:'网站授权与 Linux 运行尚未验收'},eviews_native:{ready:false,status:'未接入',reason:'尚无适用的网站集成方案'}};
+  let remote={statspai_cloud:unavailable,r_native:unavailable,stata_native:{ready:false,status:'仅教学',reason:'仅提供对应 Stata 代码，不执行计算'},eviews_native:{ready:false,status:'未接入',reason:'尚无适用的网站集成方案'}};
   if(env.EXECUTOR_URL&&env.EXECUTOR_SECRET)try{remote={...remote,...await nodeRequest(env,owner,'capabilities')};}catch(e){remote.statspai_cloud=remote.r_native={ready:false,status:'暂时不可用',reason:e.message};}
   return {...remote,browser_webr:{ready:true,status:'需在本机初始化',reason:'浏览器 webR；关闭页面会中断当前计算'}};
 }

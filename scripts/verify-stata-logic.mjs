@@ -46,6 +46,14 @@ async function heartbeat(version) {
 assert.equal((await heartbeat('1.4.0')).body.mcp_supported, true);
 assert.equal((await heartbeat('0.9.0')).body.mcp_supported, false);
 
+const teachingOnly = await handleLocalStata(
+  new Request(`http://localhost/api/local-stata/agent/${pair2}/heartbeat`, {
+    method: 'POST', headers: { Authorization: 'Bearer ' + 'a'.repeat(64), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mcp_version: '1.4.0', mcp_available: true }),
+  }), { ...env, STATA_TEACHING_ONLY: 'true' }, null, `/api/local-stata/agent/${pair2}/heartbeat`,
+);
+assert.equal(teachingOnly.status, 403, '教学专用模式应关闭助手执行入口');
+
 const created = await (await handleSessions(
   new Request('http://localhost/api/sessions', { method: 'POST' }),
   env, 'owner3', '/api/sessions',

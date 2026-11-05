@@ -54,11 +54,7 @@ async def capabilities():
             ready=versions=={'r':R_VERSION_PIN,'fixest':FIXEST_VERSION_PIN}
             r={'ready':ready,'status':'可执行' if ready else '环境待验收','reason':f'原生 R {R_VERSION_PIN} / fixest {FIXEST_VERSION_PIN}' if ready else f'必须安装 R {R_VERSION_PIN} 与 fixest {FIXEST_VERSION_PIN}','versions':versions}
         except Exception: r={'ready':False,'status':'环境待验收','reason':'原生 R 运行检查失败'}
-    stata_path=os.getenv('EA_STATA_EXECUTABLE','')
-    licensed=os.getenv('EA_STATA_WEB_AUTHORIZED')=='true'
-    accepted=os.getenv('EA_STATA_RUNTIME_ACCEPTED')=='true'
-    stata={'ready':licensed and accepted and Path(stata_path).is_file(),'status':'授权待确认' if not licensed else '环境待验收','reason':'需确认网站用途授权、Linux 安装与真实运行验收'}
-    if stata['ready']: stata.update(status='可执行',reason='已配置授权声明与运行验收声明；每次任务仍检查实际版本')
+    stata={'ready':False,'status':'仅教学','reason':'仅提供对应 Stata 代码，不在本站执行；计算请使用云端 Python'}
     return {'statspai_cloud':stats,'r_native':r,'stata_native':stata,'eviews_native':{'ready':False,'status':'未接入','reason':'尚无适用的网站集成方案'}}
 
 def stata_script(p):

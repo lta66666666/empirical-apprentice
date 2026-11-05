@@ -21,6 +21,8 @@ services:
       EA_JOB_TIMEOUT: "120"
       # 可选：填写后仅允许列表内的本机 Stata 助手版本（逗号分隔），留空表示不限制。
       # STATA_MCP_VERSIONS: "1.4.0"
+      # 教学专用模式：Stata 只展示对应代码，不接收本机/云端执行。
+      STATA_TEACHING_ONLY: "true"
     ports:
       - "127.0.0.1:18000:8080"
     volumes:
