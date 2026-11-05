@@ -1,7 +1,8 @@
 import http from 'node:http';
 import {isIP} from 'node:net';
-import { appendFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { appendFile, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openStorage } from './storage.mjs';
 import worker from '../dist/server/index.js';
@@ -12,6 +13,7 @@ const port=Number(process.env.PORT||8766),origin=new URL(process.env.PUBLIC_ORIG
 if(!['https:','http:'].includes(origin.protocol)||origin.pathname!=='/')throw Error('PUBLIC_ORIGIN must be an origin');
 if(process.env.NODE_ENV==='production'&&origin.protocol!=='https:'&&process.env.EA_ALLOW_INSECURE_HTTP!=='true')throw Error('Production requires HTTPS PUBLIC_ORIGIN');
 const storage=await openStorage(process.env.EA_DATA_DIR||fileURLToPath(new URL('../outputs/standalone/',import.meta.url)));
+const WEBR_DIR=fileURLToPath(new URL('../static/webr/',import.meta.url));
 const env={...process.env,DB:storage.DB,FILES:storage.FILES};let cleaning=false;
 async function clean(){if(cleaning)return;cleaning=true;try{const result=await cleanupExpired(env);await appendFile(join(storage.root,'cleanup.jsonl'),JSON.stringify(result)+'\n');}catch{console.error('Retention cleanup failed; retry scheduled.');}finally{cleaning=false;}}
 const timer=setInterval(clean,15*60*1000);timer.unref();
@@ -19,6 +21,22 @@ const stopInterpretations=startInterpretationDispatcher(env);
 const server=http.createServer(async(req,res)=>{
   try{
     if(req.url==='/healthz'&&['GET','HEAD'].includes(req.method)){try{await storage.DB.prepare('SELECT 1').first();res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(req.method==='HEAD'?'':JSON.stringify({status:'ok'}));}catch{res.writeHead(503);res.end();}return;}
+    // webR 运行时（含 18 MB wasm）直接从磁盘流式返回：正确 MIME + 不经过 base64 解码。
+    if(req.url.startsWith('/static/webr/')&&['GET','HEAD'].includes(req.method)){
+      const name=req.url.slice('/static/webr/'.length).split('?')[0];
+      if(!/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/.test(name)){res.writeHead(404);res.end();return;}
+      const file=resolve(WEBR_DIR,name);
+      if(!file.startsWith(WEBR_DIR)){res.writeHead(404);res.end();return;}
+      try{
+        const info=await stat(file);if(!info.isFile())throw Error('not a file');
+        const type=name.endsWith('.mjs')||name.endsWith('.js')?'text/javascript':name.endsWith('.wasm')?'application/wasm':'application/octet-stream';
+        res.writeHead(200,{'Content-Type':type,'Content-Length':info.size,'Cache-Control':'public, max-age=86400',
+          'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp',
+          'Cross-Origin-Resource-Policy':'same-origin','X-Content-Type-Options':'nosniff'});
+        if(req.method==='HEAD'){res.end();return;}
+        createReadStream(file).pipe(res);return;
+      }catch{res.writeHead(404);res.end();return;}
+    }
     if(!req.url?.startsWith('/')){res.writeHead(400);res.end();return;}
     const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>4_500_000){res.writeHead(413);res.end('Request too large');return;}chunks.push(chunk);}
     const headers=new Headers();for(const [key,value]of Object.entries(req.headers)){if(value!==undefined)headers.set(key,Array.isArray(value)?value.join(','):value);}

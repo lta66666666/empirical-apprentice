@@ -19,7 +19,8 @@ const staticRoot = resolve(root, 'static');
 async function visit(folder) {
   for (const item of await readdir(folder, { withFileTypes: true })) {
     const file = join(folder, item.name);
-    if (item.isDirectory()) await visit(file);
+    // webR 运行时与本地包仓库由 standalone 直接从磁盘提供，不内嵌进 assets.js。
+    if (item.isDirectory()) { if (item.name === 'webr') continue; await visit(file); }
     else if (item.isFile()) {
       const key = '/static/' + relative(staticRoot, file).split(sep).join('/');
       assets[key] = (await readFile(file)).toString('base64');

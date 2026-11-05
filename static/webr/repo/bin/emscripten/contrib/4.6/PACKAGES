@@ -1,0 +1,100 @@
+Package: Formula
+Version: 1.2-6
+Depends: R (>= 2.0.0), stats
+Suggests: knitr, rmarkdown
+License: GPL-2 | GPL-3
+MD5sum: bd2d44be4e28f9ce327d2e427a3e698f
+Built: R 4.6.0; ; 2026-10-09 23:55:39 UTC; unix
+File: Formula_1.2-6.tgz
+
+Package: Rcpp
+Version: 1.1.2
+Depends: R (>= 3.5.0)
+Imports: methods, utils
+Suggests: tinytest, inline, rbenchmark, pkgKitten (>= 0.1.2)
+License: GPL (>= 2)
+MD5sum: 8bd684a7371ad3ee690e210fce82c219
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-11 03:48:28 UTC; unix
+File: Rcpp_1.1.2.tgz
+
+Package: dreamerr
+Version: 1.5.0
+Imports: Formula, utils, stringmagic(>= 1.2.0)
+Suggests: knitr, rmarkdown, stats, graphics
+License: GPL-3
+MD5sum: 3b378ba186614572f852b8d4d4e303f5
+Built: R 4.6.0; ; 2026-05-13 00:07:07 UTC; unix
+File: dreamerr_1.5.0.tgz
+
+Package: fixest
+Version: 0.14.2
+Depends: R(>= 3.5.0)
+Imports: stats, graphics, grDevices, tools, utils, methods, numDeriv, nlme, sandwich, Rcpp(>= 1.0.5), dreamerr(>= 1.4.0), stringmagic(>= 1.2.0)
+LinkingTo: Rcpp
+Suggests: knitr, rmarkdown, data.table, plm, MASS, pander, ggplot2, lfe, tinytex, pdftools, emmeans, estimability, AER, Matrix
+License: GPL-3
+MD5sum: b89c55410c2dda815194aa94a310e31a
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-09 22:20:36 UTC; unix
+File: fixest_0.14.2.tgz
+
+Package: lattice
+Version: 0.23-1
+Priority: recommended
+Depends: R (>= 4.0.0)
+Imports: grid, grDevices, graphics, stats, utils
+Suggests: KernSmooth, MASS, latticeExtra, colorspace
+Enhances: chron, zoo
+License: GPL (>= 2)
+MD5sum: 650009c18932375176db0afc690ae06c
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-10 05:36:55 UTC; unix
+File: lattice_0.23-1.tgz
+
+Package: nlme
+Version: 3.1-171
+Priority: recommended
+Depends: R (>= 3.6.0)
+Imports: graphics, stats, utils, lattice
+Suggests: MASS
+License: GPL (>= 2)
+MD5sum: 55d1cbc062e3c15137fc8fbd4bacd871
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-10 18:59:05 UTC; unix
+File: nlme_3.1-171.tgz
+
+Package: numDeriv
+Version: 2016.8-1.1
+Depends: R (>= 2.11.1)
+License: GPL-2
+MD5sum: 4cedc70ba377c654e2d1a3c863ba0006
+Built: R 4.6.0; ; 2026-05-13 17:09:10 UTC; unix
+File: numDeriv_2016.8-1.1.tgz
+
+Package: sandwich
+Version: 3.1-3
+Depends: R (>= 3.0.0)
+Imports: stats, utils, zoo
+Suggests: AER, car, geepack, lattice, lme4, lmtest, MASS, multiwayvcov, parallel, pcse, plm, pscl, scatterplot3d, stats4, strucchange, survival
+License: GPL-2 | GPL-3
+MD5sum: f4fb29d8c92023678bf91d62ff82ff8a
+Built: R 4.6.0; ; 2026-10-11 09:48:43 UTC; unix
+File: sandwich_3.1-3.tgz
+
+Package: stringmagic
+Version: 1.3.0
+Imports: Rcpp(>= 1.0.5), utils, stats
+LinkingTo: Rcpp
+Suggests: knitr, rmarkdown, data.table
+License: GPL (>= 2)
+MD5sum: 6f13e571f020b6aaf42ff9ccb6474dc6
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-12 14:33:48 UTC; unix
+File: stringmagic_1.3.0.tgz
+
+Package: zoo
+Version: 1.9-1
+Depends: R (>= 3.1.0), stats
+Imports: utils, graphics, grDevices, lattice (>= 0.20-27)
+Suggests: AER, coda, chron, ggplot2 (>= 3.5.0), knitr, mondate, scales, stinepack, strucchange, timeDate, timeSeries (>= 4021.104), tinyplot, tis, tseries, xts
+License: GPL-2 | GPL-3
+MD5sum: 01b5f4c188696875ed0761deeb37097a
+Built: R 4.6.0; wasm32-unknown-emscripten; 2026-10-12 03:43:08 UTC; unix
+File: zoo_1.9-1.tgz
+

@@ -28,7 +28,8 @@ async function eaInitWebR(context=null) {
     eaInitializingRuntime=runtime;
     await runtime.init();
     if(generation!==eaRuntimeGeneration){runtime.close();throw eaAbort();}
-    const version = await runtime.evalRString("tryCatch({webr::install('fixest', repos=c('https://lrberge.r-universe.dev','https://repo.r-wasm.org')); as.character(packageVersion('fixest'))},error=function(e)paste('ERROR',conditionMessage(e)))");
+    const repo = location.origin + '/static/webr/repo';
+    const version = await runtime.evalRString(`tryCatch({webr::install('fixest', repos=c(${JSON.stringify(repo)})); as.character(packageVersion('fixest'))},error=function(e)paste('ERROR',conditionMessage(e)))`);
     if(generation!==eaRuntimeGeneration){runtime.close();throw eaAbort();}
     if (version !== '0.14.2') throw new Error(version.startsWith('ERROR') ? version : `fixest 版本不符：${version}`);
     eaWebR = runtime;
