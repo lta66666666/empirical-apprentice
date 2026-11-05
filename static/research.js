@@ -84,12 +84,46 @@ function researchMethodChange(invalidate=true,methodChanged=false){
   researchRenderLesson();
 }
 
+function researchDidLesson(root){
+  root.append(el('span','section-kicker','执行前短课'),el('h3','','同批 DID：把前后差再减一次对照组'),el('p','','DID 不是只看政策前后，而是把处理组的变化减去对照组的变化。先用示意数字看懂，再核对本任务的数据。'));
+  const shell=el('section','ea-did-lesson'),toggle=el('div','ea-did-toggle'),host=el('div','ea-did-chart'),summary=el('p','ea-did-summary');
+  let mode='parallel';
+  const svg=(tag,attrs,text)=>{const node=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,String(value));if(text)node.textContent=text;return node;};
+  const draw=()=>{
+    const data=mode==='divergent'?{tpre:45,tpost:69,cpre:45,cpost:51}:{tpre:45,tpost:63,cpre:45,cpost:51};
+    const {tpre,tpost,cpre,cpost}=data,yLo=36,yHi=76,W=620,H=320,xPre=170,xPost=450,yTop=60,yBottom=235;
+    const y=value=>yBottom-(value-yLo)/(yHi-yLo)*(yBottom-yTop);
+    const chart=svg('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':mode==='divergent'?'趋势背离时的 DID 示意':'平行趋势时的 DID 示意'});
+    chart.append(svg('rect',{width:'100%',height:'100%',fill:'#fff'}),svg('line',{x1:80,y1:yBottom,x2:565,y2:yBottom,stroke:'#cfd8dc'}),svg('line',{x1:80,y1:yTop,x2:80,y2:yBottom,stroke:'#cfd8dc'}));
+    chart.append(svg('text',{x:xPre,y:yBottom+24,'text-anchor':'middle','font-size':12,fill:'#567079'},'政策前'),svg('text',{x:xPost,y:yBottom+24,'text-anchor':'middle','font-size':12,fill:'#567079'},'政策后'));
+    for(const [pre,post,color,dashed,name] of [[tpre,tpost,'#087e75',false,'处理组'],[cpre,cpost,'#c57442',true,'对照组']]){
+      const line=svg('polyline',{points:`${xPre},${y(pre)} ${xPost},${y(post)}`,fill:'none',stroke:color,'stroke-width':3});
+      if(dashed)line.setAttribute('stroke-dasharray','7 5');
+      chart.append(line,svg('circle',{cx:xPre,cy:y(pre),r:5,fill:color}),svg('circle',{cx:xPost,cy:y(post),r:5,fill:color}),svg('text',{x:xPre-12,y:y(pre)-9,'text-anchor':'end','font-size':12,fill:color},Number(pre).toFixed(1)),svg('text',{x:xPost+12,y:y(post)-9,'font-size':12,fill:color},Number(post).toFixed(1)+' · '+name));
+    }
+    const dT=tpost-tpre,dC=cpost-cpre,did=dT-dC;
+    chart.append(svg('text',{x:80,y:28,'font-size':13,fill:'#17333d'},`示意数据：处理组变化 +${dT.toFixed(1)}，对照组变化 +${dC.toFixed(1)}`),svg('text',{x:80,y:288,'font-size':14,'font-weight':600,fill:'#0b645e'},`原始 DID = ${dT.toFixed(1)} − ${dC.toFixed(1)} = ${did.toFixed(1)}`),svg('text',{x:80,y:308,'font-size':12,fill:'#567079'},mode==='divergent'?'真实效应预设为 +12；DID 变成 +18，多出的 6 来自两组不同的原趋势。':'平行趋势下，DID 扣掉对照组共同变化，剩下 +12。'));
+    host.replaceChildren(chart);
+    summary.textContent=mode==='divergent'?'两组趋势本来就不同，再做 DID 会把趋势差当成政策效应。真实研究必须看政策前多期数据，组均值平行不等于平行趋势检验。':'两组在政策前同速变化，DID 才能扣掉共同趋势。这张图是示意，不代表本任务数据已满足平行趋势。';
+  };
+  const make=({label,value})=>{const b=button(label,'btn-secondary',()=>{mode=value;for(const node of toggle.querySelectorAll('button'))node.setAttribute('aria-pressed',String(node.dataset.mode===mode));draw();});b.dataset.mode=value;b.setAttribute('aria-pressed',String(value===mode));return b;};
+  toggle.append(make({label:'两组平行',value:'parallel'}),make({label:'趋势背离',value:'divergent'}));
+  shell.append(toggle,host,summary);root.append(shell);draw();
+  const list=el('section','ea-did-assumptions');list.append(el('h4','','DID 识别假设清单'));
+  const sameInput=$('researchSameBatch');
+  const sameState=el('span','ea-did-state pending','待勾选');
+  const sameRow=el('div','ea-did-item');sameRow.append(el('span','','同批实施'),sameState);
+  const syncSame=()=>{const checked=Boolean(sameInput?.checked);sameState.className='ea-did-state '+(checked?'ok':'pending');sameState.textContent=checked?'已勾选确认':'待勾选';};
+  if(sameInput)sameInput.onchange=syncSame;syncSame();list.append(sameRow);
+  for(const [name,state,level] of [['固定处理身份','按固定组别列约束，待核对','pending'],['平行趋势','未验证（本页只是示意）','unverified'],['同期冲击','未核实','unverified'],['无提前反应','未核实','unverified'],['样本构成稳定','缺失处理已记录，待核对','pending']]){const row=el('div','ea-did-item');row.append(el('span','',name),el('span',`ea-did-state ${level}`,state));list.append(row);}
+  root.append(list,el('p','workspace-note','组均值图只能描述变化；平行趋势需要政策前多期证据。清单只记录核对状态，不替代研究设计。'));
+}
 function researchRenderLesson(data=latestState){
   const root=$('researchLesson');if(!root)return;
   const method=$('researchMethod')?.value||'ols';
   root.replaceChildren();
   if(method==='did'){
-    root.append(el('h3','','方法提示 · 同批 DID'),el('p','','先核对政策时间、固定组别与比较对象；趋势图只能描述变化，不能证明平行趋势。'));
+    researchDidLesson(root);
     return;
   }
   const ols=method==='ols',name=ols?'OLS／多元线性回归':'个体与年份固定效应';
@@ -223,6 +257,18 @@ function researchWarning(text){
   };
   return messages[text]||text;
 }
+function researchEvidenceChain(j){
+  const short=value=>value?String(value).slice(0,8):'未记录';
+  const status=({consistent:['一致','is-ok'],inconsistent:['有差异','is-bad']})[j.verification?.status]||['尚未核对','is-wait'];
+  const chain=el('div','ea-evidence-chain');chain.setAttribute('role','group');chain.setAttribute('aria-label','复现证据链');
+  const add=(label,value,tip)=>{const node=el('div','ea-evidence-node');node.append(el('span','ea-evidence-label',label),el('code','ea-evidence-hash',short(value)));if(value)node.title=`${tip}：${value}`;chain.append(node,el('span','ea-evidence-arrow','→'));};
+  add('输入',j.input_sha256,'原始/规范化输入 SHA-256');
+  add('方案',j.plan_sha256,'确认方案 SHA-256');
+  add('代码',j.corresponding_code?.sha256,'对应 Stata 代码 SHA-256');
+  const result=el('div','ea-evidence-node '+status[1]);result.append(el('span','ea-evidence-label','复跑核对'),el('strong','ea-evidence-status',status[0]));chain.append(result);
+  chain.append(el('span','ea-evidence-version','导出版本 v'+(j.record_version||1)));
+  return chain;
+}
 function researchDrawJob(j){
   const signature=JSON.stringify([j.id,j.status,j.record_version,j.error,j.sync_error,j.stale,j.verification]);
   researchJob=j;window.eaCorrespondingQuestionContext=null;window.eaSelectedTask={id:j.id,session_id:j.session_id||sessionId,engine_id:j.engine_id||'browser_webr'};const box=$('researchResult');
@@ -260,6 +306,7 @@ function researchDrawJob(j){
   const evidence=el('details','ea-result-evidence'),evidenceBody=el('div');evidence.append(el('summary','','计算详情、完整表图与核验'),evidenceBody);
   for(const node of [box.querySelector('.research-progress'),box.querySelector(':scope>.workspace-note'),box.querySelector(':scope>.research-formula')])if(node)evidenceBody.append(node);
   box.append(el('p','ea-result-summary',`估计样本 ${r.n_used} 行 · 资料版本 ${j.research_revision??'历史未记录'} · 导出版本 ${j.record_version||1} · ${j.verification?.status==='consistent'?'同引擎复算一致':j.verification?.status==='inconsistent'?'同引擎复算有差异':'尚未独立核对'}`));
+  box.append(researchEvidenceChain(j));
   if(j.verification?.differences?.length)evidenceBody.append(el('pre','',JSON.stringify(j.verification.differences,null,2)));
   let rerunRequestId=null;const rerun=button('从原始输入独立重跑核对','btn-secondary',async()=>{if(researchRunning){researchNotice('当前操作正在处理中，请稍后重跑。',true);return;}const context=researchContext(),operation=++researchOperationEpoch;researchRunning=true;rerun.disabled=true;researchBusyFeedback('正在创建独立重跑任务…');rerunRequestId||=crypto.randomUUID();try{const next=await api(`/api/research/jobs/${j.id}/rerun`,{method:'POST',body:{request_id:rerunRequestId}});if(!researchContextCurrent(context,false))return;rerunRequestId=null;researchNotice('独立重跑任务已创建，正在计算。');storageSet('ea_auto_ai:'+next.id,'pending');eaResearchStep('execute');await researchWatch(next.id);if(next.execution_location!=='cloud_native')await browserRunJob(next,true);}catch(e){if(context.session===sessionId)researchNotice(e.message,true);}finally{if(operation===researchOperationEpoch){researchRunning=false;rerun.disabled=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}});evidenceBody.append(rerun);
   evidenceBody.append(el('p','',`${r.software_version||r.r_version} · ${JSON.stringify(r.package_versions)} · 实际估计 ${r.n_used} 行${r.clusters?' · '+r.clusters+' 个聚类':''}`));
@@ -283,6 +330,7 @@ function researchDrawJob(j){
   }
   for(const c of r.coefficients){const row=el('tr');row.tabIndex=0;row.setAttribute('aria-label',`选择 ${c.term} 查看区间与单位`);row.onclick=()=>selectCoefficient(c,row);row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectCoefficient(c,row);}};for(const value of [c.term,stataNum(c.estimate),stataNum(c.std_error),c.std_error>0?(c.estimate/c.std_error).toFixed(2):'—',stataP(c.p_value),`[${stataNum(c.ci_low)}, ${stataNum(c.ci_high)}]`])row.append(el('td','',value));table.append(row);}
   scroll.append(table);log.append(scroll,el('p','ea-stata-note','按 Stata 输出格式整理；数值来自本次云端执行，本机无需安装 Stata。'));wrap.append(bar,log);box.append(wrap);
+  if(j.plan.method==='did'){const figure=el('figure','ea-did-contrast'),image=el('img');image.src=`/api/research/jobs/${j.id}/artifacts/did_contrast.svg`;image.alt='处理组与对照组前后均值及原始 DID 对照';figure.append(image,el('figcaption','muted','原始 DID 由已确认样本的四格均值计算；模型系数可能因控制变量与固定效应不同。'));box.append(figure);}
   box.append(focus);if(window.eaInterpretationCard)box.append(eaInterpretationCard(j,{onSaved:value=>{const summary=box.querySelector('.ea-result-summary');if(summary)summary.textContent=summary.textContent.replace(/导出版本 \d+/,'导出版本 '+value.record_version);}}));const sampleDetails=el('details');sampleDetails.append(el('summary','','样本处理与核验'),window.eaSampleEvidencePanel(j));box.append(sampleDetails);selectCoefficient(r.coefficients.find(c=>c.term!=='(Intercept)')||r.coefficients[0],table.querySelectorAll('tr')[r.coefficients.findIndex(c=>c.term!=='(Intercept)')+1]||table.querySelectorAll('tr')[1]);
   if(j.engine_id==='statspai_cloud'){
     const teaching=el('details','ea-corresponding-code'),body=el('div');teaching.append(el('summary','','Stata 对应代码'),body);

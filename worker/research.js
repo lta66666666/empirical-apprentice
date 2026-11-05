@@ -458,11 +458,11 @@ export async function handleResearch(request, env, owner, path) {
         'execution.log': job.node_artifacts?.['execution.log'] || `created=${new Date(job.created * 1000).toISOString()}\nstatus=${job.status}\nlocation=${job.execution_location||'browser_webr'}\nR=${job.result?.r_version || 'not completed'}\nfixest=${job.result?.package_versions?.fixest || 'not completed'}\n`,
       };
       if(job.data_id){const d=await loadResearchData(env,owner,job.session_id,job.data_id),source=await env.FILES.get(d.source_key),sidecar=await env.FILES.get(d.metadata_key);if(!source||!sidecar)throw Error('原始材料或导入记录丢失，未导出不完整复现包。');files['original.'+d.format]=new Uint8Array(await source.arrayBuffer());files['import_metadata.json']=await sidecar.text();files['data_identity.json']=JSON.stringify({data_id:d.id,source_sha256:d.source_sha256,canonical_sha256:d.canonical_sha256,import_version:d.import_version,labels:d.labels});}
-      if(job.result){files['coefficients.svg']=coefficientsSvg(job);if(job.plan.method==='did')files['group_trends.svg']=groupTrendsSvg(job,parseCsv(original,job.filename));}
+      if(job.result){files['coefficients.svg']=coefficientsSvg(job);if(job.plan.method==='did'){files['group_trends.svg']=groupTrendsSvg(job,parseCsv(original,job.filename));files['did_contrast.svg']=didContrastSvg(job,parseCsv(original,job.filename));}}
       await requireExportVersion(env,job);
       return new Response(zipFiles(files), { headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="analysis-reproduction.zip"' } });
     }
-    if (/^artifacts\/(coefficients\.svg|group_trends\.svg|coefficients\.csv|execution\.log)$/.test(tail) && request.method === 'GET') {
+    if (/^artifacts\/(coefficients\.svg|group_trends\.svg|did_contrast\.svg|coefficients\.csv|execution\.log)$/.test(tail) && request.method === 'GET') {
       if (!job.result) return fault('任务尚无执行结果。', 409);
       const name = tail.split('/')[1];
       if (name === 'coefficients.svg') return new Response(coefficientsSvg(job), { headers: { 'Content-Type': 'image/svg+xml; charset=utf-8' } });
@@ -470,7 +470,8 @@ export async function handleResearch(request, env, owner, path) {
       if (name === 'execution.log') return new Response(job.node_artifacts?.['execution.log'] || `location=${job.execution_location||'browser_webr'}\nstatus=${job.status}\nR=${job.result.r_version}\nfixest=${job.result.package_versions.fixest}\n`, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
       const object = await env.FILES.get(job.input_key);
       if (!object) return fault('输入文件已丢失。', 404);
-      return new Response(groupTrendsSvg(job, parseCsv(await object.text(), job.filename)), { headers: { 'Content-Type': 'image/svg+xml; charset=utf-8' } });
+      const data = parseCsv(await object.text(), job.filename);
+      return new Response(name === 'did_contrast.svg' ? didContrastSvg(job, data) : groupTrendsSvg(job, data), { headers: { 'Content-Type': 'image/svg+xml; charset=utf-8' } });
     }
     return null;
   } catch (cause) { return requestFault(cause); }
@@ -572,6 +573,39 @@ function groupTrendsSvg(job, data) {
     return `<polyline points="${points}" fill="none" stroke="${group === '1' ? '#087e75' : '#c57442'}" stroke-width="3"/>`;
   }).join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 260" role="img" aria-label="处理组与对照组描述性均值"><rect width="100%" height="100%" fill="#fff"/>${lines}${years.map((year) => `<text x="${x(year)}" y="230" text-anchor="middle" font-size="11">${year}</text>`).join('')}<text x="55" y="20" font-size="12">处理组</text><text x="145" y="20" font-size="12" fill="#c57442">对照组</text><text x="55" y="252" font-size="11">描述性图；不能证明平行趋势</text></svg>`;
+}
+
+export function didContrastSvg(job, data) {
+  const { time, treated, outcome, policy_year } = job.plan;
+  const fallback = (message) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 90" role="img" aria-label="DID 对比图暂不生成"><rect width="100%" height="100%" fill="#fff"/><text x="14" y="48" font-size="13" fill="#586765">${xml(message)}</text></svg>`;
+  if (job.plan.method !== 'did') return fallback('仅同批 DID 提供前后对比图');
+  const ti = data.headers.indexOf(time), gi = data.headers.indexOf(treated), yi = data.headers.indexOf(outcome);
+  if (ti < 0 || gi < 0 || yi < 0) return fallback('数据缺少时间、处理组或结果列');
+  const used = job.result?.audit?.used_indices ? new Set(job.result.audit.used_indices) : null;
+  const cells = { tpre: { s: 0, n: 0 }, tpost: { s: 0, n: 0 }, cpre: { s: 0, n: 0 }, cpost: { s: 0, n: 0 } };
+  for (const [index, row] of data.rows.entries()) {
+    if (used && !used.has(index + 1)) continue;
+    if ([time, treated, outcome].some((name) => MISSING.has(row[data.headers.indexOf(name)]))) continue;
+    const year = Number(row[ti]), value = Number(row[yi]), group = String(row[gi]).trim();
+    if (!Number.isFinite(year) || !Number.isFinite(value) || !['0', '1'].includes(group)) continue;
+    const cell = (group === '1' ? 't' : 'c') + (year >= Number(policy_year) ? 'post' : 'pre');
+    cells[cell].s += value; cells[cell].n++;
+  }
+  if (Object.values(cells).some((cell) => !cell.n)) return fallback('实际样本缺少处理组或对照组的前后观测');
+  const mean = (key) => cells[key].s / cells[key].n;
+  const tPre = mean('tpre'), tPost = mean('tpost'), cPre = mean('cpre'), cPost = mean('cpost');
+  const dT = tPost - tPre, dC = cPost - cPre, raw = dT - dC;
+  const model = job.result.coefficients?.find((row) => row.term === 'DID effect');
+  const lo = Math.min(tPre, tPost, cPre, cPost), hi = Math.max(tPre, tPost, cPre, cPost), pad = Math.max(1, (hi - lo) * .3);
+  const yLo = lo - pad, yHi = hi + pad, W = 620, H = 330, xPre = 170, xPost = 450, yTop = 56, yBottom = 240;
+  const y = (value) => yBottom - (value - yLo) / (yHi - yLo) * (yBottom - yTop);
+  const number = (value) => Number(value).toFixed(2);
+  const sign = (value) => (value >= 0 ? '+' : '') + number(value);
+  const lines = [[tPre, tPost, '#087e75', false, '处理组'], [cPre, cPost, '#c57442', true, '对照组']].map(([pre, post, color, dashed, name]) => {
+    const path = `<polyline points="${xPre},${y(pre)} ${xPost},${y(post)}" fill="none" stroke="${color}" stroke-width="3"${dashed ? ' stroke-dasharray="7 5"' : ''}/><circle cx="${xPre}" cy="${y(pre)}" r="5" fill="${color}"/><circle cx="${xPost}" cy="${y(post)}" r="5" fill="${color}"/>`;
+    return path + `<text x="${xPre - 12}" y="${y(pre) - 9}" text-anchor="end" font-size="12" fill="${color}">${number(pre)}</text><text x="${xPost + 12}" y="${y(post) - 9}" font-size="12" fill="${color}">${number(post)} · ${name}</text>`;
+  }).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="处理组与对照组前后均值及原始DID"><rect width="100%" height="100%" fill="#fff"/><line x1="80" y1="${yBottom}" x2="565" y2="${yBottom}" stroke="#cfd8dc"/><line x1="80" y1="${yTop}" x2="80" y2="${yBottom}" stroke="#cfd8dc"/><text x="${xPre}" y="${yBottom + 24}" text-anchor="middle" font-size="12" fill="#567079">政策前</text><text x="${xPost}" y="${yBottom + 24}" text-anchor="middle" font-size="12" fill="#567079">政策后</text>${lines}<text x="80" y="28" font-size="13" fill="#17333d">处理组变化 ${sign(dT)} · 对照组变化 ${sign(dC)}</text><text x="80" y="296" font-size="14" font-weight="600" fill="#0b645e">原始 DID = ${number(dT)} − (${number(dC)}) = ${number(raw)}</text><text x="80" y="318" font-size="12" fill="#567079">${model ? '模型 DID 系数 = ' + number(model.estimate) : '模型系数未记录'}</text><text x="390" y="318" font-size="11" fill="#8a9a96">按已确认样本计算；未做因果认证</text></svg>`;
 }
 
 export function locationLabel(job){return job.execution_location==='cloud_native'?(job.software==='python'?'云端计算':`云端原生 ${job.software==='stata'?'Stata':'R'}`):'浏览器 webR';}
