@@ -1,0 +1,93 @@
+[
+  {
+    "engine": "stata_local_mcp",
+    "bridge": "stata_mcp",
+    "method": "ols",
+    "compare": false,
+    "task_id": "542a66ec-9b38-4ba8-8b7b-a9f91798020c",
+    "n_used": 160,
+    "status": "passed"
+  },
+  {
+    "engine": "stata_local_mcp",
+    "bridge": "stata_mcp",
+    "method": "panel_fe",
+    "compare": false,
+    "task_id": "77111a26-c16c-4aca-9bba-9d7c9ed19bfd",
+    "n_used": 384,
+    "status": "passed"
+  },
+  {
+    "engine": "stata_local_mcp",
+    "bridge": "stata_mcp",
+    "method": "did",
+    "compare": false,
+    "task_id": "4fb1b450-8175-4962-b8f5-019a28b75c27",
+    "n_used": 384,
+    "status": "passed"
+  },
+  {
+    "engine": "stata_local_mcp",
+    "bridge": "stata_code",
+    "method": "ols",
+    "compare": true,
+    "task_id": "951497ab-5355-47c6-af5e-4023bcd3a870",
+    "n_used": 160,
+    "status": "passed"
+  },
+  {
+    "engine": "stata_local_mcp",
+    "bridge": "stata_code",
+    "method": "panel_fe",
+    "compare": true,
+    "task_id": "34bb31b6-57f3-48b7-9ae7-fe6826cdf014",
+    "n_used": 384,
+    "status": "passed"
+  },
+  {
+    "engine": "stata_local_mcp",
+    "bridge": "stata_code",
+    "method": "did",
+    "compare": true,
+    "task_id": "15c586c9-5797-40ff-b109-6c519c62c57c",
+    "n_used": 384,
+    "status": "passed"
+  },
+  {
+    "engine": "statspai_local",
+    "bridge": "statspai_python",
+    "method": "ols",
+    "compare": false,
+    "task_id": "4c83910a-1944-488c-a6be-776b995f8f86",
+    "n_used": 160,
+    "status": "passed"
+  },
+  {
+    "engine": "statspai_local",
+    "bridge": "statspai_python",
+    "method": "panel_fe",
+    "compare": false,
+    "task_id": "ab670894-9fcf-473d-9c47-5c833ea41e7d",
+    "n_used": 384,
+    "status": "passed"
+  },
+  {
+    "engine": "statspai_local",
+    "bridge": "statspai_python",
+    "method": "did",
+    "compare": false,
+    "task_id": "d33b7553-27c1-4aac-ba55-1de207a850f6",
+    "n_used": 384,
+    "status": "passed"
+  },
+  {
+    "bridge": "stata_mcp",
+    "cancel_seconds": 2.077999999979511,
+    "status": "passed"
+  },
+  {
+    "bridge": "stata_code",
+    "cancel_seconds": 1.0940000000409782,
+    "status": "passed"
+  }
+]

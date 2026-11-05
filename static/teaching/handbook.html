@@ -1,0 +1,114 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>实证学徒 · 从零开始的图文学习手册</title><link rel="stylesheet" href="../style.css"><link rel="stylesheet" href="../teaching.css"><style>body{display:block;height:auto;overflow:auto;background:#f6f8f4;font-size:16px}
+.handbook{max-width:900px;margin:auto;padding:36px 28px}.cover{padding:42px 0;border-bottom:2px solid #087e75;margin-bottom:26px}.cover h1{font-size:36px;line-height:1.45;margin:14px 0}.cover p{color:#54665c;max-width:650px;line-height:1.9}.cover .badge{font-size:14px}.handbook-nav{display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;margin:25px 0}.handbook-nav a{font-size:14px}.handbook-lesson{background:white;padding:30px;margin:28px 0;border:1px solid #dce7e0;border-radius:12px}.handbook-lesson h2{font-size:24px;margin:9px 0 20px}.handbook-lesson h3{margin:22px 0 10px}.handbook-lesson .prose{font-size:16px}.handbook-lesson details{font-size:16px}.handbook-lesson .answer{padding:12px 15px;background:#edf5f0}.worksheet-print{padding:14px 0;border-bottom:1px dashed #bdcfc3;min-height:85px}.worksheet-print p{font-size:14px;color:#66736f;margin:6px 0}.sources{font-size:14px;line-height:1.9;overflow-wrap:anywhere}.print-btn{margin-top:20px;min-height:44px}.case-label{font-size:14px;color:#506971}.stata-reading{padding:16px;border-left:3px solid #087e75;background:#edf5f0}.stata-reading a{display:inline-block;min-height:44px;line-height:44px}
+@media(max-width:600px){.handbook{padding:20px 14px}.cover{padding:20px 0}.cover h1{font-size:28px}.handbook-lesson{padding:18px}.handbook-nav{grid-template-columns:1fr}.handbook-lesson h2{font-size:21px}}
+@media print{body{background:white}.handbook{max-width:none;padding:0}.handbook-lesson{break-before:page;border:0;padding:0;margin:0}.handbook-nav,.print-btn,.slider-controls,.lab-controls{display:none}.teaching-figure{break-inside:avoid}.worksheet-print{min-height:90px}details{display:block}details>*{display:block!important}a{color:inherit}.cover{break-after:page}.handbook-lesson h3{break-after:avoid}}</style></head><body><main class="handbook" data-curriculum="path_zero_v6"><header class="cover"><span class="badge">8 阶段 · 图解 + 示范 + 练习 + 成果</span><h1>从“不知道怎么开始”<br>到第一份研究备忘录</h1><p>实证学徒 · 新手图文学习手册。先提出问题，再找证据；先读懂数据，再解释结果。八阶段可以分多次完成，每阶段先看图、再做题、最后保存成果。按自己的速度学习。</p><div class="prose markdown-source">欢迎来到实证学徒。你会先认识研究问题，再找证据、整理数据、计算、解释和汇报。
+本课用政策评估学习因果研究；实证研究也包括描述、相关和预测研究。
+8 个阶段可以分多次完成。每阶段先看图，再做题，最后保存一张成果卡。
+课程答题由预设规则检查；开放成果卡保存为草稿，需要人工复核。
+</div><p>【教学练习】除明确链接的真实文件外，政策、文献卡与数据均为虚构。 主线同批小实验、独立分批辨别卡和第7阶段人为统计示意图分别标识，不能混用。手册可离线阅读，外部资料和在线Stata指南需要联网。</p><button class="btn-primary print-btn" onclick="window.print()">打印 / 保存为 PDF</button></header><nav class="handbook-nav" aria-label="手册目录"><a href="#lesson-1">01 从现象到研究问题</a><a href="#lesson-2">02 找政策与核对时间</a><a href="#lesson-3">03 定对象、变量与文献</a><a href="#lesson-4">04 数据、清洗与变量编码</a><a href="#lesson-5">05 看图与手算双重差分</a><a href="#lesson-6">06 可复现小实验</a><a href="#lesson-7">07 假设检查与结果解释</a><a href="#lesson-8">08 形成研究备忘录</a></nav><section class="handbook-lesson" id="lesson-1" data-curriculum="path_zero_v6"><span class="eyebrow">阶段 01 · 8–12 分钟</span><h2>从现象到研究问题</h2><p class="case-label">主线：同批手算小实验</p><div class="lesson-goal">区分描述与因果，知道这门课要解决哪类问题。<p class="lesson-goal-meta">成果：一张研究起点卡</p></div><div class="prose markdown-source">**主线模拟案例：** 某节能政策 2015 年 1 月起在 A、B 两市试点，C、D 两市未试点；观察 2013–2016 年各城市年度能源使用量。全部为教学虚构。
+**实证研究 = 用可观察的数据回答问题。** 「A 市用能下降了」是描述；「政策造成了下降」是因果判断，需要额外证据。
+本课练第二类：如果没有政策，试点城市会怎样？这个看不见的结果叫**反事实**。
+</div><div class="offline-visual" data-visual="research"></div><h3>一步一步怎么做</h3><div class="prose markdown-source">1. 从具体困惑开始：为什么一些城市用能下降了？
+2. 明确任务：描述变化、找关联、预测，还是评估政策作用？
+3. 先写对象和结果，再考虑方法。
+</div><h3>跟着示范理解</h3><div class="prose markdown-source">**补课与成绩：** 补课学生分更高，可能与家庭支持、原有成绩有关。
+看到差异不足以说补课造成差异。
+</div><h3>容易踩的坑</h3><div class="prose markdown-source">- 不要把所有实证问题都改写成因果问题。</div><h3>练习 1</h3><div class="prose markdown-source">“试点城市的能源使用量下降了”和“政策造成了下降”的差别是什么？</div><ul><li>A. 没有差别，先发生政策就能说明因果。</li><li>B. 前一句描述变化，后一句提出需要额外证据支持的因果判断。</li><li>C. 只有因果问题才算实证研究。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">B。观察到变化与把变化归因于政策，是不同的证据要求。</div></div></details><h3>练习 2</h3><div class="prose markdown-source">用历史用电量预报下月需求，主要属于哪类任务？</div><ul><li>A. 预测。预测准确并不自动解释政策因果效应。</li><li>B. 因果。只要用了历史数据就能证明原因。</li><li>C. 不属于实证，因为没有政策。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">A。研究任务决定需要什么证据。</div></div></details><h3>我的研究起点卡</h3><p>这里供打印后填写。网页应用中可保存与导出；手册本身不保存输入。</p><div class="worksheet-print"><strong>我关心的现象</strong><p>例如：部分城市的能源使用量下降了。</p></div><div class="worksheet-print"><strong>我先想回答哪类问题？为什么？</strong><p>描述 / 相关 / 预测 / 因果；用一句话说明。</p></div></section>
+<section class="handbook-lesson" id="lesson-2" data-curriculum="path_zero_v6"><span class="eyebrow">阶段 02 · 12–18 分钟</span><h2>找政策与核对时间</h2><p class="case-label">对比：分批实施辨别卡</p><div class="lesson-goal">找到官方原文，区分发布、实施和扩围时间。<p class="lesson-goal-meta">成果：政策来源卡与批次时间表</p></div><div class="prose markdown-source">**先读文件，再把文件变成变量。**
+关键区分：**发布日** ≠ **实施日**。通知 3 月发布，可能 7 月才生效。
+独立的分批辨别卡：A、B、C、D 市 2015 年 7 月 1 日开始，E、F 市 2016 年 1 月加入；不使用主线小实验的数据或 DID 结果。
+</div><div class="offline-visual" data-visual="timeline"></div><h3>一步一步怎么做</h3><div class="prose markdown-source">1. 搜“主题 + 试点/通知/实施方案”，从发布机关官网进原文。
+2. 分开记录签发日、发布日、计划实施日、实际执行日。
+3. 为每个地区单列进入日期；找不到就写“待核实”。
+</div><h3>跟着示范理解</h3><div class="prose markdown-source">**真实文件入口：** 发改委《电力现货市场建设试点通知》，落款 2017-08-28，网页 2017-09-05。
+不能把网页日期当成所有地区的运行日期。
+</div><h3>容易踩的坑</h3><div class="prose markdown-source">- 新闻转述不能替代原始名单。
+- 晚加入的地区不是永远的对照组。</div><h3>练习 1</h3><div class="prose markdown-source">第一批 A、B、C、D 市从什么时候开始实施？</div><ul><li>A. 2015 年 3 月，通知发布时。</li><li>B. 2015 年 7 月 1 日。</li><li>C. 2016 年 1 月。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">B。第一批从 2015-07-01 开始，第二批 2016-01。</div></div></details><h3>练习 2</h3><div class="prose markdown-source">E 市在 2015 年 8 月已经进入政策处理状态了吗？</div><ul><li>A. 是，因为全省通知已发布。</li><li>B. 否，E 市尚未正式加入；还应留意预期行为。</li><li>C. E 市从来不会被处理。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">B。应按地区和时间编码；尚未实施不等于完全没有预期效应。</div></div></details><h3>政策来源卡（允许填写待核实）</h3><p>这里供打印后填写。网页应用中可保存与导出；手册本身不保存输入。</p><div class="worksheet-print"><strong>标题、文号与机关</strong><p>按原文填写；模拟卡需注明模拟。</p></div><div class="worksheet-print"><strong>原文链接与查阅日期</strong><p>网址 + 条款 + 查阅日期；打不开则说明。</p></div><div class="worksheet-print"><strong>发布、实施与批次</strong><p>分开填各日期和地区，不把发布日当实施日。</p></div></section>
+<section class="handbook-lesson" id="lesson-3" data-curriculum="path_zero_v6"><span class="eyebrow">阶段 03 · 15–20 分钟</span><h2>定对象、变量与文献</h2><p class="case-label">主线：同批手算小实验</p><div class="lesson-goal">把方向变成可测量的研究问句，并知道文献帮什么。<p class="lesson-goal-meta">成果：研究问题与变量字典</p></div><div class="prose markdown-source">**一个研究问题要讲清四件事：什么政策、影响谁、观察什么结果、想判断什么关系。**
+结果变量要具体：能源总量还是强度？城市还是企业？单位是什么？
+文献的作用：看别人问过什么、用过什么数据、你还缺什么证据——不是照搬结论。
+</div><div class="offline-visual" data-visual="question"></div><h3>一步一步怎么做</h3><div class="prose markdown-source">1. 用政策卡确定干预与覆盖对象。
+2. 写明主要结果的定义、单位、来源。
+3. 写一句可回答的问题；从关键词检索最相关的 1–2 篇文献。
+4. 记录文献的样本、变量、方法、局限，标注哪些可借鉴。
+</div><h3>跟着示范理解</h3><div class="prose markdown-source">**从大到小：** “研究绿色发展” → “研究城市节能政策” → “节能试点是否降低城市年度能源使用量？”
+能源强度 = 用能 / 产出，与总量回答不同问题，不能互换。
+</div><h3>容易踩的坑</h3><div class="prose markdown-source">- 政策之后的中间变量不应未经讨论就当控制变量。</div><h3>练习 1</h3><div class="prose markdown-source">想研究“是否减少能源消耗总量”，哪个主要结果更直接匹配？</div><ul><li>A. 城市年度能源使用总量，并核对单位和统计口径。</li><li>B. 政策通知的字数，因为更容易取得。</li><li>C. 任意一个容易显著的指标。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">A。主要结果应对应问题和理论。</div></div></details><h3>练习 2</h3><div class="prose markdown-source">请为模拟节能政策写一句包含政策、对象、结果和关系的研究问句。</div><p>先独立写下答案，再展开示范。</p><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">结构示例：节能试点政策是否降低了试点城市的年度能源使用量？</div></div></details><h3>练习 3</h3><div class="prose markdown-source">AI 给出一篇非常符合选题的论文，下一步应怎么做？</div><ul><li>A. 直接引用，标题看起来合理就足够。</li><li>B. 核实文献存在，并在原文中定位支持该结论的内容。</li><li>C. 把引用数量加倍就能解决可靠性问题。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">B。真实存在的论文也可能被错误概括。</div></div></details><h3>研究问题、变量与文献卡</h3><p>这里供打印后填写。网页应用中可保存与导出；手册本身不保存输入。</p><div class="worksheet-print"><strong>一句话研究问题</strong><p>什么政策是否影响了哪些对象的什么结果？</p></div><div class="worksheet-print"><strong>主要结果的定义与单位</strong><p>总量还是强度？分母是什么？数据频率？</p></div><div class="worksheet-print"><strong>最相关文献的设计与局限</strong><p>谁与谁比？依赖什么假设？对你有什么借鉴？</p></div></section>
+<section class="handbook-lesson" id="lesson-4" data-curriculum="path_zero_v6"><span class="eyebrow">阶段 04 · 18–25 分钟</span><h2>数据、清洗与变量编码</h2><p class="case-label">主线：同批手算小实验</p><div class="lesson-goal">读懂面板数据，掌握 treated/post/did 编码，并处理重复与缺失。<p class="lesson-goal-meta">成果：数据可得性清单与清洗日志</p></div><div class="prose markdown-source">**面板数据：同一批单位在多个时期的记录。** 每行 = 城市 × 年份。
+试点统一从 2015 年 1 月开始；A、B 为试点组，C、D 为对照组，覆盖 2013–2016。
+本课三个核心编码（同批二期简化版）：
+  • **treated**：是否试点组。1 = 试点城市，0 = 非试点城市。
+  • **post**：是否政策后。1 = 政策实施当年及以后，0 = 之前。
+  • **did = treated × post**：只有「试点城市 × 政策后」的行是 1，其余都是 0。
+示例：C 市是非试点，2015 年是政策后 → treated=0, post=1, did=0。
+</div><div class="offline-visual" data-visual="panel"></div><h3>一步一步怎么做</h3><div class="prose markdown-source">1. 必需字段：城市、年份、结果值、treated、post。
+2. 按字段找来源，先试取 2 城市 × 2 年份确认能读出数值。
+3. 用“城市+年份”查唯一性；完全重复与同键不同值分开处理。
+4. 查缺失原因；本例用模拟补充表恢复，真实研究须追溯可靠来源。
+5. 输出清洗日志：原始 17 行 → 去重复 1 行 → 补缺失 1 格 → 保留 16 行。
+</div><h3>跟着示范理解</h3><div class="prose markdown-source">A 市 2014：treated=1, post=0, did=0
+A 市 2015：treated=1, post=1, did=1
+C 市 2015：treated=0, post=1, did=0（日历进入政策后，但该市没接受政策）
+</div><h3>容易踩的坑</h3><div class="prose markdown-source">- 只有政策前数据无法算前后变化。
+- 缺失值不是零。
+- 合并失败的记录不能默认成“未试点”。</div><h3>练习 1</h3><div class="prose markdown-source">一张表只有 A、C 两市 2013–2014 年数据。要评估 2015 年政策，还缺什么？</div><ul><li>A. 只缺城市名的英文翻译。</li><li>B. 政策后结果观测，以及经核实的组别和进入时间。</li><li>C. 什么都不缺，直接运行 DID。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">B。数据结构、时间覆盖和政策状态都要检查。</div></div></details><h3>练习 2</h3><div class="prose markdown-source">C 市是非试点城市。2015 年它的 treated、post、did 分别是？</div><ul><li>A. 1、1、1。</li><li>B. 0、0、0。</li><li>C. 0、1、0。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">C。未试点组也有政策后观测，否则无法比较同期变化。</div></div></details><h3>练习 3</h3><div class="prose markdown-source">原始 17 行，去掉 1 行完全重复，再填回 1 个缺失单元格，最终多少行？</div><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">16 行。填回缺失值改变单元格，不是样本行数。</div></div></details><h3>数据与清洗清单</h3><p>这里供打印后填写。网页应用中可保存与导出；手册本身不保存输入。</p><div class="worksheet-print"><strong>一行是什么？需要哪些时期？</strong><p>分析单位、时间频率、政策前后窗口。</p></div><div class="worksheet-print"><strong>每个必需字段在哪里找？</strong><p>字段 → 来源 → 获取方式 → 口径。</p></div><div class="worksheet-print"><strong>发现的问题与处理</strong><p>重复、缺失、冲突；处理依据和前后行数。</p></div></section>
+<section class="handbook-lesson" id="lesson-5" data-curriculum="path_zero_v6"><span class="eyebrow">阶段 05 · 18–25 分钟</span><h2>看图与手算双重差分</h2><p class="case-label">主线：同批手算小实验</p><div class="lesson-goal">读懂组均值趋势，用两次相减算出 DID。<p class="lesson-goal-meta">成果：图表观察卡与 DID 计算卡</p></div><div class="prose markdown-source">**DID = 两次相减。** 试点组变化 − 对照组变化。
+先算各自「后 − 前」，再相减。对照组帮你扣除共同变化（如经济周期、天气）。
+试点组 2014→2015：101 → 81；对照组：99 → 94。
+</div><div class="offline-visual" data-visual="did"></div><h3>一步一步怎么做</h3><div class="prose markdown-source">1. 看图：政策前两组水平与斜率，政策后变化方向与幅度。
+2. 算试点变化、对照变化，保留正负号与单位。
+3. 相减得 DID，写一句含义。
+4. 注意：试点组全部降幅不都是政策效果；图不能证明平行趋势。
+</div><h3>跟着示范理解</h3><div class="prose markdown-source">试点变化 = 81 − 101 = −20
+对照变化 = 94 − 99 = −5
+DID = (−20) − (−5) = −15（万吨标准煤）
+</div><h3>容易踩的坑</h3><div class="prose markdown-source">- 不能把试点组全部降幅都算政策效果。
+- DID 符号取决于相减顺序。</div><h3>练习 1</h3><div class="prose markdown-source">2014 年 A 市 100、B 市 102，两市简单平均是多少？</div><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">101 万吨标准煤。</div></div></details><h3>练习 2</h3><div class="prose markdown-source">试点组从 101 到 81，变化量是多少？</div><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">−20 万吨标准煤。</div></div></details><h3>练习 3</h3><div class="prose markdown-source">对照组从 99 到 94，变化量是多少？</div><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">−5 万吨标准煤。</div></div></details><h3>练习 4</h3><div class="prose markdown-source">试点变化 −20，对照变化 −5，DID 是多少？</div><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">−15 万吨标准煤。只有比较假设成立时才能解释为效应估计。</div></div></details><h3>图表观察与 DID 计算卡</h3><p>这里供打印后填写。网页应用中可保存与导出；手册本身不保存输入。</p><div class="worksheet-print"><strong>图中直接看到了什么？</strong><p>组别、年份、数值、方向及单位。</p></div><div class="worksheet-print"><strong>DID 计算式与结果</strong><p>(试点后−试点前) − (对照后−对照前)，带单位。</p></div><div class="worksheet-print"><strong>如何解释？需要哪些前提？</strong><p>相对变化与平行趋势等条件。</p></div></section>
+<section class="handbook-lesson" id="lesson-6" data-curriculum="path_zero_v6"><span class="eyebrow">阶段 06 · 20–25 分钟</span><h2>可复现小实验</h2><p class="case-label">主线：同批手算小实验</p><div class="lesson-goal">用脚本把清洗、分组均值和 DID 连成一次可复现运行。<p class="lesson-goal-meta">成果：实验输出与运行记录</p></div><div class="prose markdown-source">**手算之后，用脚本验证。** 资料包含原始 CSV、模拟补充表、变量字典、带注释的 Python 脚本。
+无需 API 密钥或第三方包。Python 3.10+，脚本与 CSV 放同一文件夹。
+预期：16 行、去 1 重复、补 1 缺失、二期 DID = −15。
+</div><div class="offline-visual" data-visual="pipeline"></div><h3>一步一步怎么做</h3><div class="prose markdown-source">1. 解压资料包，核对文件齐全。
+2. Windows：`py run_demo.py`；macOS/Linux：`python3 run_demo.py`。
+3. 按 ①读取 ②审计 ③清洗 ④聚合 ⑤计算 顺序读注释。
+4. 检查 outputs 中的清洗日志、清洁数据、组均值与研究备忘录。
+5. 值不一致就从清洗日志和组均值逐步排查。
+</div><h3>跟着示范理解</h3><div class="prose markdown-source">`did = (treated_after - treated_before) - (control_after - control_before)`
+二期回归记法：Y = α + β·treated + γ·post + δ·(treated×post) + ε。
+本课等权饱和模型中 δ 对应均值 DID。
+</div><h3>容易踩的坑</h3><div class="prose markdown-source">- 脚本成功不代表设计正确。
+- 改数据/窗口后必须重跑全部输出。</div><aside class="stata-reading"><h3>用 Stata 看懂同一条复现链路</h3><p>本阶段原有 Python 小实验继续保留。想理解 Stata 的 do-file、运行与日志，可以进入只读操作指南，再对照本次分析的实际代码与结果。</p><a href="/analysis?stata_guide=do-files">打开 Stata 操作指南：do-file 与运行记录</a><p>网页可能要求先登录。阅读指南不会执行代码，也不代表已掌握；真实 Stata 计算仍需要有效安装及本机两次批准。离线时可继续阅读本手册和 Python 实验，在线指南需联网。</p></aside><h3>练习 1</h3><div class="prose markdown-source">脚本输出 DID = −15，应该怎么核对？</div><ul><li>A. 只看终端有没有红色报错。</li><li>B. 核对行数、清洗日志、两组前后均值，再与手算比较。</li><li>C. 立刻写“政策显著降低了能源使用量”。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">B。复算是必要检查，因果有效性仍依赖设计。</div></div></details><h3>练习 2</h3><div class="prose markdown-source">把窗口改成 2013–2016 后，能否沿用旧输出文件？</div><ul><li>A. 能，因为 DID 方法没变。</li><li>B. 不能，需更新设计记录并重跑，核对输出对应新窗口。</li><li>C. 只改图表标题即可。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">B。代码、数据、输出、文字应属同一版本。</div></div></details><h3>可复现运行记录</h3><p>这里供打印后填写。网页应用中可保存与导出；手册本身不保存输入。</p><div class="worksheet-print"><strong>运行环境与命令</strong><p>系统、Python 版本、执行命令。</p></div><div class="worksheet-print"><strong>实际输出或报错</strong><p>行数、重复缺失数、DID；或关键报错。</p></div><div class="worksheet-print"><strong>如何追溯一个数字？</strong><p>从原始行到组均值到 DID 的路径。</p></div></section>
+<section class="handbook-lesson" id="lesson-7" data-curriculum="path_zero_v6"><span class="eyebrow">阶段 07 · 18–25 分钟</span><h2>假设检查与结果解释</h2><p class="case-label">主线：同批手算小实验</p><div class="lesson-goal">理解平行趋势、置信区间，联合解释方向、幅度与局限。<p class="lesson-goal-meta">成果：威胁清单与四句话结果解释</p></div><div class="prose markdown-source">**平行趋势：** 没有政策时，处理组与对照组的变化应可比。这个反事实看不见。
+政策前走势是诊断，不是证明。「不显著」≠ 证明无差异。
+下面的事件研究图是**独立的人为示意图**，未由前面的 4 城市数据估计。
+解释结果四步：观察 → 幅度 → 不确定性 → 局限。对数系数要做指数变换。
+</div><div class="offline-visual" data-visual="event"></div><h3>一步一步怎么做</h3><div class="prose markdown-source">1. 解释为什么这组对照能代表无政策时的变化。
+2. 列出至少两种威胁（同期冲击、选择机制、外溢等）及所需证据。
+3. 报告具体估计与区间，不只看星号。
+4. 对数系数 −0.22 ≈ 100×(exp(−0.22)−1) ≈ −19.75%，含义看模型。
+</div><h3>跟着示范理解</h3><div class="prose markdown-source">点估计 −2，区间 [−8, 4]：与下降、零或一定上升都相容，不能写“政策无效”。
+区间只表达抽样不确定性，不消除选择偏误。
+</div><h3>容易踩的坑</h3><div class="prose markdown-source">- 区间跨零不等于证明没效果。
+- 事后显著不自动证明因果。</div><h3>练习 1</h3><div class="prose markdown-source">政策前系数检验不显著，最稳妥的判断是什么？</div><ul><li>A. 已经证明平行趋势成立。</li><li>B. 必然只是样本太小。</li><li>C. 没有足够证据拒绝零假设；仍需结合趋势、区间和设计。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">C。不显著不能单独判定假设成立或政策无效。</div></div></details><h3>练习 2</h3><div class="prose markdown-source">t=1 的对数系数为 −0.22，哪种解释更准确？</div><ul><li>A. 能源使用量减少 22 万吨标准煤。</li><li>B. 必然等于平均能源使用量减少 22%。</li><li>C. 对数尺度系数为负；指数变换约 −19.75%，具体含义看模型。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">C。先确认模型与估计量，再解释经济含义。</div></div></details><h3>练习 3</h3><div class="prose markdown-source">估计 −2，区间 [−8, 4]，可以说“政策被证明无效”吗？</div><ul><li>A. 可以，区间包含零就证明效应是零。</li><li>B. 不可以，区间允许多种方向和幅度，应报告不确定性。</li><li>C. 反而证明政策必然有效，只是精度不够。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">B。应如实报告估计、区间、设计与局限。</div></div></details><h3>威胁、证据与四句话解释</h3><p>这里供打印后填写。网页应用中可保存与导出；手册本身不保存输入。</p><div class="worksheet-print"><strong>第一种威胁及所需证据</strong><p>同期政策 → 两组政策清单与时点。</p></div><div class="worksheet-print"><strong>第二种不同的威胁</strong><p>不要把“同期政策”和“别的政策”当两个独立威胁。</p></div><div class="worksheet-print"><strong>第一句 · 具体观察</strong><p>时点、估计、方向与区间。</p></div><div class="worksheet-print"><strong>局限与下一步</strong><p>哪个替代解释未排除？怎样找证据？</p></div></section>
+<section class="handbook-lesson" id="lesson-8" data-curriculum="path_zero_v6"><span class="eyebrow">阶段 08 · 15–20 分钟</span><h2>形成研究备忘录</h2><p class="case-label">主线：同批手算小实验</p><div class="lesson-goal">把问题、证据、分析和局限连起来，知道下一步做什么。<p class="lesson-goal-meta">成果：一页研究备忘录与个人行动清单</p></div><div class="prose markdown-source">**终点是一份可审阅的备忘录，不是“我学会了”。**
+串起：问题 → 政策证据 → 文献 → 数据与清洗 → 比较设计 → 结果 → 局限与下一步。
+模拟结果不是真实发现；未核实信息要分开标注。
+</div><div class="offline-visual" data-visual="memo"></div><h3>一步一步怎么做</h3><div class="prose markdown-source">1. 回顾各阶段成果卡，补齐空项；不会的写成具体待办。
+2. 每个数字能追溯到数据、代码或明确标注的教学示意。
+3. 写清模拟 vs 真实。
+4. 导出学习记录。选择真实政策或自己的想法进入研究蓝图。
+</div><h3>跟着示范理解</h3><div class="prose markdown-source">**小实验备忘录摘要：** 4 个模拟城市，原始 17 行去 1 重复补 1 缺失得 16 行。
+2014–2015 均值 DID = −15 万吨标准煤。人为数据，未做可靠推断，不能形成真实结论。
+下一步：核实自己题目的政策时间、数据覆盖与比较对象。
+</div><h3>容易踩的坑</h3><div class="prose markdown-source">- 没有数据或对照时应调整问题，不必强行套 DID。
+- 零结果与不确定结论也有价值。</div><h3>练习 1</h3><div class="prose markdown-source">正式研究数据尚未拿到、政策时间仍有疑问，现在最合理的交付是什么？</div><ul><li>A. 用模拟结果替换真实结果并完成论文。</li><li>B. 带来源与待核实项的设计备忘录、数据获取计划和下一步任务。</li><li>C. 不用记录问题，继续生成更多回归表。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">B。把未知转为可执行任务，才是真正推进研究。</div></div></details><h3>练习 2</h3><div class="prose markdown-source">论文数值与最新脚本输出不同，提交前应怎么做？</div><ul><li>A. 保留更显著、更好看的那个数字。</li><li>B. 核对数据、代码、样本与输出版本，统一后重新审阅。</li><li>C. 只改小数位，让差异不明显。</li></ul><details><summary>完成后再核对示范</summary><div class="answer"><div class="prose markdown-source">B。你已完成这条入门路线；请导出记录并复习需要提示的题目。完成课程不等于真实研究已通过审核。</div></div></details><h3>我的第一份研究备忘录</h3><p>这里供打印后填写。网页应用中可保存与导出；手册本身不保存输入。</p><div class="worksheet-print"><strong>问题、政策与文献依据</strong><p>研究问题和可核对来源；标注模拟或真实。</p></div><div class="worksheet-print"><strong>数据、清洗与比较设计</strong><p>样本、窗口、变量、处理记录、比较对象及假设。</p></div><div class="worksheet-print"><strong>结果、解释与局限</strong><p>具体数值和单位；哪些尚不能得出结论？</p></div><div class="worksheet-print"><strong>下一步可执行行动</strong><p>去哪里找什么、产出什么、由谁核对。</p></div></section><section class="handbook-lesson sources"><h2>来源与使用边界</h2><p>真实政策原文：<a href="https://www.ndrc.gov.cn/xxgk/zcfb/tz/201709/t20170905_962552.html">国家发展改革委、国家能源局：发改办能源〔2017〕1453号</a>。用于区分文件发布与实际实施，未据此验证地方启动时间。</p><p>统计解释依据：<a href="https://www.amstat.org/asa/files/pdfs/P-ValueStatement.pdf">American Statistical Association（2016），Statement on Statistical Significance and P-Values 新闻说明</a>。用于解释不应只按阈值判断结论。</p><p>进阶方法阅读：<a href="https://arxiv.org/abs/1803.09015">Callaway &amp; Sant’Anna，Difference-in-Differences with Multiple Time Periods</a>。用于提示多期分批设计与组别—时间效应；本课没有实现该估计器。</p><p>上述来源既有核对日期：2026-09-28。所有示意图和教学数值为本项目自制，不能作为真实政策效果引用。</p><p>数据实验：<a href="empirical_lab.zip" download>完整 Python 实验包</a>。不需要第三方 Python 包，详细运行步骤见第6阶段《可复现小实验》。</p><p>更多教材与命令来源见<a href="source-index.html">教学材料与来源索引</a>。本手册与网页课程同源；完成课程不等于独立掌握或真实研究通过审核。</p></section></main><script src="../vendor/marked.umd.js"></script><script src="../vendor/lucide.min.js"></script><script>
+function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;}
+function icon(name){const n=el('i');n.dataset.lucide=name;return n;}
+function button(text,cls,action){const b=el('button',cls,text);b.type='button';b.onclick=action;return b;}
+function markdown(target,text){target.innerHTML=marked.parse(text||'');}
+</script><script src="../teaching.js"></script><script>
+document.querySelectorAll('.markdown-source').forEach(n=>markdown(n,n.textContent));
+document.querySelectorAll('[data-visual]').forEach(n=>n.append(Teaching.visualize(n.dataset.visual)));
+document.querySelectorAll('a[href^="/static/teaching/"]').forEach(a=>a.setAttribute('href',a.getAttribute('href').replace('/static/teaching/','')));
+window.lucide?.createIcons();
+const openStates=new Map();window.addEventListener('beforeprint',()=>{document.querySelectorAll('details').forEach(d=>{openStates.set(d,d.open);d.open=true;});});window.addEventListener('afterprint',()=>{openStates.forEach((v,d)=>d.open=v);openStates.clear();});
+</script></body></html>

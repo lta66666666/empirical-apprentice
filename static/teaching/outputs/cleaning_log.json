@@ -1,0 +1,7 @@
+{
+  "input_rows": 17,
+  "exact_duplicates_removed": 1,
+  "missing_values_restored": 1,
+  "output_rows": 16,
+  "source": "全部模拟；补值仅来自同包 correction.csv"
+}

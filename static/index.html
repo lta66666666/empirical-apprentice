@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#087e75">
+  <title>实证学徒 · 学习工作台</title>
+  <link rel="stylesheet" href="/static/style.css?v=20260930i">
+  <link rel="stylesheet" href="/static/teaching.css?v=20260930i">
+  <link rel="stylesheet" href="/static/learning-polish.css?v=8">
+  <link rel="stylesheet" href="/static/research.css?v=9">
+  <link rel="stylesheet" href="/static/task-workbench.css?v=14">
+  <link rel="stylesheet" href="/static/practical-conversation.css?v=19">
+  <script defer src="/static/vendor/marked.umd.js"></script>
+  <script defer src="/static/vendor/lucide.min.js"></script>
+  <script defer src="/static/teaching.js?v=20260930i"></script>
+  <script defer src="/static/app.js?v=20260930i"></script>
+<link rel="stylesheet" href="/static/ui/components.css"><link rel="stylesheet" href="/static/ui/theme.css"></head>
+<body class="ea-ui">
+  <div role="status" style="padding:10px 18px;background:#fff1ce;color:#4f3a08;font:14px/1.5 system-ui,sans-serif">试用版：请先核对软件与执行位置。云端节点尚未上线，可明确选择浏览器 webR；本机 Stata MCP 需配对助手及本机批准；云端 Stata 授权、手机运行与清理时限分别验收。模型状态以当前实际请求为准。</div>
+  <header class="app-header">
+    <a class="brand" href="/" aria-label="实证学徒首页"><span class="brand-icon"><i data-lucide="sprout"></i></span><span>实证学徒<small>EMPIRICAL APPRENTICE</small></span></a>
+    <span class="header-divider"></span><span class="header-label">学习工作台</span>
+    <div class="header-actions">
+      <span id="modeLabel" class="mode-label">连接中</span>
+      <button id="pastBtn" class="icon-btn" title="历史练习记录" aria-label="历史练习记录"><i data-lucide="folder-clock"></i></button>
+      <button id="exportBtn" class="icon-btn" title="导出学习记录" aria-label="导出学习记录"><i data-lucide="download"></i></button>
+      <button id="newSessionBtn" class="btn-secondary" aria-label="开始新练习" title="开始新练习"><i data-lucide="plus"></i><span>新练习</span></button>
+    </div>
+  </header>
+  <div id="errorBar" class="error-bar" role="alert" hidden><span id="errorText"></span><button id="recoverBtn" class="text-btn">重新连接</button><button id="dismissError" class="icon-btn" title="关闭提示" aria-label="关闭提示"><i data-lucide="x"></i></button></div>
+  <nav class="mobile-nav" aria-label="工作区切换"><button id="learnViewBtn" class="active" aria-pressed="true">学习</button><button id="workViewBtn" aria-pressed="false">研究工作区</button></nav>
+  <main class="layout">
+    <nav class="learning-rail" aria-label="学习路线">
+      <div class="rail-heading"><i data-lucide="route"></i><h2>学习路线</h2><span id="railRange">01—08</span></div>
+      <div class="rail-progress"><span id="railCount">尚未开始</span><progress id="railProgress" max="8" value="0" aria-label="课程完成进度"></progress></div>
+      <ol id="courseOutline" class="course-outline"></ol>
+      <div class="rail-end"><i data-lucide="notebook-pen"></i><span>形成研究蓝图<small>从练习走向自己的问题</small></span></div>
+      <div class="rail-footer"><i data-lucide="shield-check"></i><p>教学陪练，不代写论文<br><span>模拟案例与真实研究分开记录</span></p></div>
+    </nav>
+    <section class="chat-panel" aria-label="学习与对话">
+      <button id="workspaceOpenBtn" type="button" class="workspace-reopen" title="展开研究工作区" aria-label="展开研究工作区" aria-expanded="false" aria-controls="sidePanel" hidden><i data-lucide="panel-right-open"></i><span>研究工作区</span></button>
+      <div class="panel-toolbar"><div><span id="stageEyebrow" class="eyebrow">开始学习</span><h1 id="stageTitle">选择你的起点</h1></div><div class="toolbar-actions"><button id="courseMapBtn" class="icon-btn" title="课程目录与成果回顾" aria-label="课程目录与成果回顾"><i data-lucide="map"></i></button><button id="historyBtn" class="icon-btn" title="查看对话记录" aria-label="查看对话记录" aria-pressed="false"><i data-lucide="history"></i></button></div></div>
+      <div id="learningScroll" class="learning-scroll">
+        <section id="entryScreen" class="entry-screen" hidden>
+          <span class="section-kicker">从一个问题开始</span><h2>研究，可以一步一步来。</h2><p class="entry-lead">不必先懂模型。选择适合你的起点，完成一次有反馈的练习。</p>
+          <div class="entry-cards">
+            <button class="entry-card recommended" data-path="zero"><span class="entry-icon"><i data-lucide="sprout"></i></span><span class="entry-copy"><span class="entry-title">我完全没接触过实证研究 <span class="badge">推荐</span></span><span class="entry-desc">8 阶段图解教学：从找政策、读数据，到动手计算和写研究备忘录</span></span><i data-lucide="arrow-up-right"></i></button>
+            <button class="entry-card" data-path="prepare"><span class="entry-icon"><i data-lucide="notebook-pen"></i></span><span class="entry-copy"><span class="entry-title">有想法，还没有数据</span><span class="entry-desc">先整理研究问题、来源与可得性；不需要先上传 CSV</span></span><i data-lucide="arrow-up-right"></i></button>
+            <button class="entry-card" data-path="data"><span class="entry-icon"><i data-lucide="file-spreadsheet"></i></span><span class="entry-copy"><span class="entry-title">已有数据，制定分析方案</span><span class="entry-desc">检查字段和缺失，学习适用方法，核对后再运行 R</span></span><i data-lucide="arrow-up-right"></i></button>
+          </div>
+          <div class="entry-secondary"><button class="text-btn" data-path="some">学过方法但没有题目</button><button class="text-btn" data-path="free">直接提问</button></div>
+          <div class="entry-outcomes"><span><i data-lucide="check-check"></i>逐题反馈</span><span><i data-lucide="file-check-2"></i>可导出记录</span><span><i data-lucide="git-branch"></i>自主选择下一步</span></div>
+        </section>
+        <section id="lessonFocus" hidden>
+          <div class="lesson-meta"><span class="badge neutral">教学练习 · 来源分别标注</span><span id="lessonProgress"></span></div>
+          <div id="lessonGoal" class="lesson-goal"></div>
+          <nav class="lesson-tabs" aria-label="本阶段学习步骤">
+            <button type="button" data-learn-pane="learn" aria-pressed="true">01 看图学</button>
+            <button type="button" data-learn-pane="practice" aria-pressed="false">02 做练习</button>
+            <button type="button" data-learn-pane="workbook" aria-pressed="false">03 写成果</button>
+          </nav>
+          <section id="learnPane" aria-label="图解与讲解">
+            <div id="lessonIntro" class="prose lesson-intro"></div>
+            <div id="teachingVisual"></div><div id="teachingDetails"></div>
+            <button type="button" id="goPractice" class="btn-primary">我理解了，开始练习</button>
+          </section>
+          <section id="practicePane" aria-label="当前练习" hidden>
+            <div id="lessonFeedback" class="feedback" role="status" hidden></div>
+            <div class="question-block"><span class="eyebrow">先判断，再看反馈</span><div id="lessonPrompt" class="prose"></div><div id="lessonBox"></div></div>
+            <p class="practice-note">答错会逐步给提示。查看示范不计为独立掌握；每阶段还有换场景练习。</p>
+            <button type="button" id="backToLesson" class="text-btn">返回图解与示范</button>
+          </section>
+          <section id="workbookPane" aria-label="本阶段成果草稿" hidden><div id="lessonWorkbook"></div></section>
+        </section>
+        <div id="messages" class="messages" role="log" aria-label="对话记录"></div>
+        <div id="quickActions" class="quick-actions"></div>
+        <div id="jumpBottomWrap" class="jump-bottom-wrap" hidden><button id="jumpBottomBtn" type="button" class="jump-bottom" title="回到底部" aria-label="回到底部"><i data-lucide="arrow-down"></i>回到底部</button></div>
+        <div id="waiting" class="waiting" role="status" hidden><span class="spinner"></span>正在整理反馈…</div>
+      </div>
+      <div id="composerWrap" class="composer-wrap" hidden><div class="input-area"><textarea id="userInput" maxlength="2000" placeholder="写下你的想法…" rows="2" aria-label="你的回答"></textarea><button id="sendBtn" class="btn-primary send-btn" title="发送回答" aria-label="发送回答"><i data-lucide="arrow-up"></i></button></div><div class="composer-footer"><span id="inputHint">你的回答会保留在本次学习记录中</span><span id="charCount">0 / 2000</span></div></div>
+      <div id="demoHint" class="demo-hint">正在连接学习服务…</div>
+    </section>
+    <aside id="sidePanel" class="side-panel" aria-label="研究工作区">
+      <div class="workspace-heading"><h2>研究工作区</h2><button id="workspaceCloseBtn" type="button" class="workspace-toggle" title="收起研究工作区" aria-label="收起研究工作区" aria-expanded="true" aria-controls="sidePanel"><i data-lucide="panel-right-close"></i></button></div>
+      <div class="workspace-tabs" role="tablist" aria-label="研究资料"><button id="tab-blueprint" role="tab" aria-selected="true" aria-controls="pane-blueprint" data-tab="blueprint">蓝图 <span id="blueprintCount">0</span></button><button id="tab-preparation" role="tab" aria-selected="false" aria-controls="pane-preparation" tabindex="-1" data-tab="preparation">准备清单</button><button id="tab-materials" role="tab" aria-selected="false" aria-controls="pane-materials" tabindex="-1" data-tab="materials">资料</button><button id="tab-records" role="tab" aria-selected="false" aria-controls="pane-records" tabindex="-1" data-tab="records">记录</button></div>
+      <div class="workspace-body">
+        <section id="pane-blueprint" role="tabpanel" aria-labelledby="tab-blueprint"><div class="workspace-note">仅记录你的研究想法；确认表述不代表事实已核实。</div><div id="blueprintContent"></div></section>
+        <section id="pane-preparation" role="tabpanel" aria-labelledby="tab-preparation" hidden><div id="preparationContent"></div></section>
+        <section id="pane-materials" role="tabpanel" aria-labelledby="tab-materials" hidden>
+          <section class="resource-section"><span class="eyebrow">可下载 · 可复算</span><h3>4 城市 DID 小实验</h3><p>模拟原始数据、数据字典、注释脚本和核对值。无需 API 密钥。</p><a class="resource-download" href="/static/teaching/empirical_lab.zip" download>下载完整实验包 ↓</a><a class="source-link" href="/static/teaching/handbook.html" target="_blank" rel="noopener">打开图文学习手册（可打印）</a></section>
+          <section class="resource-section"><h3>进阶案例解读</h3><p>沿用 V9 的五张现有教学案例；先写自己的解释，再对照原有参考要点，可保存修订。</p><button id="startPracticeCase" type="button" class="btn-secondary">开始一张进阶案例</button></section>
+          <section id="caseCard" class="resource-section" hidden><h3>案例图表</h3><div id="caseInfo" class="muted"></div><div id="eventChart"></div></section>
+          <section class="resource-section"><span class="eyebrow">从哪里找政策</span><h3>先找原文，再记信息</h3><ol class="guide-list"><li>搜“政策关键词 + 通知 / 试点名单”，优先进入发布机关官网。</li><li>核对文件名、文号、发布机关和原文链接。</li><li>分别记录发布日期、实施日期、覆盖对象和批次。</li><li>沿附件与地方文件核实落地情况，不把新闻摘要当作政策原文。</li></ol></section>
+          <section class="resource-section"><span class="eyebrow">真实文件 · 阅读示例</span><h3>电力现货市场建设试点</h3><p>发改办能源〔2017〕1453号</p><a class="source-link" href="https://www.ndrc.gov.cn/xxgk/zcfb/tz/201709/t20170905_962552.html" target="_blank" rel="noopener noreferrer">国家发展改革委原文 <i data-lucide="external-link"></i></a><p class="resource-caution">发布不等于实施。各地启动时间、数据可得性与可比对象还需要核实。</p></section>
+          <section class="resource-section"><h3>概念速查</h3><details><summary>处理组与对照组</summary><p>处理组受到政策干预；对照组帮助推测没有政策时会怎样。没有受到政策并不自动意味着适合作对照。</p></details><details><summary>什么是 DID？</summary><p>比较两组在政策前后的变化之差。在平行趋势等识别假设成立时，才可能将差异解释为政策效应。</p></details><details><summary>什么是面板数据？</summary><p>同一批单位在多个时期的观测。例如每一行是一个城市在某年的能源使用量。</p></details></section>
+        </section>
+        <section id="pane-records" role="tabpanel" aria-labelledby="tab-records" hidden><div id="recordContent"></div><section id="taskCard" class="resource-section" hidden><h3>研究任务单</h3><div id="taskContent"></div></section><button id="exportRecordBtn" class="btn-secondary full-width"><i data-lucide="download"></i>导出完整学习记录</button><div class="report-actions"><a class="btn-secondary" id="learningReportMd" download="learning-report.md">学生学习报告.md</a><a class="btn-secondary" id="learningReportPdf" download="learning-report.pdf">学生学习报告.pdf</a></div><p class="storage-note">记录属于当前浏览器，保存在服务器；最近活动 7 天后拒绝访问，物理清理接口已实现，云端定时调度待恢复；到期后一小时内删除尚未验收。可手动删除或提前导出；清除浏览器身份凭证后无法自动找回。</p></section>
+      </div>
+    </aside>
+  </main>
+  <dialog id="appDialog" aria-labelledby="dialogTitle"><div class="dialog-heading"><h2 id="dialogTitle"></h2><button id="closeDialog" class="icon-btn" title="关闭" aria-label="关闭"><i data-lucide="x"></i></button></div><div id="dialogBody"></div><div id="dialogActions" class="dialog-actions"></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+<script defer src="/static/analysis.js"></script>
+<script defer src="/static/plan-normalization.js"></script>
+<script defer src="/static/ai-interpretation.js"></script>
+<script defer src="/static/research.js?v=14"></script>
+<script defer src="/static/webr-execution.js"></script>
+<script defer src="/static/pdf-export.js"></script>
+<script defer src="/static/learning-motion.js"></script>
+<script defer src="/static/tutorial.js"></script>
+<script defer src="/static/preparation.js?v=10"></script>
+<script defer src="/static/research-drafts.js?v=14"></script>
+<script defer src="/static/task-workbench.js?v=14"></script>
+<script defer src="/static/agent-evidence.js?v=15"></script>
+<script defer src="/static/ui-refinement.js?v=18"></script>
+<script defer src="/static/sample-evidence.js"></script>
+<script defer src="/static/sample-evidence-view.js"></script>
+<script defer src="/static/practical-conversation.js?v=19"></script>
+</body>
+</html>

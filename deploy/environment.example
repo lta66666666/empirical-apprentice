@@ -1,0 +1,9 @@
+SITE_DOMAIN=your-filed-domain.example
+PUBLIC_ORIGIN=https://your-filed-domain.example
+# Generate a random 32+ character secret; both names must contain the same value.
+EXECUTOR_SECRET=
+EA_NODE_SECRET=
+CLEANUP_TOKEN=
+MODEL_BASE_URL=https://api.deepseek.com
+MODEL_NAME=your-compatible-model-name
+MODEL_API_KEY=
