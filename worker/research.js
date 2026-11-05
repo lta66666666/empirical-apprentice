@@ -486,6 +486,10 @@ export function reportMarkdown(job) {
     `- 执行位置：${locationLabel(job)}`, `- 方案确认：学生执行前确认`];
   lines.push(`- 执行资料版本：${job.research_revision ?? '历史未记录'}；导出版本：${job.record_version || 1}`,`- 重跑核对：${job.verification?.status || 'not_checked'}`);
   lines.push(`- 原始文件 SHA-256：${job.source_sha256||'历史未记录'}`,`- 规范化数据 SHA-256：${job.canonical_sha256||job.input_sha256}`,`- 导入版本：${job.import_version||'历史未记录'}`,`- 对应代码 SHA-256：${job.corresponding_code?.sha256||'历史未记录'}`);
+  if(job.result){
+    const main=job.result.coefficients.find(row=>row.term!=='(Intercept)')||job.result.coefficients[0];
+    lines.push('', '## 本案例能证明什么', `- 在已确认样本与模型下，${main.term} 的估计为 ${main.estimate}（95% 区间 [${main.ci_low}, ${main.ci_high}]）；实际估计样本 ${job.result.n_used} 行。${job.plan.method==='did'?'该系数表示处理组相对对照组在政策后的额外变化。':''}`, '- 输入、方案、对应代码和执行版本都有哈希记录，可按复现包独立核对。', '', '## 本案例不能证明什么', '- 不能仅凭该系数断言政策因果效应：平行趋势、同期冲击、无提前反应等识别条件尚未验证。', '- 不能把结果外推到样本外单位、其他时期或其他政策环境。', '- 统计显著不等于经济显著，也不等于政策有效。');
+  }
   if(job.stale)lines.push('> 当前研究资料已修改；以下为历史方案与执行结果。');
   lines.push('', '## 执行前资料与来源状态');
   const snapshot=job.evidence_snapshot||{},cards=snapshot.preparation?.cards||{};
@@ -539,14 +543,19 @@ export function compareResults(original, rerun) {
 }
 const xml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[char]);
 function coefficientsSvg(job) {
-  const rows = job.result.coefficients, width = 680, height = Math.max(180, 60 + rows.length * 42);
+  const rows = job.result.coefficients, nUsed = job.result.n_used, clusters = job.result.clusters;
+  const width = 760, height = Math.max(220, 110 + rows.length * 44);
   const min = Math.min(0, ...rows.map((row) => row.ci_low)), max = Math.max(0, ...rows.map((row) => row.ci_high));
-  const span = Math.max(.001, max - min), x = (value) => 180 + ((value - min) / span) * 460;
+  const span = Math.max(.001, max - min), x = (value) => 200 + ((value - min) / span) * 380;
+  const number = (value) => Number(value).toPrecision(4);
+  const pText = (value) => value < .0005 ? '0.000' : value.toFixed(3);
+  const term = (value) => value.length > 24 ? value.slice(0, 23) + '…' : value;
+  const meaning = job.dictionary?.[job.plan.outcome];
   const marks = rows.map((row, index) => {
-    const y = 55 + index * 42;
-    return `<text x="8" y="${y + 4}" font-size="13">${xml(row.term)}</text><line x1="${x(row.ci_low)}" y1="${y}" x2="${x(row.ci_high)}" y2="${y}" stroke="#087e75" stroke-width="3"/><circle cx="${x(row.estimate)}" cy="${y}" r="5" fill="#0b645e"/>`;
+    const y = 86 + index * 44;
+    return `<text x="8" y="${y + 4}" font-size="12" fill="#17333d">${xml(term(row.term))}</text><line x1="${x(row.ci_low)}" y1="${y}" x2="${x(row.ci_high)}" y2="${y}" stroke="#087e75" stroke-width="3"/><circle cx="${x(row.estimate)}" cy="${y}" r="5" fill="#0b645e"/><text x="600" y="${y + 4}" font-size="11" fill="#17333d">${number(row.estimate)}</text><text x="752" y="${y + 4}" text-anchor="end" font-size="10" fill="#8a9a96">[${number(row.ci_low)}, ${number(row.ci_high)}] · p=${pText(row.p_value)}</text>`;
   }).join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="系数与95%区间"><rect width="100%" height="100%" fill="#fff"/><line x1="${x(0)}" y1="25" x2="${x(0)}" y2="${height - 25}" stroke="#a0aaa7" stroke-dasharray="4 4"/>${marks}<text x="8" y="${height - 10}" font-size="11" fill="#586765">${xml(locationLabel(job))} 结果；来源与因果条件未认证</text></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="系数、95%区间与样本信息"><rect width="100%" height="100%" fill="#fff"/><text x="8" y="24" font-size="13" fill="#17333d">结果变量：${xml(job.plan.outcome)}${meaning ? '（' + xml(meaning) + '）' : '（单位未记录）'}</text><text x="752" y="24" text-anchor="end" font-size="12" fill="#567079">N = ${nUsed}${clusters ? ' · 聚类 ' + clusters : ''}</text><text x="8" y="44" font-size="11" fill="#8a9a96">点：系数；横线：95% 区间；虚线：零。p 值仅作参考，不单独证明因果。</text><line x1="${x(0)}" y1="60" x2="${x(0)}" y2="${height - 24}" stroke="#a0aaa7" stroke-dasharray="4 4"/>${marks}<text x="8" y="${height - 8}" font-size="11" fill="#586765">${xml(locationLabel(job))} 结果；来源与因果条件未认证</text></svg>`;
 }
 
 function groupTrendsSvg(job, data) {

@@ -118,6 +118,8 @@ function researchDidLesson(root){
   if(sameInput)sameInput.onchange=syncSame;syncSame();list.append(sameRow);
   for(const [name,state,level] of [['固定处理身份','按固定组别列约束，待核对','pending'],['平行趋势','未验证（本页只是示意）','unverified'],['同期冲击','未核实','unverified'],['无提前反应','未核实','unverified'],['样本构成稳定','缺失处理已记录，待核对','pending']]){const row=el('div','ea-did-item');row.append(el('span','',name),el('span',`ea-did-state ${level}`,state));list.append(row);}
   root.append(list,el('p','workspace-note','组均值图只能描述变化；平行趋势需要政策前多期证据。清单只记录核对状态，不替代研究设计。'));
+  const staggered=el('details','ea-did-staggered');staggered.append(el('summary','','如果政策是分批实施的？'),el('p','','本工具目前只支持同批实施。分批时继续用双向固定效应（TWFE），已经处理的单位可能被当作对照组，产生负权重，系数甚至可能与真实效应方向相反。'),el('p','','应改用 Callaway–Sant’Anna 等异质性稳健估计，并做 Goodman-Bacon 分解检查权重；这些方法暂未接入本工具。'));
+  root.append(staggered);
 }
 function researchRenderLesson(data=latestState){
   const root=$('researchLesson');if(!root)return;
@@ -365,7 +367,10 @@ function researchDrawJob(j){
   if(lastAttempt){const preview=el('section','ea-feedback-preview');preview.append(el('h4','','最新反馈预览'),el('p','workspace-note',`第 ${lastAttempt.answer_version||attempts.length} 次解释 · ${lastAttempt.mode==='ai_advice'?'AI 建议':'规则自查'} · ${lastAttempt.model||'规则提示'} · ${lastAttempt.prompt_version||'提示词版本未记录'} · 关联任务 ${j.id}`),el('p','',Array.from(String(lastAttempt.feedback||'')).slice(0,240).join('')+(Array.from(String(lastAttempt.feedback||'')).length>240?'…':'')));const full=el('details');full.append(el('summary','','展开完整反馈与引用说明'));const body=el('div','prose');markdown(body,lastAttempt.feedback||'');full.append(body,el('p','workspace-note',lastAttempt.interaction_id?`完整提示词与引用材料编号见“记录与报告”的交互 ${lastAttempt.interaction_id}。`:'本次未记录模型交互编号；不补造引用材料。'));preview.append(full);reflection.append(preview);}
   attempts.forEach((attempt,i)=>{const item=el('details');item.append(el('summary','',`第 ${i+1} 次解释 · ${attempt.mode==='ai_advice'?'AI 建议':'自查清单'}`),el('p','',attempt.answer));const body=el('div','prose');markdown(body,attempt.feedback);item.append(body);history.append(item);});
   const draftKey=`reflection:${j.id}`,draft=eaDraftEntry(draftKey);if(!draft.version&&latestState?.research_drafts?.[draftKey])Object.assign(draft,latestState.research_drafts[draftKey]);
-  const input=el('textarea');input.id='researchReflection';input.setAttribute('aria-label','你的系数解释与局限');input.rows=5;input.maxLength=2000;input.placeholder='系数对应什么变化？单位是什么？哪些条件尚未验证？';input.value=draft.value.answer??attempts.at(-1)?.answer??'';
+  const template=el('div','ea-answer-template');template.append(el('strong','','一句话结论的四个要素'));
+  for(const [label,hint] of [['系数','多少、正负'],['单位','每 1 单位 X 对应多少 Y'],['不确定性','95% 区间或标准误'],['条件','哪些识别条件还没验证']]){const item=el('span','ea-answer-item');item.append(el('b','',label),document.createTextNode(hint));template.append(item);}
+  reflection.append(template);
+  const input=el('textarea');input.id='researchReflection';input.setAttribute('aria-label','你的系数解释与局限');input.rows=5;input.maxLength=2000;input.placeholder='系数多少、单位是什么、区间多宽、哪些条件尚未验证？';input.value=draft.value.answer??attempts.at(-1)?.answer??'';
   const draftNote=el('p','ea-draft-status');draftNote.setAttribute('role','status');eaDraftMessage(draft,draftNote);draft.node=draftNote;
   input.oninput=()=>eaQueueDraft(draftKey,{answer:input.value,based_on_answer_version:attempts.length},draftNote);
   const feedback=el('div','prose');

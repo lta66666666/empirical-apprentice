@@ -184,3 +184,8 @@ function eaRenderDataHealth(){
   root.append(el('p','workspace-note',`${units.size>30?`仅显示前 30 个单位（共 ${units.size} 个）；`:''}缺格可能是尚未实施或未采集，需结合研究设计判断，不能自动当作错误。`));
 }
 eaSetTask('learn');eaResearchStep('data');
+$('eaQuickDemo')?.addEventListener('click',async()=>{
+  if(!sessionId)await newSession();
+  if(latestState?.stage==='entry')await mutate('entry',{path:'data'});
+  eaSetTask('research');await researchSample('did');eaResearchStep('plan');await researchMakePlan();
+});
