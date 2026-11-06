@@ -229,6 +229,15 @@ function scrollToLastUserAnswer(box) {
   box.scrollTop = target;
 }
 
+function lessonMastery(record) {
+  const steps = record?.steps || [];
+  if (!steps.length || steps.some(s => !s.outcome)) return null;
+  if (steps.some(s => s.outcome === "revealed")) return { key: "review", label: "需复习", note: "有题目查看过示范" };
+  if (steps.some(s => s.outcome === "corrected")) return { key: "suggest", label: "建议复习", note: "有题目经提示后修正" };
+  if (steps.every(s => s.outcome === "independent_correct")) return { key: "mastered", label: "已掌握", note: "全部独立答对" };
+  return { key: "done", label: "已完成", note: "含自评题" };
+}
+
 function renderLesson(ui, data) {
   Teaching.render(ui, data);
   $("lessonProgress").textContent = `阶段 ${ui.lesson_id} / ${ui.total_lessons} · ` + (ui.step_type === "checkpoint" ? "整理阶段成果" : `第 ${ui.step_idx + 1} / ${ui.total_steps} 题`);
@@ -249,10 +258,16 @@ function renderLesson(ui, data) {
   const box = $("lessonBox"); box.replaceChildren();
   if (ui.step_type === "checkpoint") {
     const saved=data.learning_artifacts?.[String(ui.lesson_id)], wrap=el("div","quick-actions");
+    const record=data.lesson_records?.find(r=>r.stage===ui.lesson_id);
+    const counts=[["independent_correct","独立答对"],["corrected","提示后修正"],["revealed","查看示范"],["self_review","自评"]]
+      .map(([key,label])=>[label,record?.steps?.filter(s=>s.outcome===key).length||0]).filter(([,n])=>n>0).map(([label,n])=>`${label} ${n}`).join(" · ")||"尚无作答记录";
+    const next=data.outline?.find(x=>x.id===ui.lesson_id+1);
+    const summary=el("div","stage-summary");
+    summary.append(el("strong","","本阶段小结"),el("p","",`作答：${counts}`),el("p","",`${saved?"成果卡已保存":"成果卡未保存"} · ${next?`下一阶段：${next.title}`:"全部阶段已完成，可导出记录"}`));
     wrap.append(button("补写本阶段成果","btn-primary",()=>Teaching.selectPane("workbook")));
     const message = saved ? "继续下一阶段" : "稍后补写，继续";
     wrap.append(button(ui.lesson_id === ui.total_lessons ? (saved ? "完成路线，查看总结" : "稍后补写，查看总结") : message,"btn-secondary",()=>mutate("lesson_action",{message})));
-    box.append(wrap,el("p","practice-note",saved ? "已保存草稿，仍需检查内容是否完整。" : "成果卡尚未保存。稍后可从“课程目录”或“记录”中补写。"));
+    box.append(summary,wrap);
   } else if (ui.step_type === "choice") {
     const wrap = el("div","choice-wrap");
     for (const opt of ui.options || []) {
@@ -320,8 +335,8 @@ function renderRecords(data) {
   if (!steps.length) box.append(el("p","workspace-note","完成第一道练习后，这里会记录你的学习过程。"));
   for (const r of data.lesson_records) {
     const item = el("div","record-item"); item.append(el("strong","",`${r.stage}. ${r.title}`),el("small","",`${r.steps.filter(s => s.outcome).length} 题已完成 · ${r.steps.reduce((n,s)=>n+s.attempts,0)} 次作答`)); box.append(item);
-    const revealed = r.steps.filter(s=>s.outcome === "revealed").length;
-    if (revealed) item.append(el("p","badge review-needed",`${revealed} 题看过示范 · 需要复习`));
+    const mastery = lessonMastery(r);
+    if (mastery && mastery.key !== "done") { const badge=el("p",`badge mastery-${mastery.key}`,mastery.label); badge.title=mastery.note; item.append(badge); }
     const lesson=(data.outline||[]).find(l=>l.id===r.stage);
     if(lesson)item.append(button("回顾图解 / 补写成果","text-btn record-review",()=>showLessonReview(lesson)));
   }

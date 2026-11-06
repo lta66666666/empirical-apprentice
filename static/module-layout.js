@@ -39,7 +39,29 @@
     if(courseScreen==='directory'){
       directory.replaceChildren(el('span','eyebrow','定向导学'),el('h1','','八阶段学习目录'),el('p','workspace-note','按顺序完成看图、练习与成果。已完成阶段可回顾，后续阶段可先预览；分析输入与结果保持原样。'));
       if(!course){directory.append(el('p','workspace-note','正在读取学习目录…'));return;}
-      const grid=el('div','course-grid');for(const item of course.lessons){const card=el('article','course-card'),kind=item.status==='completed'?'review':item.status==='current'?'continue':'preview';card.append(el('span','course-state',item.status==='completed'?'已完成 · 可回顾':item.status==='current'?(context.status==='not_started'?'下一步 · 可开始':'当前阶段 · 可继续'):'后续阶段 · 可预览'),el('h2','',`${String(item.id).padStart(2,'0')} ${item.title}`),el('p','',item.goal),el('p','muted',`建议 ${item.duration} · ${item.output}`),button(kind==='review'?'回顾本阶段':kind==='continue'?(context.status==='not_started'?'开始学习':'继续本阶段'):'预览内容',kind==='continue'?'btn-primary':'btn-secondary',()=>openLesson(item.id,kind)));if(item.completed&&kind==='continue')card.append(button('回顾已完成练习','btn-secondary',()=>openLesson(item.id,'review')));grid.append(card);}directory.append(grid);return;
+      const ui=data.course?.lesson_ui||data.lesson_ui;
+      const done=course.lessons.filter(x=>x.completed).length,total=course.lessons.length,current=course.lessons.find(x=>x.status==='current');
+      const progress=el('div','course-progress');
+      const meter=el('div','course-progress-meter');meter.setAttribute('role','progressbar');meter.setAttribute('aria-valuemin','0');meter.setAttribute('aria-valuemax',String(total));meter.setAttribute('aria-valuenow',String(done));meter.setAttribute('aria-label',`已完成 ${done} / ${total} 阶段`);
+      const fill=el('span','course-progress-fill');fill.style.width=`${total?Math.round(done/total*100):0}%`;meter.append(fill);
+      progress.append(el('span','course-progress-text',`已完成 ${done}/${total} 阶段`),meter);
+      if(current){
+        const pos=ui&&ui.lesson_id===current.id?(ui.step_type==='checkpoint'?'成果整理':`第 ${ui.step_idx+1}/${ui.total_steps} 题`):'';
+        progress.append(button(context.status==='not_started'?'开始阶段 1':`继续：阶段 ${current.id}${pos?' · '+pos:''}`,'btn-primary course-resume',()=>openLesson(current.id,'continue')));
+      }else if(done===total)progress.append(el('span','course-progress-text','全部阶段已完成，可回顾或导出记录'));
+      directory.append(progress);
+      const grid=el('div','course-grid');
+      for(const item of course.lessons){
+        const card=el('article','course-card'),kind=item.status==='completed'?'review':item.status==='current'?'continue':'preview';
+        const record=data.lesson_records?.find(r=>r.stage===item.id),mastery=item.completed?lessonMastery(record):null;
+        const stateText=item.status==='completed'?(mastery&&mastery.key!=='done'?`${mastery.label} · 可回顾`:'已完成 · 可回顾'):item.status==='current'?(context.status==='not_started'?'下一步 · 可开始':'当前阶段 · 可继续'):'后续阶段 · 可预览';
+        const pos=ui&&ui.lesson_id===item.id?(ui.step_type==='checkpoint'?'成果整理':`第 ${ui.step_idx+1}/${ui.total_steps} 题`):'';
+        const label=kind==='review'?'回顾本阶段':kind==='continue'?(context.status==='not_started'?'开始学习':(pos?`继续：${pos}`:'继续本阶段')):'预览内容';
+        card.append(el('span','course-state',stateText),el('h2','',`${String(item.id).padStart(2,'0')} ${item.title}`),el('p','',item.goal),el('p','muted',`建议 ${item.duration} · ${item.output}`),button(label,kind==='continue'?'btn-primary':'btn-secondary',()=>openLesson(item.id,kind)));
+        if(item.completed&&kind==='continue')card.append(button('回顾已完成练习','btn-secondary',()=>openLesson(item.id,'review')));
+        grid.append(card);
+      }
+      directory.append(grid);return;
     }
     if(['preview','review'].includes(context.view_mode)){
       const item=data.outline?.find(value=>value.id===context.view_lesson_id);if(!item){showDirectory();return;}
