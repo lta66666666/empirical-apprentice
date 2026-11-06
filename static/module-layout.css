@@ -99,3 +99,29 @@ body.coach-minimal>div[role=status]{display:none!important}
 
 /* Zero-basis path hint in the coach welcome/demo card. */
 .coach-steps{font-size:12px;line-height:1.65;color:#6b8781;letter-spacing:.01em;margin:4px 0 2px}
+.coach-demo-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 16px 0;padding:8px 12px;background:#fff7e8;border:1px solid #efd9b4;border-radius:10px;font-size:13px}
+.coach-demo-tag{font-weight:700;color:#8a5a12;background:#fdf3e3;border:1px solid #eed9b4;border-radius:999px;padding:2px 8px}
+.coach-demo-text{color:#7a6242;flex:1 1 200px}
+.coach-brief{display:grid;gap:6px;margin:0 0 12px}
+.coach-brief-row{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:8px;align-items:start;font-size:13px;line-height:1.55}
+.coach-brief-label{color:#6b8781}
+.coach-brief-value{color:#274e4b;overflow-wrap:anywhere}
+.coach-brief-value.muted{color:#9aada8}
+.coach-brief-status{font-size:11px;color:#0b645e;background:#e9f5f1;border:1px solid #cfe8e2;border-radius:999px;padding:1px 6px;white-space:nowrap}
+.coach-brief-status.suggested,.coach-brief-status.fixture{color:#8a5a12;background:#fdf3e3;border-color:#eed9b4}
+.coach-gap-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.coach-gap-skipped{font-size:13px;color:#6b8781;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.coach-plus{display:block;margin:0;line-height:0}
+.coach-plus>summary{cursor:pointer;font-size:12px;color:#6b8781;list-style:none;padding:0;line-height:1.6;display:inline-block;min-height:auto}
+.ea-ui .coach-plus>summary{min-height:auto;padding:0}
+.coach-plus[open]{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 6px;line-height:normal}
+.coach-plus[open]>summary{flex:0 0 auto}
+.coach-plus>summary::-webkit-details-marker{display:none}
+.coach-plus .dock-format,.coach-plus .coach-attach{margin:0 0 6px}
+.coach-minimal .coach-plus[open] .dock-format{display:flex!important}
+.coach-knowledge-chips{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:8px 0 2px}
+.coach-knowledge-chips .text-btn{font-size:12px;padding:2px 8px}
+.coach-knowledge-all{margin-top:16px;font-size:13px}
+.coach-kb-search{width:100%;box-sizing:border-box;margin:6px 0;padding:7px 9px;border:1px solid #d8e7e2;border-radius:8px;font-size:13px;background:#fff}
+.coach-kb-list{display:flex;flex-direction:column;align-items:flex-start;gap:2px;max-height:260px;overflow:auto}
+.coach-kb-list .text-btn{font-size:13px;text-align:left}
