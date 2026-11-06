@@ -47,7 +47,7 @@
 
 ## 五、未完成项与限制
 
-1. **本地全链路 E2E 未运行**：`scripts/verify-experience-site.mjs` 需要本地 8000 端口，端口被 2026-11-03 遗留的兄弟项目测试进程占用（PID 47608）。需要授权终止该进程，或改用其他端口运行，才能覆盖 DTA 上传、年度转换、并发幂等、学习报告等更细的接口流程。
+1. **本地全链路 E2E 已补齐（原阻塞解除）**：终止占用 8000 端口的 2026-11-03 遗留进程（PID 47608）、重建 `dist/server` 后，`scripts/verify-experience-site.mjs` 13 项全部通过，覆盖真实注册、DTA 上传与年度转换、DTA/CSV 回归一致性、DID 缺后置期拒绝、并发幂等、学习记录版本、三队列 StatsPAI 任务、跨账号隔离、伪造完成拦截、Stata 代码绑定、Markdown/ZIP 导出、取消无伪造结果、进程重启后登录与结果保留、登出撤销会话。
 2. **两个 DOM 回归脚本受依赖限制**：`conversation-first-regression.mjs` 缺少 `outputs/ui-qa/node_modules/jsdom`；`webr-lifecycle-regression.mjs` 缺少 `document` 测试桩。属于测试环境，不是产品运行错误。
 3. **两个旧回归脚本存在漂移**：`research-understanding-regression.mjs` 使用旧版模型 mock 结构，修复后在后续断言处仍不匹配；`interaction-regression.mjs` 在未带 `state_version` 的方案请求处得到 422，而同一 OLS 方案在公网 API 正常通过，判断为测试状态漂移。
 4. **浏览器覆盖**：本轮只实测 Chromium；Firefox/Safari 未安装，未做真实跨浏览器验证。HTTPS 与 COOP/COEP 头已确认，webR 可在公网正常初始化并完成 DID。
@@ -64,5 +64,5 @@
 
 1. 部署本轮 3 个后端修复（`practical.js`、`model.js`、`research.js`）并重建容器。
 2. 部署后复验：单位“不知道”追问、AI 候选方法、`/api/research/status` 仅两种执行方式。
-3. 如需补齐本地全链路 E2E，请授权终止端口 8000 的遗留测试进程；否则以公网实测结果作为交付证据。
+3. 本地全链路 E2E 已随本轮修复补跑并通过；部署后仍建议按第 2 条做一次线上复验。
 4. 跨浏览器与事件研究/IV/分批 DID 的 UI 逐项验收，建议列入提交后的持续验证，不阻断当前核心演示。
