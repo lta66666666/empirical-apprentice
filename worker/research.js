@@ -79,7 +79,7 @@ function normalized(data, plan) {
   const aliases = Object.fromEntries(data.headers.map((name, index) => [name, `v${index}`]));
   const normalizedPlan = { ...plan, predictors: plan.predictors.map((name) => aliases[name]),
     labels: Object.fromEntries(Object.entries(aliases).map(([name, alias]) => [alias, name])) };
-  for (const key of ['outcome', 'unit', 'time', 'treated', 'cluster']) if (normalizedPlan[key]) normalizedPlan[key] = aliases[normalizedPlan[key]];
+  for (const key of ['outcome', 'unit', 'time', 'treated', 'first_treat', 'cluster']) if (normalizedPlan[key]) normalizedPlan[key] = aliases[normalizedPlan[key]];
   if (normalizedPlan.endogenous) normalizedPlan.endogenous = aliases[normalizedPlan.endogenous];
   normalizedPlan.instruments = (normalizedPlan.instruments || []).map((name) => aliases[name]);
   const csv = [data.headers.map((name) => aliases[name]).join(','), ...data.rows.map((row) => row.map(quoteCsv).join(','))].join('\n') + '\n';
@@ -101,14 +101,15 @@ function validatePlan(input, data, blueprint, session) {
     window: Array.isArray(input.window) ? input.window : null, reference_period: input.reference_period ?? null,
     vcov: input.vcov || 'hetero', cluster: input.cluster || '', missing: input.missing || 'block',
     same_batch: input.same_batch === true, engine_id: input.engine_id || 'statspai_cloud',
+    first_treat: input.first_treat || '', control_group: input.control_group || '', absorbing_confirmed: input.absorbing_confirmed === true,
   };
   if (!engineMetadata[plan.engine_id]) throw new Error('执行引擎未接入。');
   for(const key of ['software','execution_location'])if(input[key]!==undefined && input[key]!==engineMetadata[plan.engine_id][key])throw new Error('软件、位置与引擎不一致，请重新整理方案。');
   Object.assign(plan,engineMetadata[plan.engine_id]); delete plan.label;
   if (!enabledMethods.includes(plan.method)) throw new Error(methodRegistry[plan.method]?.reason||'该方法尚未接入。');
   if (!['iid', 'hetero', 'cluster'].includes(plan.vcov) || !['block', 'drop'].includes(plan.missing)) throw new Error('标准误或缺失处理设置无效。');
-  const panelMethods=['panel_fe','did','event_study'];
-  if (panelMethods.includes(plan.method) && plan.vcov !== 'cluster') throw new Error('固定效应、DID 与事件研究仅开放单向聚类标准误，请选择聚类列。');
+  const panelMethods=['panel_fe','did','staggered_did','event_study'];
+  if (panelMethods.includes(plan.method) && plan.vcov !== 'cluster') throw new Error('面板类方法仅开放单向聚类标准误，请选择聚类列。');
   if (!data.headers.includes(plan.outcome)) throw new Error('请选择数据中的结果变量。');
   if (plan.predictors.length > 12 || new Set(plan.predictors).size !== plan.predictors.length || plan.predictors.includes(plan.outcome)) throw new Error('解释变量不能重复或包含结果变量，最多 12 列。');
   if (plan.method==='panel_fe' && !plan.predictors.length) throw new Error('请至少选择一个解释变量。');
@@ -133,12 +134,12 @@ function validatePlan(input, data, blueprint, session) {
   const batches = blueprint?.policy_batches?.value || '';
   if ((plan.method === 'did' || plan.method === 'event_study') && session && didConflict(session)) throw new Error(didConflict(session));
   if ((plan.method === 'did' || plan.method === 'event_study') && /分批/.test(batches) && !/没有分批|不是分批|非分批/.test(batches)) throw new Error('蓝图记录了分批实施，本版同批 DID 与事件研究不适用。');
-  if (panelMethods.includes(plan.method) && (plan.vcov !== 'cluster' || !plan.cluster)) throw new Error('固定效应、DID 与事件研究需指定聚类标准误。');
+  if (panelMethods.includes(plan.method) && (plan.vcov !== 'cluster' || !plan.cluster)) throw new Error('面板类方法需指定聚类标准误。');
   if (plan.vcov === 'cluster' && !plan.cluster) throw new Error('聚类标准误需要聚类列。');
-  const required = [plan.outcome, ...plan.predictors, plan.unit, plan.time, plan.treated, plan.cluster, plan.endogenous, ...plan.instruments].filter(Boolean);
+  const required = [plan.outcome, ...plan.predictors, plan.unit, plan.time, plan.treated, plan.first_treat, plan.cluster, plan.endogenous, ...plan.instruments].filter(Boolean);
   const absent = required.filter((name) => !data.headers.includes(name));
   if (absent.length) throw new Error('数据中没有这些列：' + absent.join(', '));
-  for (const name of [plan.outcome, ...plan.predictors, plan.endogenous, ...plan.instruments].filter(Boolean)) {
+  for (const name of [plan.outcome, ...plan.predictors, plan.endogenous, plan.first_treat, ...plan.instruments].filter(Boolean)) {
     if (!data.profile.columns.find((column) => column.name === name)?.numeric) throw new Error(`${name} 不是可用数值列。`);
   }
   const selected = [...new Set(required)];
@@ -196,11 +197,37 @@ function validatePlan(input, data, blueprint, session) {
     }
     if (![...treatedUnits].every((unit) => usableRows.some((row) => row[ui] === unit && Number(row[ti]) === plan.policy_year + plan.reference_period))) throw new Error('部分处理单位缺少基期观测，请调整窗口或样本。');
   }
+  if (plan.method === 'staggered_did') {
+    if (!data.headers.includes(plan.first_treat)) throw new Error('请选择数据中的首次处理年份列。');
+    if (!['nevertreated', 'notyettreated'].includes(plan.control_group)) throw new Error('请选择对照组口径：始终未处理或尚未处理。');
+    if (plan.absorbing_confirmed !== true) throw new Error('分批 DID 需先确认处理一旦开始不会撤销。');
+    if ([plan.unit, plan.time, plan.outcome, ...plan.predictors].includes(plan.first_treat)) throw new Error('首次处理年份列不能同时用作其他角色。');
+    const ui = data.headers.indexOf(plan.unit), ti = data.headers.indexOf(plan.time), fi = data.headers.indexOf(plan.first_treat);
+    const firstByUnit = new Map(), years = [];
+    for (const row of usableRows) {
+      const year = Number(row[ti]), first = Number(row[fi]);
+      years.push(year);
+      if (!Number.isInteger(first) || first < 0) throw new Error('首次处理年份须为非负整数，始终未处理记为 0。');
+      if (firstByUnit.has(row[ui]) && firstByUnit.get(row[ui]) !== first) throw new Error('同一单位的首次处理年份随时间改变，请核对口径。');
+      firstByUnit.set(row[ui], first);
+    }
+    const cohorts = [...new Set([...firstByUnit.values()].filter((value) => value > 0))].sort((a, b) => a - b);
+    if (!cohorts.length) throw new Error('没有识别到已开始处理的单位。');
+    if (cohorts.length < 2) throw new Error('只识别到一个处理批次，请改用同批 DID。');
+    const minYear = Math.min(...years), maxYear = Math.max(...years);
+    if (cohorts[0] < minYear || cohorts[cohorts.length - 1] > maxYear) throw new Error('首次处理年份超出样本时间范围。');
+    if (plan.control_group === 'nevertreated' && ![...firstByUnit.values()].some((value) => value === 0)) throw new Error('没有始终未处理的对照单位，请改用尚未处理对照。');
+    for (const group of cohorts) {
+      const units = [...firstByUnit.entries()].filter(([, value]) => value === group).map(([unit]) => unit);
+      if (!units.some((unit) => usableRows.some((row) => row[ui] === unit && Number(row[ti]) === group - 1))) throw new Error(`队列 ${group} 缺少政策前一期（${group - 1}）观测。`);
+      if (!units.some((unit) => usableRows.some((row) => row[ui] === unit && Number(row[ti]) >= group))) throw new Error(`队列 ${group} 缺少政策后观测。`);
+    }
+  }
   return { plan, missingLines };
 }
 
 function description(plan) {
-  const labels = { ols: 'OLS／多元线性回归', panel_fe: '个体与年份固定效应', did: '同批 DID', event_study: '事件研究（同批）', iv_2sls: '工具变量 2SLS' };
+  const labels = { ols: 'OLS／多元线性回归', panel_fe: '个体与年份固定效应', did: '同批 DID', staggered_did: '分批 DID', event_study: '事件研究（同批）', iv_2sls: '工具变量 2SLS' };
   if (plan.method === 'iv_2sls') {
     const rhs = `(${plan.endogenous} ~ ${plan.instruments.join(' + ')})` + (plan.predictors.length ? ' + ' + plan.predictors.join(' + ') : '');
     const fe = plan.unit ? ` | ${plan.unit} + ${plan.time}` : '';
@@ -208,6 +235,13 @@ function description(plan) {
       meaning: '2SLS 系数是在工具变量识别下的局部平均效应（LATE）；外生性不能由数据自动检验。',
       checks: '工具相关性、排除限制、弱工具、过度识别、聚类层级与样本。',
       quiz: '请解释一个系数及其单位，并指出工具变量仍需哪些外部论证。' };
+  }
+  if (plan.method === 'staggered_did') {
+    const control = plan.control_group === 'nevertreated' ? '始终未处理' : '尚未处理';
+    return { label: labels.staggered_did, formula: `${plan.outcome} ~ 队列×时期 ATT（Callaway–Sant'Anna，${control}对照） | ${plan.unit} + ${plan.time}`,
+      meaning: '分批实施下先逐队列估计 ATT 再加权汇总；TWFE 在效应异质时可能给出负权重，需要与队列估计对照。',
+      checks: '处理不可撤销、队列与对照覆盖、政策前趋势、同期冲击和聚类层级。',
+      quiz: '请解释一个队列或事件期 ATT，并指出 TWFE 与队列估计不一致的可能原因。' };
   }
   if (plan.method === 'event_study') {
     const [pre, post] = plan.window;
@@ -296,7 +330,7 @@ export async function handleResearch(request, env, owner, path) {
   if(teachingRoute&&request.method==='GET')try{const state=await loadOwnedSession(env,owner,teachingRoute[1]);if(!state||state==='expired')return fault('练习不可读取。',404);const ref=Object.fromEntries(new URL(request.url).searchParams),lesson=await correspondingReference(env,owner,state,ref);return resultJson({card:lesson.card,reference:lesson.reference});}catch(e){return fault(e.message,e.status||422);}
   if (path === '/api/research/status' && request.method === 'GET') {
     const engines=await engineCapabilities(env,owner);
-    return resultJson({r:engines.browser_webr,engines,default_engine:'statspai_cloud',software:[{id:'statspai_cloud',label:'云端计算',...engines.statspai_cloud},{id:'r',label:'云端原生 R',...engines.r_native},{id:'browser_webr',label:'浏览器 webR',...engines.browser_webr},{id:'stata',label:'Stata',...engines.stata_native},{id:'eviews',label:'EViews',...engines.eviews_native}],methods:enabledMethods,method_registry:methodRegistry,unsupported:['分批 DID','RDD','PSM'],planner_mode:env.MODEL_API_KEY&&env.MODEL_NAME&&env.MODEL_BASE_URL?'online':'rules',model_capabilities:modelCapabilities(env)});
+    return resultJson({r:engines.browser_webr,engines,default_engine:'statspai_cloud',software:[{id:'statspai_cloud',label:'云端计算',...engines.statspai_cloud},{id:'r',label:'云端原生 R',...engines.r_native},{id:'browser_webr',label:'浏览器 webR',...engines.browser_webr},{id:'stata',label:'Stata',...engines.stata_native},{id:'eviews',label:'EViews',...engines.eviews_native}],methods:enabledMethods,method_registry:methodRegistry,unsupported:['RDD','PSM'],planner_mode:env.MODEL_API_KEY&&env.MODEL_NAME&&env.MODEL_BASE_URL?'online':'rules',model_capabilities:modelCapabilities(env)});
   }
   if (path === '/api/research/candidate' && request.method === 'POST') {
     try {
@@ -376,7 +410,7 @@ export async function handleResearch(request, env, owner, path) {
           dictionary, metadata, interpretation_warnings:interpretationWarnings(plan,dictionary), csv_lines:data.lines, research_revision:session.research_revision, evidence_snapshot:{...evidenceSnapshot(session),dictionary}, auto_interpretation:true, record_version:1,
           source: String(body.source || '用户提供的数据；来源未核实').slice(0, 1000), question: String(body.question || '').slice(0, 1000),
           simulated: body.simulated === true, missing_lines: missingLines, result: null, reflections: [],
-          tool_trace: [{ transport: plan.execution_location, tool: plan.software==='python'?(plan.method==='ols'?'statspai.regress':plan.method==='event_study'?'statspai.event_study':plan.method==='iv_2sls'?'statspai.iv（2SLS）':'statspai.fast.feols'):plan.software==='stata'?'Stata regress/xtreg':'fixest::feols' }],
+          tool_trace: [{ transport: plan.execution_location, tool: plan.software==='python'?(plan.method==='ols'?'statspai.regress':plan.method==='event_study'?'statspai.event_study':plan.method==='iv_2sls'?'statspai.iv（2SLS）':plan.method==='staggered_did'?'statspai.did（分批）':'statspai.fast.feols'):plan.software==='stata'?'Stata regress/xtreg':'fixest::feols' }],
         };
         await env.FILES.put(key, body.text);
         try {
@@ -717,7 +751,7 @@ export async function syncCloudJob(env,job,session){
       }
       if(job.plan.method==='iv_2sls'&&r.iv_diagnostics&&r.iv_diagnostics.status!=='unavailable'&&!Number.isFinite(r.iv_diagnostics.effective_f))throw new Error('执行节点工具变量诊断无效。');
       r.audit={missing_removed_csv_lines:job.missing_lines,used_indices:r.used_indices,model_removed_count:job.n_rows-job.missing_lines.length-r.n_used,model_removed_csv_lines:job.csv_lines.filter((line,i)=>!r.used_indices.includes(i+1)&&!job.missing_lines.includes(line))};
-      job.result=r;job.completed=remote.completed;job.node_artifacts=Object.fromEntries(Object.entries(remote.artifacts||{}).filter(([k,v])=>/^(estimate\.(R|do|py)|stata-corresponding\.(do|json)|parameters\.json|execution\.log|session-info\.txt|full-coefficients\.csv|sample\.csv)$/.test(k)&&typeof v==='string'));
+      job.result=r;job.completed=remote.completed;job.node_artifacts=Object.fromEntries(Object.entries(remote.artifacts||{}).filter(([k,v])=>/^(estimate\.(R|do|py)|stata-corresponding\.(do|json)|r-corresponding\.R|parameters\.json|execution\.log|session-info\.txt|full-coefficients\.csv|sample\.csv)$/.test(k)&&typeof v==='string'));
       job.result_origin=`${locationLabel(job)}执行节点返回；网站校验归属、快照与格式，未另行复算。`;
       if(job.verification_of_job_id){const original=await getJob(env,job.owner,job.verification_of_job_id);job.verification=compareResults(original,job);if(original){original.verification={...job.verification,rerun_job_id:job.id};original.record_version=(original.record_version||1)+1;await saveJob(env,original);}}
     }

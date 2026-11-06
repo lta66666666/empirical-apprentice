@@ -57,7 +57,7 @@
   const bridge=el('select');bridge.setAttribute('aria-label','真实 Stata 桥接器');bridge.append(new Option('现有 Stata MCP','stata_mcp'),new Option('stata-code / PyStata（试验）','stata_code'));
   const compareLabel=el('label','research-check'),compare=el('input');compare.type='checkbox';compareLabel.append(compare,document.createTextNode('本次明确要求双引擎对照：本机顺序运行；差异不会自动择优'));advanced.append(engine,bridge,compareLabel);
   engine.onchange=()=>{bridge.hidden=compareLabel.hidden=engine.value==='statspai_local';if(engine.value==='statspai_local'){mode.value='template';compare.checked=false;}mode.onchange();};
-  const method=el('select');method.setAttribute('aria-label','本机计量方法');for(const [key,name]of Object.entries(researchNames))method.append(new Option(name,key));
+  const method=el('select');method.setAttribute('aria-label','本机计量方法');for(const [key,name]of Object.entries(researchNames))if(key!=='staggered_did')method.append(new Option(name,key));
   const selects={};for(const [key,title]of Object.entries({outcome:'结果变量',unit:'个体列（面板）',time:'年份列（面板）',treated:'处理组列（DID）',cluster:'聚类列（留空使用稳健标准误）'})){const label=el('label','research-field',title),select=el('select');selects[key]=select;select.dataset.role=key;label.dataset.role=key;label.append(select);localFields.append(label);}
   const predictors=el('div','pc-local-predictors'),year=el('input');year.type='number';year.placeholder='同批政策实施年';
   year.setAttribute('aria-label','同批政策实施年份');

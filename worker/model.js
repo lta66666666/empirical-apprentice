@@ -121,22 +121,23 @@ export async function proposeCandidate(input,env,audit=null){
     let ignoredDictionary=0;
     if(raw.proposed_dictionary===null)raw.proposed_dictionary={};
     if(raw.proposed_dictionary&&typeof raw.proposed_dictionary==='object'&&!Array.isArray(raw.proposed_dictionary))raw.proposed_dictionary=Object.fromEntries(Object.entries(raw.proposed_dictionary).filter(([,v])=>{if(typeof v==='string')return true;ignoredDictionary++;return false;}));
-    const errors=[];for(const k of ['reason','outcome','unit','time','treated','cluster'])if(raw[k]!==undefined&&typeof raw[k]!=='string')errors.push(k);for(const k of ['predictors','questions'])if(raw[k]!==undefined&&(!Array.isArray(raw[k])||raw[k].some(x=>typeof x!=='string')))errors.push(k);for(const k of ['proposed_cards','proposed_dictionary'])if(raw[k]!==undefined&&(!raw[k]||Array.isArray(raw[k])||typeof raw[k]!=='object'||Object.values(raw[k]).some(x=>typeof x!=='string')))errors.push(k);if(errors.length)throw fieldError(response,errors);
+    const errors=[];for(const k of ['reason','outcome','unit','time','treated','first_treat','control_group','cluster'])if(raw[k]!==undefined&&typeof raw[k]!=='string')errors.push(k);if(raw.absorbing_confirmed!==undefined&&typeof raw.absorbing_confirmed!=='boolean')errors.push('absorbing_confirmed');for(const k of ['predictors','questions'])if(raw[k]!==undefined&&(!Array.isArray(raw[k])||raw[k].some(x=>typeof x!=='string')))errors.push(k);for(const k of ['proposed_cards','proposed_dictionary'])if(raw[k]!==undefined&&(!raw[k]||Array.isArray(raw[k])||typeof raw[k]!=='object'||Object.values(raw[k]).some(x=>typeof x!=='string')))errors.push(k);if(errors.length)throw fieldError(response,errors);
     const questions=(Array.isArray(raw.questions)?raw.questions:[]).filter(q=>typeof q==='string').slice(0,4).map(q=>q.slice(0,300));
     const reason=String(raw.reason||'').slice(0,1000),names=new Set(columns.map(c=>c.name)),pick=k=>names.has(raw[k])?raw[k]:'';
-    if(raw.method!=null&&!['ols','panel_fe','did','event_study','iv_2sls'].includes(raw.method)){output={...meta,detail:'模型提出尚未接入的方法或未明确方法；请手动选择并核对适用条件。',mode:'manual',ready:false,candidate:null,reason};status='rejected';http=422;details.diagnostics={...details.diagnostics,stage:'validation',validation_errors:['unsupported_method']};}
+    if(raw.method!=null&&!['ols','panel_fe','did','staggered_did','event_study','iv_2sls'].includes(raw.method)){output={...meta,detail:'模型提出尚未接入的方法或未明确方法；请手动选择并核对适用条件。',mode:'manual',ready:false,candidate:null,reason};status='rejected';http=422;details.diagnostics={...details.diagnostics,stage:'validation',validation_errors:['unsupported_method']};}
     else if(input.blocker&&(raw.method==='did'||raw.method==null)){output={...meta,candidate:null,ready:false,mode:'needs_information',reason:input.blocker,questions:[...new Set([input.blocker,...questions])].slice(0,4),warning:'方法条件冲突，未填入候选方案。'};status='blocked';}
     else{
       const predictors=Array.isArray(raw.predictors)?[...new Set(raw.predictors.filter(n=>names.has(n)))].slice(0,12):[];
       const p={method:raw.method,outcome:pick('outcome'),predictors,unit:pick('unit'),time:pick('time'),treated:pick('treated'),policy_year:Number.isInteger(raw.policy_year)&&raw.policy_year>=1800&&raw.policy_year<=2200?raw.policy_year:null,vcov:raw.method==='ols'?'hetero':'cluster',cluster:raw.method==='ols'?'':pick('cluster')||pick('unit'),missing:'block',
         same_batch:['did','event_study'].includes(raw.method)&&input.preparation?.adoption_mode==='single_batch',
         endogenous:pick('endogenous'),instruments:Array.isArray(raw.instruments)?[...new Set(raw.instruments.filter(n=>names.has(n)))].slice(0,4):[],
-        window:Array.isArray(raw.window)&&raw.window.length===2&&raw.window.every(Number.isInteger)?raw.window:null,reference_period:Number.isInteger(raw.reference_period)?raw.reference_period:null};
+        window:Array.isArray(raw.window)&&raw.window.length===2&&raw.window.every(Number.isInteger)?raw.window:null,reference_period:Number.isInteger(raw.reference_period)?raw.reference_period:null,
+        first_treat:pick('first_treat'),control_group:['nevertreated','notyettreated'].includes(raw.control_group)?raw.control_group:'',absorbing_confirmed:raw.absorbing_confirmed===true};
       const missing=[];
       if(!columns.length)missing.push('研究对象、变量、观察时期和数据来源是什么？拿到数据后请检查字段。');
       if(!p.method)missing.push('希望解释一般关联、面板内变化，还是政策影响？');
       if(!p.outcome)missing.push('请选择数据中的结果变量列。');
-      if(!['did','iv_2sls'].includes(p.method)&&!predictors.length)missing.push('解释变量是什么？');
+      if(!['did','staggered_did','iv_2sls'].includes(p.method)&&!predictors.length)missing.push('解释变量是什么？');
       if(p.method&&p.method!=='ols'&&p.method!=='iv_2sls'&&(!p.unit||!p.time))missing.push('个体编号与时间列是什么？');
       if(['did','event_study'].includes(p.method)){
         if(!p.treated||!p.policy_year)missing.push('处理组与明确的政策实施年是什么？');
@@ -150,6 +151,11 @@ export async function proposeCandidate(input,env,audit=null){
       if(p.method==='iv_2sls'){
         if(!p.endogenous)missing.push('哪一列是内生解释变量？');
         if(!p.instruments.length)missing.push('工具变量使用哪一列（最多 4 列）？');
+      }
+      if(p.method==='staggered_did'){
+        if(!p.first_treat)missing.push('哪一列记录首次处理年份（始终未处理记 0）？');
+        if(!p.control_group)missing.push('对照组使用始终未处理，还是尚未处理单位？');
+        if(!p.absorbing_confirmed)missing.push('请确认处理一旦开始不会撤销。');
       }
       output={...meta,candidate:p.method?p:null,ready:!missing.length,mode:missing.length?'needs_information':'candidate',reason,questions:[...new Set([...questions,...missing])].slice(0,6),warning:'AI 候选方案；来源、单位与识别条件未自动核实，学生确认后才执行。'};status=missing.length?'needs_information':'response_valid';
     }

@@ -24,9 +24,9 @@ def stats_compute(directory, plan):
     from scipy.stats import t
     versions = pinned_versions()
     if platform.python_version_tuple()[:2] != ('3', '11'): raise ValueError('需要 Python 3.11')
-    if plan['method'] not in ('ols', 'panel_fe', 'did', 'event_study', 'iv_2sls'): raise ValueError('方法未开放')
+    if plan['method'] not in ('ols', 'panel_fe', 'did', 'staggered_did', 'event_study', 'iv_2sls'): raise ValueError('方法未开放')
     if plan['vcov'] not in ('iid','hetero','cluster') or plan['missing'] not in ('block','drop'): raise ValueError('方差或缺失值处理参数无效')
-    panel = plan['method'] in ('panel_fe','did','event_study')
+    panel = plan['method'] in ('panel_fe','did','staggered_did','event_study')
     if panel and plan['vcov']!='cluster':raise ValueError('面板方法仅开放单向聚类')
     if plan['method']=='iv_2sls' and plan.get('unit') and plan['vcov']!='cluster':raise ValueError('带固定效应的工具变量需聚类')
     # Read strings first, exactly as the Stata template does. No patsy formulas
@@ -36,12 +36,14 @@ def stats_compute(directory, plan):
     panel_cols = [plan.get('unit'), plan.get('time')] if panel or (plan['method']=='iv_2sls' and plan.get('unit')) else []
     selected = list(dict.fromkeys(v for v in [plan['outcome'], *plan['predictors'], *panel_cols,
         plan.get('treated') if plan['method'] in ('did','event_study') else '',
+        plan.get('first_treat') if plan['method']=='staggered_did' else '',
         plan.get('endogenous') if plan['method']=='iv_2sls' else '',
         *(plan.get('instruments') or []),
         plan.get('cluster') if plan['vcov']=='cluster' else ''] if v))
     # 个体编号与聚类列可以是字符串（如 C00），只按组别使用，不强制转为数值。
     numeric = list(dict.fromkeys([plan['outcome'], *plan['predictors'], *([plan['time']] if panel_cols else []),
         *([plan['treated']] if plan['method'] in ('did','event_study') else []),
+        *([plan['first_treat']] if plan['method']=='staggered_did' else []),
         *([plan['endogenous']] if plan['method']=='iv_2sls' else []),
         *(plan.get('instruments') or [])]))
     frame[selected] = frame[selected].replace({'': np.nan, 'NA': np.nan, 'N/A': np.nan, 'null': np.nan, 'NaN': np.nan})
@@ -97,10 +99,30 @@ def stats_compute(directory, plan):
         if (post.groupby(data[plan['unit']]).nunique() != 2).any(): raise ValueError('个体缺少前期或后期')
         if any(not ((data[plan['treated']] == g) & (post == p)).any() for g in (0,1) for p in (0,1)): raise ValueError('DID四格样本不完整')
         rhs = ['policy_effect'] + rhs
+    if plan['method'] == 'staggered_did':
+        if plan.get('absorbing_confirmed') is not True: raise ValueError('分批 DID 需先确认处理一旦开始不会撤销')
+        if plan.get('control_group') not in ('nevertreated', 'notyettreated'): raise ValueError('对照组设置无效')
+        cohort = plan['first_treat']
+        if (data.groupby(plan['unit'])[cohort].nunique() != 1).any(): raise ValueError('首次处理年份随时期改变')
+        first = data.groupby(plan['unit'])[cohort].first()
+        if (first < 0).any() or not (first == np.floor(first)).all(): raise ValueError('首次处理年份须为非负整数，始终未处理记 0')
+        cohorts = sorted(int(value) for value in first[first > 0].unique())
+        if not cohorts: raise ValueError('没有识别到已开始处理的单位')
+        if len(cohorts) < 2: raise ValueError('只识别到一个处理批次，请改用同批 DID')
+        if cohorts[0] < data[plan['time']].min() or cohorts[-1] > data[plan['time']].max(): raise ValueError('首次处理年份超出样本时间范围')
+        if plan['control_group'] == 'nevertreated' and not (first == 0).any(): raise ValueError('没有始终未处理的对照单位，请改用尚未处理对照')
+        for group in cohorts:
+            units = first[(first > 0) & (first.astype(int) == group)].index
+            if data[(data[plan['unit']].isin(units)) & (data[plan['time']] == group - 1)].empty: raise ValueError(f'队列 {group} 缺少政策前一期（{group-1}）观测')
+            if data[(data[plan['unit']].isin(units)) & (data[plan['time']] >= group)].empty: raise ValueError(f'队列 {group} 缺少政策后观测')
     if plan['method'] == 'event_study':
         result = event_study_compute(directory, plan, data, frame, versions, sp, np)
         result['descriptives'] = descriptives
         result['balance'] = balance
+        return result
+    if plan['method'] == 'staggered_did':
+        result = staggered_compute(directory, plan, data, frame, versions, sp, np)
+        result['descriptives'] = descriptives
         return result
     if plan['method'] == 'iv_2sls':
         result = iv_compute(directory, plan, data, frame, versions, sp, np)
@@ -197,6 +219,124 @@ def stats_compute(directory, plan):
     result['balance'] = balance
     result['robustness'] = robustness
     return result
+
+def staggered_compute(directory, plan, data, frame, versions, sp, np):
+    import re
+    from scipy.stats import t
+    unit, time, cohort, cluster = plan['unit'], plan['time'], plan['first_treat'], plan['cluster']
+    control_group = plan['control_group']
+    def finite(value):
+        value = float(value)
+        if not math.isfinite(value): raise ValueError('估计或推断数值无效')
+        return value
+    def row_of(result):
+        tidy = result.tidy()
+        main = tidy[tidy['type'] == 'main']
+        if not len(main): raise ValueError('原生结果未返回 ATT')
+        row = main.iloc[0]
+        return {'estimate': finite(row['estimate']), 'std_error': finite(row['std_error']),
+                'p_value': finite(row['p_value']), 'ci_low': finite(row['conf_low']), 'ci_high': finite(row['conf_high'])}
+    clusters = int(data[cluster].nunique())
+    df = float(clusters - 1)
+    if df <= 0: raise ValueError('推断自由度不足')
+    # TWFE 基准：与分批估计同一样本，用于展示负权重风险下的差异。
+    d = data.copy()
+    d['ea_treat'] = ((d[cohort] > 0) & (d[time] >= d[cohort])).astype(int)
+    controls = ' + '.join(plan['predictors'])
+    formula = plan['outcome'] + ' ~ ea_treat' + ((' + ' + controls) if controls else '') + ' | ' + unit + ' + ' + time
+    fit = sp.fast.feols(formula, data=d, vcov='cr1', cluster=cluster, ssc='fixest', drop_singletons=False)
+    if fit.n_kept != len(d) or fit.n_dropped_singletons: raise ValueError('原生结果未提供足够的实际样本证据')
+    twfe = {'estimate': finite(fit.coef()['ea_treat']), 'std_error': finite(fit.se()['ea_treat'])}
+    crit = float(t.ppf(.975, df))
+    twfe.update({'p_value': finite(2*t.sf(abs(twfe['estimate']/twfe['std_error']), df)),
+                 'ci_low': twfe['estimate']-crit*twfe['std_error'], 'ci_high': twfe['estimate']+crit*twfe['std_error'],
+                 'n_used': len(d)})
+    # 主结果：Callaway–Sant'Anna 队列 ATT，基期统一为政策前一期。
+    result = sp.did(data, y=plan['outcome'], treat=cohort, time=time, id=unit,
+                    covariates=list(plan['predictors']) or None, method='cs', control_group=control_group,
+                    base_period='universal', cluster=cluster, alpha=.05)
+    if result.nobs is not None and int(result.nobs) != len(data): raise ValueError('原生结果未提供足够的实际样本证据')
+    n_used = int(result.nobs) if result.nobs is not None else len(data)
+    att = row_of(result)
+    tidy = result.tidy()
+    coefficients, periods = [], []
+    for _, row in tidy.iterrows():
+        if str(row.get('type')) != 'event_study': continue
+        match = re.fullmatch(r'event_([+-]?\d+)', str(row['term']))
+        if not match: continue
+        period = int(match.group(1))
+        if not -5 <= period <= 5: continue
+        periods.append(period)
+        coefficients.append({'term': f'事件期 {period:+d}' if period else '事件期 0',
+            'estimate': finite(row['estimate']), 'std_error': finite(row['std_error']),
+            'p_value': finite(row['p_value']), 'ci_low': finite(row['conf_low']), 'ci_high': finite(row['conf_high'])})
+    if len(coefficients) > 14:
+        keep = sorted(sorted(range(len(coefficients)), key=lambda i: (abs(periods[i]), periods[i]))[:14])
+        coefficients = [coefficients[i] for i in keep]
+        periods = [periods[i] for i in keep]
+    group_time = []
+    for _, row in tidy.iterrows():
+        if str(row.get('type')) != 'group_time': continue
+        match = re.fullmatch(r'att\(g=([-0-9.eE+]+),t=([-0-9.eE+]+)\)', str(row['term']))
+        if not match: continue
+        group, period = float(match.group(1)), float(match.group(2))
+        group_time.append({'cohort': int(group) if group == int(group) else group, 'time': int(period) if period == int(period) else period,
+            'relative_time': int(period-group) if (period-group) == int(period-group) else period-group,
+            'estimate': finite(row['estimate']), 'std_error': finite(row['std_error']),
+            'p_value': finite(row['p_value']), 'ci_low': finite(row['conf_low']), 'ci_high': finite(row['conf_high'])})
+    try:
+        pretrend = result.pretrend_test()
+        pretrend = {'statistic': finite(pretrend.get('statistic')), 'p_value': finite(pretrend.get('pvalue')), 'df': pretrend.get('df')}
+    except Exception:
+        pretrend = None
+    comparison = [{'name': 'TWFE（双向固定效应）', 'status': 'ok', **twfe},
+                  {'name': 'Callaway–Sant\'Anna（主结果）', 'status': 'ok', 'n_used': n_used, **att}]
+    def variant(label, runner):
+        try:
+            main = row_of(runner())
+            comparison.append({'name': label, 'status': 'ok', 'n_used': n_used, **main})
+        except Exception as error:
+            comparison.append({'name': label, 'status': 'failed', 'note': str(error)[:160]})
+    if control_group == 'notyettreated':
+        comparison.append({'name': 'Sun–Abraham（2021）', 'status': 'failed',
+                           'note': 'Sun–Abraham 仅支持始终未处理或最后处理队列作对照；本方案以 CS 与 BJS 对比为主'})
+    else:
+        variant('Sun–Abraham（2021）', lambda: sp.sun_abraham(data, y=plan['outcome'], g=cohort, t=time, i=unit,
+                                                             control_group=control_group, cluster=cluster))
+    variant('Borusyak–Jaravel–Spiess（2024）', lambda: sp.did_imputation(data, y=plan['outcome'], group=unit, time=time,
+                                                                        first_treat=cohort, controls=list(plan['predictors']) or None, cluster=cluster))
+    weights = {'status': 'unavailable'}
+    try:
+        decomposition = sp.twfe_decomposition(data, y=plan['outcome'], group=unit, time=time, first_treat=cohort)
+        info = decomposition.model_info
+        weights = {'status': 'ok', 'bacon_components': int(info.get('n_comparisons', 0)),
+                   'negative_bacon': int(info.get('n_negative_weights_bacon', 0)),
+                   'negative_dcdh': int(info.get('n_negative_weights_dcdh', 0)),
+                   'sum_negative_dcdh': finite(info.get('sum_negative_weights_dcdh', 0))}
+    except Exception as error:
+        weights = {'status': 'unavailable', 'reason': str(error)[:160]}
+    warnings = ['分批 DID 的 ATT 是各队列与相对时期的加权平均；平行趋势需按队列分别成立，不能只看总体均值。',
+                '处理一旦开始不可撤销由用户确认，数据未自动验证。']
+    if control_group == 'notyettreated': warnings.append('对照组使用尚未处理的单位；需核实这些单位在本队列比较期内未提前受政策影响。')
+    if weights.get('status') == 'ok':
+        if weights['negative_dcdh'] > 0: warnings.append(f"TWFE 对 {weights['negative_dcdh']} 个单元×时期取了负权重（合计 {weights['sum_negative_dcdh']:.2f}）；TWFE 与队列估计不一致时不要用 TWFE 作主结果。")
+        if weights['negative_bacon'] > 0: warnings.append('Goodman–Bacon 分解中存在负权重比较（已处理组被当作对照）；TWFE 系数不能直接解释为处理效应。')
+    used = [int(index) for index in data.index]
+    native = result.to_dict()
+    (directory/'statspai-native.json').write_text(json.dumps(native, default=lambda x: x.tolist() if hasattr(x, 'tolist') else str(x), ensure_ascii=False), encoding='utf-8')
+    return {'summary': '分批 DID：队列 ATT、事件研究与 TWFE 对比；对应 Stata 代码仅供教学。',
+            'software_version': 'StatsPAI ' + versions['statspai'], 'package_versions': versions,
+            'python_version': platform.python_version(), 'n_used': len(used), 'used_indices': used,
+            'coefficients': [{'term': '分批 DID ATT（Callaway–Sant\'Anna）', **att}, *coefficients], 'att': att,
+            'event_study': {'window': [min(periods), max(periods)] if periods else [-1, 1], 'reference_period': -1,
+                            'pretrend': pretrend, 'periods': periods, 'control_group': control_group},
+            'group_time': group_time, 'twfe': twfe, 'twfe_weights': weights, 'warnings': warnings,
+            'robustness': comparison, 'deleted_count': len(frame) - len(used), 'omitted_terms': None,
+            'omitted_status': '不可识别的队列×时期单元由原生估计丢弃',
+            'inference': {'vcov': plan['vcov'], 'cluster': plan['labels'].get(cluster, cluster), 'df': df, 'confidence': .95,
+                          'correction': 'Callaway–Sant’Anna 队列估计与 TWFE 均按单元聚类；t(G-1) 推断'},
+            'validation_scope': '当前受控配置；预趋势检验与负权重提示只是识别证据，不自动证明平行趋势'}
+
 
 def event_study_compute(directory, plan, data, frame, versions, sp, np):
     import re

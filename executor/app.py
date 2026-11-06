@@ -96,7 +96,7 @@ async def authenticate(request):
 def validate(body):
     # Normalize aliases only; arbitrary formulas, scripts and paths never enter templates.
     p = body.get('plan', {})
-    if body.get('engine_id') not in ('statspai_cloud', 'r_native', 'stata_native') or p.get('method') not in ('ols', 'panel_fe', 'did', 'event_study', 'iv_2sls'):
+    if body.get('engine_id') not in ('statspai_cloud', 'r_native', 'stata_native') or p.get('method') not in ('ols', 'panel_fe', 'did', 'staggered_did', 'event_study', 'iv_2sls'):
         raise ValueError('Unsupported engine or method')
     if body.get('software') != {'r_native':'r','stata_native':'stata','statspai_cloud':'python'}[body['engine_id']] or body.get('execution_location') != 'cloud_native':
         raise ValueError('Engine metadata mismatch')
@@ -108,14 +108,14 @@ def validate(body):
         raise ValueError('Invalid row or column limits')
     if any(not re.fullmatch(r'v\d+', n) for n in rows[0]) or any(len(row)!=len(rows[0]) for row in rows):
         raise ValueError('Only rectangular normalized CSV is accepted')
-    fields = [p.get(k, '') for k in ('outcome','unit','time','treated','cluster','endogenous')] + p.get('predictors', []) + p.get('instruments', [])
+    fields = [p.get(k, '') for k in ('outcome','unit','time','treated','first_treat','cluster','endogenous')] + p.get('predictors', []) + p.get('instruments', [])
     if len(p.get('predictors', []))>12 or len(p.get('instruments', []))>4 or any(n and n not in rows[0] for n in fields):
         raise ValueError('Invalid variable mapping')
     if not p.get('outcome') or p.get('vcov') not in ('iid','hetero','cluster') or p.get('missing') not in ('drop','block'):
         raise ValueError('Invalid plan')
     if p['vcov']=='cluster' and not p.get('cluster'):
         raise ValueError('Cluster variable required')
-    panel = p['method'] in ('panel_fe','did','event_study')
+    panel = p['method'] in ('panel_fe','did','staggered_did','event_study')
     if panel and (not p.get('unit') or not p.get('time') or p['unit']==p['time']):
         raise ValueError('Panel mapping required')
     if p.get('method')=='iv_2sls' and bool(p.get('unit')) != bool(p.get('time')):
@@ -124,6 +124,9 @@ def validate(body):
     if p['method']=='iv_2sls' and p.get('unit') and p['vcov']!='cluster':raise ValueError('IV with fixed effects requires clustering')
     if p['method'] in ('did','event_study') and (p.get('same_batch') is not True or not isinstance(p.get('policy_year'), int) or not 1800<=p['policy_year']<=2200 or not p.get('treated')):
         raise ValueError('Only confirmed same-batch DID and event study are supported')
+    if p['method']=='staggered_did':
+        if not p.get('first_treat') or p.get('control_group') not in ('nevertreated','notyettreated') or p.get('absorbing_confirmed') is not True:
+            raise ValueError('Invalid staggered DID setting')
     if p['method']=='event_study':
         window=p.get('window'); reference=p.get('reference_period')
         if not (isinstance(window,list) and len(window)==2 and all(isinstance(v,int) for v in window) and 1<=window[0]<=5 and 1<=window[1]<=5):
@@ -211,12 +214,13 @@ async def gateway(route,request:Request):
         from .cloud_artifacts import teaching
         body=await json_body(request);plan=body.get('plan',{})
         try:
-            fields=[plan.get(k,'') for k in ('outcome','unit','time','treated','cluster','endogenous')]+plan.get('predictors',[])+plan.get('instruments',[])
-            if plan.get('method') not in ('ols','panel_fe','did','event_study','iv_2sls') or plan.get('vcov') not in ('iid','hetero','cluster') or plan.get('missing') not in ('drop','block'):raise ValueError('教学方案无效')
+            fields=[plan.get(k,'') for k in ('outcome','unit','time','treated','first_treat','cluster','endogenous')]+plan.get('predictors',[])+plan.get('instruments',[])
+            if plan.get('method') not in ('ols','panel_fe','did','staggered_did','event_study','iv_2sls') or plan.get('vcov') not in ('iid','hetero','cluster') or plan.get('missing') not in ('drop','block'):raise ValueError('教学方案无效')
             if len(plan.get('predictors',[]))>12 or len(plan.get('instruments',[]))>4 or any(v and not re.fullmatch(r'v\d+',v) for v in fields):raise ValueError('教学字段必须为受控别名')
-            if plan['method'] in ('panel_fe','did','event_study') and plan['vcov']!='cluster':raise ValueError('面板方法仅开放单向聚类')
+            if plan['method'] in ('panel_fe','did','staggered_did','event_study') and plan['vcov']!='cluster':raise ValueError('面板方法仅开放单向聚类')
             if plan['method']=='iv_2sls' and plan.get('unit') and plan['vcov']!='cluster':raise ValueError('带固定效应的工具变量需聚类')
             if plan['method'] in ('did','event_study') and (plan.get('same_batch') is not True or not isinstance(plan.get('policy_year'),int) or not 1800<=plan['policy_year']<=2200 or not plan.get('treated')):raise ValueError('同批设定无效')
+            if plan['method']=='staggered_did' and (not plan.get('first_treat') or plan.get('control_group') not in ('nevertreated','notyettreated') or plan.get('absorbing_confirmed') is not True):raise ValueError('分批 DID 设定无效')
             if plan['method']=='event_study':
                 window=plan.get('window');reference=plan.get('reference_period')
                 if not (isinstance(window,list) and len(window)==2 and all(isinstance(v,int) for v in window) and 1<=window[0]<=5 and 1<=window[1]<=5 and isinstance(reference,int) and -window[0]<=reference<=-1):raise ValueError('事件研究窗口或基期无效')

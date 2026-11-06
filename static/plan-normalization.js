@@ -6,6 +6,8 @@ window.eaNormalizeMethodPlan=function(input={}) {
  if(!['did','event_study'].includes(plan.method)){plan.treated='';plan.policy_year=null;plan.same_batch=false;}
  if(plan.method!=='event_study'){plan.window=null;plan.reference_period=null;}
  if(plan.method!=='iv_2sls'){plan.endogenous='';plan.instruments=[];}
+ if(plan.method!=='staggered_did'){plan.first_treat='';plan.control_group='';plan.absorbing_confirmed=false;}
+ else {plan.vcov='cluster';plan.cluster=plan.cluster||plan.unit;}
  if(plan.vcov!=='cluster')plan.cluster='';
  return plan;
 }

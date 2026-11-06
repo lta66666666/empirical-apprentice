@@ -6,7 +6,7 @@
  const card=el('article','stata-learning-card');card.id='stataLearningCard';card.setAttribute('aria-label','Stata代码与结果讲解');card.hidden=true;feed.append(card);
  let tasks=[],selected=null,signature='',scope='',request=0,reference=null,viewed=new Set();
  const statusNames={queued:'等待助手准备代码',awaiting_approval:'本机已准备，尚未执行',running:'本机正在执行',awaiting_upload:'已完成计算，等待本机批准上传',succeeded:'对应本次实际执行及已批准上传结果',cancelled:'任务已取消',interrupted:'任务已中断',failed:'执行失败'};
- const brief={import:'读取本机归一化数据',numeric:'将字段转换为数值',missing:'按确认规则处理缺失行',sample:'检查最小可用样本',panel:'生成个体编号',cluster:'生成聚类编号',xtset:'声明个体与年份',post:'定义政策后时期',interaction:'生成处理组与政策后的交互项',estimate:'执行本次已确认模型'};
+ const brief={import:'读取本机归一化数据',numeric:'将字段转换为数值',missing:'按确认规则处理缺失行',sample:'检查最小可用样本',panel:'生成个体编号',cluster:'生成聚类编号',xtset:'声明个体与年份',post:'定义政策后时期',interaction:'生成处理组与政策后的交互项',estimate:'执行本次已确认模型',event:'按事件期汇总动态效应',simple:'汇总平均处理效应',comparison:'与 TWFE 负权重分解对照'};
  function current(t){return t&&scope===sessionId&&selected?.id===t.id;}
  function viewRecord(t,id){const key='stata-reading',old=eaDraftEntry(key).value||{};if(old.task_id!==t.id||old.preview_hash!==t.teaching_preview.preview_hash)viewed=new Set();else viewed=new Set(old.viewed||[]);viewed.add(id);eaQueueDraft(key,{task_id:t.id,preview_hash:t.teaching_preview.preview_hash,command_id:id,viewed:[...viewed].slice(-100),view_only:true},parts.draftStatus);}
  async function explain(t,c,focus='command',term=null,reveal=true,part='command'){

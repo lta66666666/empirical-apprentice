@@ -6,7 +6,7 @@ import {readDrafts} from './drafts.js';
 import {applyUnderstanding,researchSummary} from './research-understanding.js';
 import {inputIdentity} from './input-identity.js';
 const cards=['question','sample','outcome','predictor','data_source','access','policy_name','policy_doc','effective_date','treated_list','comparison'];
-const methods=['ols','panel_fe','did','event_study','iv_2sls'],steps=['prepare','data','health','plan','execute','explain','reports'];
+const methods=['ols','panel_fe','did','staggered_did','event_study','iv_2sls'],steps=['prepare','data','health','plan','execute','explain','reports'];
 const labels={prepare:'整理研究准备',data:'载入数据',health:'检查数据与变量',plan:'核对完整方案',execute:'确认并执行',explain:'解释与修订',reports:'下载并核验报告'};
 const fail=(detail,status=422)=>Object.assign(Error(detail),{status});
 export function workspace(state){return state.analysis_workspace||{view:'data',mode:'analysis',guide:{status:'idle',index:0},applied:[]};}
@@ -17,7 +17,9 @@ export async function selectedResult(env,owner,state,id){
 export function safeDraft(raw,profile){
  const names=new Set(profile.columns.map(c=>c.name)),result={};
  if(methods.includes(raw?.method))result.method=raw.method;
- for(const key of ['outcome','unit','time','treated','cluster'])if(names.has(raw?.[key]))result[key]=raw[key];
+ for(const key of ['outcome','unit','time','treated','first_treat','cluster'])if(names.has(raw?.[key]))result[key]=raw[key];
+ if(['nevertreated','notyettreated'].includes(raw?.control_group))result.control_group=raw.control_group;
+ if(raw?.absorbing_confirmed===true)result.absorbing_confirmed=true;
  result.predictors=Array.isArray(raw?.predictors)?raw.predictors.filter(x=>names.has(x)).slice(0,12):[];
  return result;
 }

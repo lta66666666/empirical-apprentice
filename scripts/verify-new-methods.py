@@ -26,7 +26,21 @@ PLANS = {
         "predictors": ["v1"], "vcov": "hetero", "missing": "block",
         "labels": {"v0": "y", "v1": "x", "v4": "d", "v5": "z"},
     },
+    "staggered_did_never": {
+        "method": "staggered_did", "outcome": "v0", "predictors": ["v1"], "unit": "v2",
+        "time": "v3", "first_treat": "v5", "control_group": "nevertreated",
+        "absorbing_confirmed": True, "vcov": "cluster", "cluster": "v2",
+        "missing": "block", "labels": {"v0": "y", "v1": "x", "v5": "first_treat"},
+    },
+    "staggered_did_notyet": {
+        "method": "staggered_did", "outcome": "v0", "predictors": ["v1"], "unit": "v2",
+        "time": "v3", "first_treat": "v5", "control_group": "notyettreated",
+        "absorbing_confirmed": True, "vcov": "cluster", "cluster": "v2",
+        "missing": "block", "labels": {"v0": "y", "v1": "x", "v5": "first_treat"},
+    },
 }
+
+EXPECTED = {"staggered_did_never": ("csdid ", "bacondecomp "), "staggered_did_notyet": ("csdid ", "notyet", "bacondecomp ")}
 
 checks = []
 for name, plan in PLANS.items():
@@ -35,8 +49,15 @@ for name, plan in PLANS.items():
     assert manifest["commands"], name
     assert manifest["core_command"] in text, name
     assert "待验收" not in text, name
-    assert any(command in text for command in ("reghdfe", "ivreghdfe", "ivreg2")), name
+    if name in EXPECTED:
+        assert all(command in text for command in EXPECTED[name]), name
+    else:
+        assert any(command in text for command in ("reghdfe", "ivreghdfe", "ivreg2")), name
     assert "executed" in manifest and manifest["executed"] is False, name
+    r_code = manifest.get("r_code", "")
+    assert r_code and manifest["r_sha256"] == hashlib.sha256(r_code.encode()).hexdigest(), name
+    assert ("att_gt(" in r_code) if name.startswith("staggered") else ("feols(" in r_code), name
+    assert "本脚本未在 R 中实际运行" in r_code, name
     checks.append(name)
 
-print(json.dumps({"checks": checks, "scope": "Stata corresponding-code templates only; not executed"}))
+print(json.dumps({"checks": checks, "scope": "Stata and R corresponding-code templates only; not executed"}))
