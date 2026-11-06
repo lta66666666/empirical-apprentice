@@ -14,13 +14,13 @@
   },
   "contrast": {
     "id": "contrast_staggered",
-    "label": "对比：分批实施辨别卡",
+    "label": "对比：分批实施辨别卡（另一组城市）",
     "type": "staggered",
     "publication_date": "2015-03-01",
-    "first_batch": ["A", "B", "C", "D"],
+    "first_batch": ["甲", "乙", "丙", "丁"],
     "first_effective_date": "2015-07-01",
-    "second_batch": ["E", "F"],
+    "second_batch": ["戊", "己"],
     "second_effective_date": "2016-01-01",
-    "summary": "独立的分批辨别卡：A、B、C、D 市 2015 年 7 月 1 日开始，E、F 市 2016 年 1 月加入；不使用主线小实验的数据或 DID 结果。"
+    "summary": "独立的分批辨别卡（另一组城市）：甲、乙、丙、丁市 2015 年 7 月 1 日开始，戊、己市 2016 年 1 月加入；不使用主线小实验的数据或 DID 结果。"
   }
 }

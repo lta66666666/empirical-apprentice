@@ -98,7 +98,7 @@ function lessonUi(state) {
     lesson_id: id, title: item.title, banner: curriculum.case_banner || '',
     case_id: item.case_id || 'main', case_label: item.case_label || '', intro: item.intro,
     goal: item.goal || '', duration: item.duration || '', output: item.output || '',
-    visual: item.visual || '', guide: item.guide || '', example: item.example || '',
+    visual: item.visual || '', visual_extra: item.visual_extra || '', guide: item.guide || '', example: item.example || '',
     pitfalls: item.pitfalls || [], worksheet: item.worksheet || null, step_idx: stepIndex,
     total_steps: item.steps.length, step_type: step.type, prompt: step.prompt,
     options: step.options || null, total_lessons: curriculum.lessons.length,
@@ -140,7 +140,7 @@ export async function sessionPayload(env, state, {syncJobs=false}={}) {
     last_question: state.last_question, project_choice: state.project_choice,
     tasks: [], outline: curriculum.lessons.map((item) => ({
       id: item.id, title: item.title, intro: item.intro, goal: item.goal || '',
-      duration: item.duration || '', output: item.output || '', visual: item.visual || '',
+      duration: item.duration || '', output: item.output || '', visual: item.visual || '', visual_extra: item.visual_extra || '',
       guide: item.guide || '', example: item.example || '', pitfalls: item.pitfalls || [],
       worksheet: item.worksheet || null, total_steps: item.steps.length,
     })),

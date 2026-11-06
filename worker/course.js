@@ -48,7 +48,7 @@ export function courseView(state){
   const step=item?.steps[index]||(index===item?.steps.length?{type:'checkpoint',prompt:'本阶段练习结束。请补写成果卡，再决定是否进入下一阶段。'}:null);
   if(!item||!step)return null;
   return {lesson_id:item.id,title:item.title,banner:curriculum.case_banner||'',case_id:item.case_id||'main',case_label:item.case_label||'',
-    intro:item.intro,goal:item.goal||'',duration:item.duration||'',output:item.output||'',visual:item.visual||'',guide:item.guide||'',example:item.example||'',
+    intro:item.intro,goal:item.goal||'',duration:item.duration||'',output:item.output||'',visual:item.visual||'',visual_extra:item.visual_extra||'',guide:item.guide||'',example:item.example||'',
     pitfalls:item.pitfalls||[],worksheet:item.worksheet||null,step_idx:index,total_steps:item.steps.length,step_type:step.type,prompt:step.prompt,
     options:step.options||null,total_lessons:curriculum.lessons.length,progress:`第 ${item.id}/${curriculum.lessons.length} 阶段 · ${item.title}`};
 }

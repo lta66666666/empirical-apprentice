@@ -44,7 +44,7 @@
     if(['preview','review'].includes(context.view_mode)){
       const item=data.outline?.find(value=>value.id===context.view_lesson_id);if(!item){showDirectory();return;}
       layout.hidden=true;previewLesson.hidden=false;previewLesson.replaceChildren(button('返回八阶段目录','btn-secondary',showDirectory),el('p','course-state',context.view_mode==='review'?'已完成阶段回顾 · 不改变学习进度':'后续阶段预览 · 不作答、不改变学习进度'),el('h1','',item.title));
-      if(context.view_mode==='review')previewLesson.append(Teaching.review(item));else{const intro=el('div','prose');markdown(intro,item.intro);previewLesson.append(intro,Teaching.visualize(item.visual),Teaching.details(item));}return;
+      if(context.view_mode==='review')previewLesson.append(Teaching.review(item));else{const intro=el('div','prose');markdown(intro,item.intro);previewLesson.append(intro,...Teaching.visuals(item),Teaching.details(item));}return;
     }
     if(context.status==='completed'){
       $('quickActions').replaceChildren(button('继续手算教学','btn-secondary',()=>eaSetTask('hand')),button('进入边分析边学','btn-primary',()=>leave(()=>location.assign('/analysis'))),button('整理研究准备','btn-secondary',()=>eaSetTask('prepare')),button('查看学习记录','btn-secondary',showRecords));

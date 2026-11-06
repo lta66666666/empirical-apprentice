@@ -123,7 +123,14 @@ window.Teaching = (() => {
       }
       const caption=el("p","lab-explanation");caption.setAttribute("aria-live","polite");
       common.input.oninput=extra.input.oninput=update;
-      box.append(plot,controls,metrics,caption,button("重置为课程数据","btn-secondary",()=>{common.input.value=commonStart;extra.input.value=extraStart;update();}));update();
+      box.append(plot,controls,metrics,caption,button("重置为课程数据","btn-secondary",()=>{common.input.value=commonStart;extra.input.value=extraStart;update();}));
+      const g=main.group_means,preT2=g.treated[1],postT2=g.treated[2],preC2=g.control[1],postC2=g.control[2],did=(postT2-preT2)-(postC2-preC2);
+      box.append(table(["组别","2014（政策前）","2015（政策后）","变化（后 − 前）"],
+        [[`试点组 ${main.treated.join('、')}`,preT2,postT2,postT2-preT2],
+         [`对照组 ${main.control.join('、')}`,preC2,postC2,postC2-preC2],
+         ["DID（试点变化 − 对照变化）","","",did]],
+        "课程固定数值；拖动滑块只改变上方示意图，不改变此表。"));
+      update();
     }else if(kind==="uncertainty"){
       box=figure("同为“不显著”，信息量可以很不同","独立人为区间示意，不是 4 城市实验的估计。点是估计，横线是 95% 区间。");
       const chart=svg("svg",{viewBox:"0 0 560 210",role:"img","aria-label":"示意一：估计负2，区间负8到4；示意二：估计0，区间负0.3到0.3。"});
@@ -152,9 +159,10 @@ window.Teaching = (() => {
     return box || el("div");
   }
   let visualSerial=0;
+  function visuals(item){const nodes=[visualize(item.visual)];if(item.visual_extra)nodes.push(visualize(item.visual_extra));return nodes;}
   function details(ui){
     const wrap=el("div","teaching-details");
-    for(const [title,text,open] of [["一步一步怎么做",ui.guide,true],["跟着示范理解",ui.example,true],["容易踩的坑",(ui.pitfalls||[]).map(x=>"- "+x).join("\n"),true]]){
+    for(const [title,text,open] of [["一步一步怎么做",ui.guide,true],["跟着示范理解",ui.example,false],["容易踩的坑",(ui.pitfalls||[]).map(x=>"- "+x).join("\n"),false]]){
       const d=el("details"), body=el("div","prose");d.open=open;d.append(el("summary","",title));markdown(body,text);d.append(body);wrap.append(d);
     }
     return wrap;
@@ -195,7 +203,7 @@ window.Teaching = (() => {
     const key=`${state.session_id}:${ui.lesson_id}`;
     if(key!==currentKey){currentKey=key;pane=['learn','practice','workbook'].includes(state.learning_context?.pane)?state.learning_context.pane:'learn';}
     $("lessonGoal").replaceChildren(el("p","",ui.goal),el("div","lesson-goal-meta",`${ui.case_label} · 建议 ${ui.duration} · 本阶段产出：${ui.output}`));
-    $("teachingVisual").replaceChildren(visualize(ui.visual));$("teachingDetails").replaceChildren(details(ui));
+    $("teachingVisual").replaceChildren(...visuals(ui));$("teachingDetails").replaceChildren(details(ui));
     $("lessonWorkbook").replaceChildren(workbook(ui,state));
     if(ui.step_type==="checkpoint")$("lessonWorkbook").append(button("返回阶段检查点，继续学习","btn-secondary",()=>selectPane("practice")));
     document.querySelectorAll("[data-learn-pane]").forEach(b=>b.onclick=()=>{selectPane(b.dataset.learnPane,true);$("learningScroll").scrollTop=0;});
@@ -204,8 +212,8 @@ window.Teaching = (() => {
   }
   function review(item){
     const body=el("div","lesson-review"), intro=el("div","prose");markdown(intro,item.intro);
-    body.append(el("p","lesson-goal-meta",item.goal),intro,visualize(item.visual),details(item),workbook(item,latestState));
+    body.append(el("p","lesson-goal-meta",item.goal),intro,...visuals(item),details(item),workbook(item,latestState));
     return body;
   }
-  return {render,review,selectPane,syncPane:()=>selectPane(pane),visualize,details,workbook,table};
+  return {render,review,selectPane,syncPane:()=>selectPane(pane),visualize,visuals,details,workbook,table};
 })();
