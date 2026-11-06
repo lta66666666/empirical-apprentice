@@ -119,8 +119,10 @@ export async function sessionPayload(env, state, {syncJobs=false}={}) {
   const messages=await practicalMessages(env,state.owner_id,state.session_id);
   const draftRecords=await readDrafts(env,state.session_id),pairRow=await env.DB.prepare('SELECT body FROM local_pairings WHERE session_id=? AND owner=? AND revoked=0 ORDER BY created_at DESC LIMIT 1').bind(state.session_id,state.owner_id).first();
   Object.defineProperty(state,'research_drafts',{value:draftRecords,enumerable:false,configurable:true});Object.defineProperty(state,'_local_input',{value:pairRow?JSON.parse(pairRow.body):null,enumerable:false,configurable:true});
+  const context=state.learning_context,courseStage=context?(context.status==='active'?'lesson':context.status==='completed'?'project_choice':'entry'):null;
+  const stage=courseStage&&['entry','lesson'].includes(state.stage)?courseStage:state.stage;
   return {
-    demo_fixture:state.demo_fixture||null,session_id: state.session_id, state_version:state.state_version, analysis_workspace:state.analysis_workspace||null,research_summary:researchSummary(state,messages),learning_context:state.learning_context,course:coursePayload(state), stage: state.stage, entry_path: state.entry_path,
+    demo_fixture:state.demo_fixture||null,session_id: state.session_id, state_version:state.state_version, analysis_workspace:state.analysis_workspace||null,research_summary:researchSummary(state,messages),learning_context:state.learning_context,course:coursePayload(state), stage, entry_path: state.entry_path,
     blueprint: state.project, conversation: state.conversation, case_answers: state.case_answers,
     lesson_records: state.lesson_records, learning_artifacts: state.learning_artifacts,
     preparation: state.preparation, method_learning: state.method_learning,
@@ -163,7 +165,8 @@ async function learningMarkdown(env, state) {
     const labels = new Map((lesson(Number(id))?.worksheet?.fields || []).map((field) => [field.key, field.label]));
     for (const [key, value] of Object.entries(artifact)) lines.push(`- ${labels.get(key) || key}：${value || '待补充'}`);
   }
-  lines.push('', '## 导学位置与对话',`- 当前阶段：${state.learning_context?.lesson_id||1}；题目：${(state.learning_context?.step_idx||0)+1}；显示：${state.learning_context?.view_mode||'directory'}`);
+  const context=state.learning_context||{},totalSteps=lesson(context.lesson_id||1)?.steps.length||0;
+  lines.push('', '## 导学位置与对话',`- 当前阶段：${context.lesson_id||1}；${context.step_idx>=totalSteps?'成果整理':`题目：第 ${(context.step_idx||0)+1} 题`}；显示：${context.view_mode||'directory'}`);
   for(const item of state.learning_context?.conversation||[])lines.push(`- ${item.role}：${item.content}`);
   lines.push('', '## 手算教学');
   for (const [index, record] of Object.entries(state.tutorial.records || {})) {
@@ -243,13 +246,17 @@ function readNumber(text) {
   return value;
 }
 
+const researchParts = [
+  ['政策或干预', /政策|试点|措施|改革|计划|补贴|税|禁令|规定|规划/],
+  ['研究对象', /城市|企业|家庭|个人|地区|省份|行业|高校|学生|居民|试点|非试点/],
+  ['结果变量', /使用量|用能|能耗|能源消耗|排放|消费|收入|就业|效率|成本|价格|产量|质量|数量|水平/],
+  ['想判断的关系', /是否|能否|会不会|影响|导致|降低|提高|促进|抑制|比较|造成/],
+];
+function missingResearchParts(text) {
+  return researchParts.filter(([, pattern]) => !pattern.test(text)).map(([label]) => label);
+}
 function checkFree(step, text) {
-  if (step.check?.mode === 'research_question') {
-    return /政策|试点|措施|改革|计划|补贴|税|禁令|规定|规划/.test(text)
-      && /城市|企业|家庭|个人|地区|省份|行业|高校|学生|居民|试点|非试点/.test(text)
-      && /使用量|用能|能耗|能源消耗|排放|消费|收入|就业|效率|成本|价格|产量|质量|数量|水平/.test(text)
-      && /是否|能否|会不会|影响|导致|降低|提高|促进|抑制|比较|造成/.test(text);
-  }
+  if (step.check?.mode === 'research_question') return missingResearchParts(text).length === 0;
   const words = step.check?.any_of || [];
   return words.filter((word) => text.includes(word)).length >= (step.check?.min_hits || 1);
 }
@@ -266,7 +273,7 @@ function lessonAction(state, raw) {
   if (!item) throw new Error('课程不存在。');
   const step = item.steps[index];
   if (!step) {
-    if (!['继续下一阶段', '稍后补写，继续'].includes(value)) {
+    if (!['继续下一阶段', '稍后补写，继续', '完成路线，查看总结', '稍后补写，查看总结'].includes(value)) {
       add(state, '请保存成果草稿后点击继续，也可以选择稍后补写。');
       return;
     }
@@ -289,7 +296,11 @@ function lessonAction(state, raw) {
   attempt.attempts++;
   attempt.history ||= [];
   if (!['choice', 'calc'].includes(step.type)) {
-    const feedback = `${checkFree(step, value) ? '规则提示：回答覆盖了部分提示词，仍需自行核对。' : '规则提示：请检查问题、对象、变量和解释边界。'}\n参考要点：${step.reveal || '请对照本阶段讲解。'}`;
+    const missing = step.check?.mode === 'research_question' ? missingResearchParts(value) : [];
+    const note = step.check?.mode === 'research_question'
+      ? (missing.length ? `规则提示：还缺${missing.join('、')}。研究问句需要同时写明政策、对象、结果和想判断的关系。` : '规则提示：政策、对象、结果与关系都已覆盖，仍需自行核对用词和解释边界。')
+      : (checkFree(step, value) ? '规则提示：回答覆盖了部分提示词，仍需自行核对。' : '规则提示：请检查问题、对象、变量和解释边界。');
+    const feedback = `${note}\n参考要点：${step.reveal || '请对照本阶段讲解。'}`;
     attempt.final_answer = value; attempt.outcome = 'self_review';
     attempt.history.push({ answer: value, feedback, at: new Date().toISOString() });
     add(state, feedback);

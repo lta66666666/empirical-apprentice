@@ -81,11 +81,14 @@ export function openCourse(state,body={}){
   if(mode==='continue'){
     const allowed=context.status==='active'?context.lesson_id:firstPending(state);
     if(!allowed||id!==allowed)throw Error('请按目录继续当前阶段；后续阶段可先预览。');
-    if(context.status==='not_started'){
-      context.status='active';context.lesson_id=id;context.step_idx=0;
+    if(context.status!=='active'){
+      // 已完成全部阶段但仍有无作答记录的阶段（如“学过一些方法”从阶段3起步）时，允许回到这些阶段补完。
+      const record=state.lesson_records.find(value=>value.stage===id);
+      const index=item.steps.findIndex((_,stepIndex)=>!record?.steps.some(step=>step.step_idx===stepIndex&&step.outcome));
+      context.status='active';context.lesson_id=id;context.step_idx=index<0?item.steps.length:index;
       if(!state.entry_path)state.entry_path='zero';
-      if(!state.lesson_records.some(record=>record.stage===id))state.lesson_records.push({stage:id,title:item.title,steps:[]});
-      context.conversation.push({role:'assistant',content:`${curriculum.case_banner||''}\n\n### 阶段 ${id}：${item.title}\n\n${item.intro}`},
+      if(!record)state.lesson_records.push({stage:id,title:item.title,steps:[]});
+      if(context.step_idx===0)context.conversation.push({role:'assistant',content:`${curriculum.case_banner||''}\n\n### 阶段 ${id}：${item.title}\n\n${item.intro}`},
         {role:'assistant',content:`**${item.steps[0].prompt}**`});
     }
     context.view_lesson_id=context.lesson_id;
