@@ -297,14 +297,18 @@ function lessonAction(state, raw) {
   attempt.history ||= [];
   if (!['choice', 'calc'].includes(step.type)) {
     const missing = step.check?.mode === 'research_question' ? missingResearchParts(value) : [];
+    const retry = step.check?.mode === 'research_question' && missing.length > 0 && attempt.attempts < 2;
     const note = step.check?.mode === 'research_question'
       ? (missing.length ? `规则提示：还缺${missing.join('、')}。研究问句需要同时写明政策、对象、结果和想判断的关系。` : '规则提示：政策、对象、结果与关系都已覆盖，仍需自行核对用词和解释边界。')
       : (checkFree(step, value) ? '规则提示：回答覆盖了部分提示词，仍需自行核对。' : '规则提示：请检查问题、对象、变量和解释边界。');
-    const feedback = `${note}\n参考要点：${step.reveal || '请对照本阶段讲解。'}`;
-    attempt.final_answer = value; attempt.outcome = 'self_review';
-    attempt.history.push({ answer: value, feedback, at: new Date().toISOString() });
-    add(state, feedback);
+    const hint = retry ? `\n提示：${(step.hints || [])[attempt.attempts - 1] || '先补上缺少的部分，再连成一句完整的研究问句。'}` : '';
+    attempt.final_answer = value;
+    attempt.history.push({ answer: value, feedback: `${note}${hint}`, at: new Date().toISOString() });
+    add(state, `${note}${hint}`);
+    if (retry) { add(state, '请补充完整后重新提交。'); return; }
+    attempt.outcome = 'self_review';
     state.last_question = `l${id}s${index + 1}`;
+    add(state, `参考要点：${step.reveal || '请对照本阶段讲解。'}`);
     add(state, index + 1 < item.steps.length ? `**${item.steps[index + 1].prompt}**` : '本阶段作答已保存，请写成果；自由回答尚未验证掌握。');
     return;
   }
