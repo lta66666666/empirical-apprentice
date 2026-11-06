@@ -51,6 +51,33 @@ def stats_compute(directory, plan):
     missing = frame[selected].isna().any(axis=1)
     if plan['missing'] == 'block' and missing.any(): raise ValueError('存在缺失值，需要先核对删除规则')
     data = frame.loc[~missing].copy()
+    def finite(value):
+        value = float(value)
+        return round(value, 6) if math.isfinite(value) else None
+    descriptives = []
+    for name in numeric:
+        series = data[name].dropna()
+        if series.empty: continue
+        quant = series.quantile([.25, .5, .75])
+        descriptives.append({'variable': plan['labels'].get(name, name), 'n': int(series.count()),
+            'mean': finite(series.mean()), 'sd': finite(series.std(ddof=1)) if len(series) > 1 else None,
+            'min': finite(series.min()), 'p25': finite(quant.loc[.25]), 'median': finite(quant.loc[.5]),
+            'p75': finite(quant.loc[.75]), 'max': finite(series.max()), 'missing': int(frame[name].isna().sum())})
+    balance = []
+    robustness = []
+    if plan['method'] in ('did', 'event_study'):
+        before = data[data[plan['time']] < plan['policy_year']]
+        for name in [plan['outcome'], *plan['predictors']]:
+            treated, control = before.loc[before[plan['treated']] == 1, name].dropna(), before.loc[before[plan['treated']] == 0, name].dropna()
+            if treated.empty or control.empty: continue
+            diff = float(treated.mean() - control.mean())
+            var_t = float(treated.var(ddof=1)) if len(treated) > 1 else 0.0
+            var_c = float(control.var(ddof=1)) if len(control) > 1 else 0.0
+            denom = math.sqrt((var_t + var_c) / 2)
+            balance.append({'variable': plan['labels'].get(name, name), 'treated_mean': finite(treated.mean()),
+                'control_mean': finite(control.mean()), 'difference': finite(diff),
+                'std_diff': finite(diff / denom) if denom > 0 else None,
+                'n_treated': int(treated.count()), 'n_control': int(control.count())})
     minimum=max(8,len(plan['predictors'])+(1 if plan['method']=='did' else 0)+len(plan.get('instruments') or [])+2)
     if len(data)<minimum:raise ValueError('完整样本不足，需要至少'+str(minimum)+'行')
     if panel or (plan['method']=='iv_2sls' and plan.get('unit')):
@@ -71,9 +98,15 @@ def stats_compute(directory, plan):
         if any(not ((data[plan['treated']] == g) & (post == p)).any() for g in (0,1) for p in (0,1)): raise ValueError('DID四格样本不完整')
         rhs = ['policy_effect'] + rhs
     if plan['method'] == 'event_study':
-        return event_study_compute(directory, plan, data, frame, versions, sp, np)
+        result = event_study_compute(directory, plan, data, frame, versions, sp, np)
+        result['descriptives'] = descriptives
+        result['balance'] = balance
+        return result
     if plan['method'] == 'iv_2sls':
-        return iv_compute(directory, plan, data, frame, versions, sp, np)
+        result = iv_compute(directory, plan, data, frame, versions, sp, np)
+        result['descriptives'] = descriptives
+        result['balance'] = balance
+        return result
     formula = plan['outcome'] + ' ~ ' + ' + '.join(rhs)
     if plan['method'] == 'ols':
         opts = {'robust': False if plan['vcov'] == 'iid' else 'HC1'}
@@ -110,14 +143,60 @@ def stats_compute(directory, plan):
         if name not in rhs and label != '(Intercept)': continue
         crit = float(t.ppf(.975, df))
         coefficients.append({'term':label,'estimate':value,'std_error':se,'p_value':float(2*t.sf(abs(value/se),df)), 'ci_low':value-crit*se,'ci_high':value+crit*se})
+    if plan['method'] == 'did':
+        def variant_fit(d, cluster_name, label):
+            try:
+                formula_v = plan['outcome'] + ' ~ policy_effect' + ((' + ' + ' + '.join(plan['predictors'])) if plan['predictors'] else '') + ' | ' + plan['unit'] + ' + ' + plan['time']
+                fit_v = sp.fast.feols(formula_v, data=d, vcov='cr1', cluster=cluster_name, ssc='fixest', drop_singletons=False)
+                coef = float(fit_v.coef()['policy_effect']); se = float(fit_v.se()['policy_effect'])
+                df_v = float(d[cluster_name].nunique() - 1)
+                if df_v <= 0 or se <= 0 or not math.isfinite(coef): raise ValueError('推断自由度或标准误无效')
+                crit = float(t.ppf(.975, df_v))
+                return {'name': label, 'status': 'ok', 'estimate': coef, 'std_error': se,
+                        'p_value': float(2*t.sf(abs(coef/se), df_v)), 'ci_low': coef-crit*se, 'ci_high': coef+crit*se,
+                        'n_used': len(d), 'cluster': plan['labels'].get(cluster_name, cluster_name)}
+            except Exception as error:
+                return {'name': label, 'status': 'failed', 'note': str(error)[:160]}
+        def did_data(d, year):
+            d = d.copy()
+            post = (d[plan['time']] >= year).astype(int)
+            d['policy_effect'] = d[plan['treated']] * post
+            if not d[plan['treated']].isin([0, 1]).all(): raise ValueError('组别无效')
+            if (d.groupby(plan['unit'])[plan['treated']].nunique() != 1).any(): raise ValueError('组别随时期改变')
+            if (post.groupby(d[plan['unit']]).nunique() != 2).any(): raise ValueError('个体缺少前期或后期')
+            if any(not ((d[plan['treated']] == g) & (post == p)).any() for g in (0,1) for p in (0,1)): raise ValueError('四格样本不完整')
+            return d
+        base = next((c for c in coefficients if c['term'] == 'DID effect'), None)
+        if base: robustness.append({'name': '基准（当前方案）', 'status': 'ok', 'estimate': base['estimate'],
+            'std_error': base['std_error'], 'p_value': base['p_value'], 'ci_low': base['ci_low'], 'ci_high': base['ci_high'],
+            'n_used': len(used), 'cluster': plan['labels'].get(plan['cluster'], plan['cluster'])})
+        try:
+            robustness.append(variant_fit(did_data(data, plan['policy_year'] - 1), plan['cluster'], '安慰剂：政策提前 1 年'))
+        except Exception as error:
+            robustness.append({'name': '安慰剂：政策提前 1 年', 'status': 'failed', 'note': str(error)[:160]})
+        robustness.append(variant_fit(data, plan['unit'], '聚类：按个体编号'))
+        try:
+            d = data.copy(); lo, hi = d[plan['outcome']].quantile([.01, .99]); d[plan['outcome']] = d[plan['outcome']].clip(lo, hi)
+            robustness.append(variant_fit(d, plan['cluster'], '缩尾：结果变量 1%/99%'))
+        except Exception as error:
+            robustness.append({'name': '缩尾：结果变量 1%/99%', 'status': 'failed', 'note': str(error)[:160]})
+        try:
+            d = data[data[plan['time']] < data[plan['time']].max()].copy()
+            robustness.append(variant_fit(did_data(d, plan['policy_year']), plan['cluster'], '剔除最后一年'))
+        except Exception as error:
+            robustness.append({'name': '剔除最后一年', 'status': 'failed', 'note': str(error)[:160]})
     # Full native result is a local artifact only; it may contain observations.
     (directory/'statspai-native.json').write_text(json.dumps(native, default=lambda x: x.tolist() if hasattr(x,'tolist') else str(x), ensure_ascii=False), encoding='utf-8')
-    return {'summary':'StatsPAI 云端计算；对应 Stata 代码仅供教学。', 'software_version':'StatsPAI '+versions['statspai'],
+    result = {'summary':'StatsPAI 云端计算；对应 Stata 代码仅供教学。', 'software_version':'StatsPAI '+versions['statspai'],
             'package_versions':versions,'python_version':platform.python_version(), 'n_used':len(used), 'used_indices':used,
             'coefficients':coefficients,'deleted_count':len(frame)-len(used),'omitted_terms':None,'omitted_status':'未分项记录；奇异或不可识别模型停止计算',
             'covariance':{'terms':[str(n) for n in covariance.index],'matrix':covariance.to_numpy().tolist()},'model_dimensions':dimensions,
             'inference':{'vcov':plan['vcov'],'cluster':plan['labels'].get(plan['cluster'],plan['cluster']),'df':df,'confidence':.95,'correction':correction},
             'validation_scope':'当前受控配置；数值对照、来源和识别条件分别核验'}
+    result['descriptives'] = descriptives
+    result['balance'] = balance
+    result['robustness'] = robustness
+    return result
 
 def event_study_compute(directory, plan, data, frame, versions, sp, np):
     import re

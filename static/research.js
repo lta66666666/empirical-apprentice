@@ -339,6 +339,31 @@ function researchIvDiagnostics(j,r){
   box.append(el('p','workspace-note','外生性不可由数据检验；2SLS 系数解释为工具变量识别下的局部效应。'));
   return box;
 }
+function researchSimpleTable(headers,rows){
+  const wrap=el('div','table-scroll'),table=el('table','research-table'),head=el('tr');
+  for(const label of headers)head.append(el('th','',label));table.append(head);
+  for(const row of rows){const tr=el('tr');for(const value of row)tr.append(el('td','',value==null?'—':String(value)));table.append(tr);}
+  wrap.append(table);return wrap;
+}
+function researchCsvCell(value){return '"'+String(value==null?'':value).replaceAll('"','""')+'"';}
+function researchSaveText(text,filename,type){const blob=new Blob([text],{type}),link=el('a');link.href=URL.createObjectURL(blob);link.download=filename;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);}
+function researchEscapeLatex(value){return String(value==null?'':value).replace(/\\/g,'\\\\').replace(/&/g,'\\&').replace(/%/g,'\\%').replace(/_/g,'\\_').replace(/#/g,'\\#').replace(/\{/g,'\\{').replace(/\}/g,'\\}');}
+function researchExportRow(title,headers,rows){
+  const box=el('div','research-table-actions');
+  const csv=[headers,...rows].map(row=>row.map(researchCsvCell).join(',')).join('\n');
+  const latex=['\\begin{tabular}{l'+'r'.repeat(Math.max(0,headers.length-1))+'}\\toprule',headers.map(researchEscapeLatex).join(' & ')+' \\\\','\\midrule',...rows.map(row=>row.map(researchEscapeLatex).join(' & ')+' \\\\'),'\\bottomrule','\\end{tabular}'].join('\n');
+  box.append(button('导出 CSV','text-btn',()=>researchSaveText(csv,title+'.csv','text/csv;charset=utf-8')),button('导出 LaTeX','text-btn',()=>researchSaveText(latex,title+'.tex','text/plain;charset=utf-8')));
+  return box;
+}
+async function researchDownloadPng(url,filename){
+  try{
+    const svg=await (await fetch(url)).text(),image=new Image();
+    await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;image.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svg)));});
+    const width=image.width||560,height=image.height||300,scale=2,canvas=el('canvas');canvas.width=width*scale;canvas.height=height*scale;
+    const context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.scale(scale,scale);context.drawImage(image,0,0,width,height);
+    canvas.toBlob(blob=>{const link=el('a');link.href=URL.createObjectURL(blob);link.download=filename;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);},'image/png');
+  }catch(e){researchNotice('图导出失败：'+e.message,true);}
+}
 function researchDrawJob(j){
   const signature=JSON.stringify([j.id,j.status,j.record_version,j.error,j.sync_error,j.stale,j.verification]);
   researchJob=j;window.eaCorrespondingQuestionContext=null;window.eaSelectedTask={id:j.id,session_id:j.session_id||sessionId,engine_id:j.engine_id||'browser_webr'};const box=$('researchResult');
@@ -377,6 +402,9 @@ function researchDrawJob(j){
   for(const node of [box.querySelector('.research-progress'),box.querySelector(':scope>.workspace-note'),box.querySelector(':scope>.research-formula')])if(node)evidenceBody.append(node);
   box.append(el('p','ea-result-summary',`估计样本 ${r.n_used} 行 · 资料版本 ${j.research_revision??'历史未记录'} · 导出版本 ${j.record_version||1} · ${j.verification?.status==='consistent'?'同引擎复算一致':j.verification?.status==='inconsistent'?'同引擎复算有差异':'尚未独立核对'}`));
   box.append(researchEvidenceChain(j));
+  const lineage=el('details','ea-lineage');lineage.append(el('summary','','复现信息'));
+  for(const [label,value] of [['输入 SHA-256',j.input_sha256],['方案 SHA-256',j.plan_sha256],['原始文件 SHA-256',j.source_sha256],['规范化数据 SHA-256',j.canonical_sha256],['对应代码 SHA-256',j.corresponding_code?.sha256],['数据行数',j.n_rows],['导入版本',j.import_version],['研究版本',j.research_revision]].filter(([,value])=>value!=null))lineage.append(el('p','',`${label}：${value}`));
+  evidenceBody.append(lineage);
   if(j.verification?.differences?.length)evidenceBody.append(el('pre','',JSON.stringify(j.verification.differences,null,2)));
   let rerunRequestId=null;const rerun=button('从原始输入独立重跑核对','btn-secondary',async()=>{if(researchRunning){researchNotice('当前操作正在处理中，请稍后重跑。',true);return;}const context=researchContext(),operation=++researchOperationEpoch;researchRunning=true;rerun.disabled=true;researchBusyFeedback('正在创建独立重跑任务…');rerunRequestId||=crypto.randomUUID();try{const next=await api(`/api/research/jobs/${j.id}/rerun`,{method:'POST',body:{request_id:rerunRequestId}});if(!researchContextCurrent(context,false))return;rerunRequestId=null;researchNotice('独立重跑任务已创建，正在计算。');storageSet('ea_auto_ai:'+next.id,'pending');eaResearchStep('execute');await researchWatch(next.id);if(next.execution_location!=='cloud_native')await browserRunJob(next,true);}catch(e){if(context.session===sessionId)researchNotice(e.message,true);}finally{if(operation===researchOperationEpoch){researchRunning=false;rerun.disabled=false;if(typeof eaUpdateStepAction==='function')eaUpdateStepAction();}}});evidenceBody.append(rerun);
   evidenceBody.append(el('p','',`${r.software_version||r.r_version} · ${JSON.stringify(r.package_versions)} · 实际估计 ${r.n_used} 行${r.clusters?' · '+r.clusters+' 个聚类':''}`));
@@ -400,6 +428,19 @@ function researchDrawJob(j){
   }
   for(const c of r.coefficients){const row=el('tr');row.tabIndex=0;row.setAttribute('aria-label',`选择 ${c.term} 查看区间与单位`);row.onclick=()=>selectCoefficient(c,row);row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectCoefficient(c,row);}};for(const value of [c.term,stataNum(c.estimate),stataNum(c.std_error),c.std_error>0?(c.estimate/c.std_error).toFixed(2):'—',stataP(c.p_value),`[${stataNum(c.ci_low)}, ${stataNum(c.ci_high)}]`])row.append(el('td','',value));table.append(row);}
   scroll.append(table);log.append(scroll,el('p','ea-stata-note','按 Stata 输出格式整理；数值来自本次云端执行，本机无需安装 Stata。'));wrap.append(bar,log);box.append(wrap);
+  if(Array.isArray(r.descriptives)&&r.descriptives.length){
+    const details=el('details','ea-extra-tables');details.append(el('summary','','表1 · 描述统计与政策前平衡'));
+    const rows=r.descriptives.map(d=>[d.variable,d.n,d.mean,d.sd,d.min,d.p25,d.median,d.p75,d.max,d.missing]),headers=['变量','N','均值','标准差','最小值','P25','中位数','P75','最大值','缺失'];
+    details.append(researchSimpleTable(headers,rows),researchExportRow('描述统计',headers,rows));
+    if(Array.isArray(r.balance)&&r.balance.length){const balanceRows=r.balance.map(d=>[d.variable,d.treated_mean,d.control_mean,d.difference,d.std_diff,d.n_treated,d.n_control]),balanceHeaders=['变量','处理组均值','对照组均值','差值','标准化差异','处理组N','对照组N'];details.append(el('h4','','政策前平衡表（处理组 vs 对照组）'),researchSimpleTable(balanceHeaders,balanceRows),researchExportRow('平衡表',balanceHeaders,balanceRows));}
+    box.append(details);
+  }
+  if(Array.isArray(r.robustness)&&r.robustness.length){
+    const details=el('details','ea-extra-tables');details.append(el('summary','','稳健性网格'));
+    const headers=['检验','估计','标准误','p 值','95% 区间','样本','聚类/说明'],rows=r.robustness.map(d=>d.status==='ok'?[d.name,Number(d.estimate).toPrecision(6),Number(d.std_error).toPrecision(4),Number(d.p_value).toFixed(3),'['+Number(d.ci_low).toPrecision(4)+', '+Number(d.ci_high).toPrecision(4)+']',d.n_used,d.cluster||'—']:[d.name,'—','—','—','—','—',d.note||'未完成']);
+    details.append(researchSimpleTable(headers,rows),researchExportRow('稳健性网格',headers,rows),el('p','workspace-note','稳健性结果用于检查结论是否稳定，不替代识别假设与来源核对。'));
+    box.append(details);
+  }
   if(j.plan.method==='did'){const figure=el('figure','ea-did-contrast'),image=el('img');image.src=`/api/research/jobs/${j.id}/artifacts/did_contrast.svg`;image.alt='处理组与对照组前后均值及原始 DID 对照';figure.append(image,el('figcaption','muted','原始 DID 由已确认样本的四格均值计算；模型系数可能因控制变量与固定效应不同。'));box.append(figure);}
   if(j.plan.method==='event_study')box.append(researchEventStudyFigure(j,r));
   if(j.plan.method==='iv_2sls')box.append(researchIvDiagnostics(j,r));
@@ -417,7 +458,7 @@ function researchDrawJob(j){
   const selector=el('select');selector.setAttribute('aria-label','选择要解释的系数');for(const c of r.coefficients)selector.append(new Option(c.term,c.term));selector.value=(r.coefficients.find(c=>c.term!=='(Intercept)')||r.coefficients[0]).term;
   for(const option of selector.options)option.textContent=option.value==='(Intercept)'?'截距（查看零点含义）':`${option.value} · 查看系数、区间与单位`;
   selector.className='ea-coefficient-selector';selector.onchange=()=>{const index=r.coefficients.findIndex(c=>c.term===selector.value);selectCoefficient(r.coefficients[index],table.querySelectorAll('tr')[index+1]);const other=$('researchExplanation')?.querySelector('.ea-coefficient-selector');if(other)other.value=selector.value;};box.insertBefore(selector,focus);
-  const figure=el('figure'),img=el('img');img.src=`/api/research/jobs/${j.id}/artifacts/coefficients.svg`;img.alt='本次执行的系数与95%置信区间图';figure.append(img,el('figcaption','muted',j.execution_location==='cloud_native'?'系数与区间来自云端原生执行；来源与识别条件仍需核对。':'系数及区间由浏览器 webR 提交，服务器未独立重算。'));evidenceBody.append(figure);
+  const figure=el('figure'),img=el('img');img.src=`/api/research/jobs/${j.id}/artifacts/coefficients.svg`;img.alt='本次执行的系数与95%置信区间图';figure.append(img,el('figcaption','muted',j.execution_location==='cloud_native'?'系数与区间来自云端原生执行；来源与识别条件仍需核对。':'系数及区间由浏览器 webR 提交，服务器未独立重算。'),button('导出图 PNG','text-btn',()=>researchDownloadPng(img.src,'coefficients.png')));evidenceBody.append(figure);
   if(j.plan.method==='did'){
     const f=el('figure'),im=el('img');im.src=`/api/research/jobs/${j.id}/artifacts/group_trends.svg`;im.alt='本次样本的处理组与对照组均值变化';f.append(im,el('figcaption','muted','组均值变化：描述性图，不是事件研究回归或平行趋势证明。'));evidenceBody.append(f);
   }

@@ -111,6 +111,14 @@
 .stage-summary{margin:0 0 14px;padding:13px 15px;border:1px solid #d8e7e2;border-radius:12px;background:#f7fbf9}
 .stage-summary strong{display:block;font-size:14px;color:#0b4f4a;margin-bottom:5px}
 .stage-summary p{margin:2px 0;font-size:13px;line-height:1.7;color:#44615f}
+.research-table-actions{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.research-table-actions .text-btn{font-size:12px;padding:2px 8px}
+.ea-extra-tables{margin:14px 0;padding:12px 14px;border:1px solid #dbe8e4;border-radius:12px;background:#f8fbfa}
+.ea-extra-tables>summary{cursor:pointer;font-weight:600;font-size:14px;margin-bottom:8px}
+.ea-extra-tables h4{font-size:13px;margin:14px 0 6px}
+.ea-lineage{margin:10px 0;font-size:12px;color:#54665c}
+.ea-lineage>summary{cursor:pointer;font-weight:600}
+.ea-lineage p{margin:4px 0;overflow-wrap:anywhere}
 .badge.mastery-mastered{color:#0b645e;background:#e3f4ee;border-color:#bfe3d8}
 .badge.mastery-suggest{color:#8a5a12;background:#fdf3e3;border-color:#eed9b4}
 .badge.mastery-review{color:#9b3b2e;background:#fdece9;border-color:#efc9c2}
