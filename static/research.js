@@ -73,6 +73,7 @@ function researchSetFields(profile,preset={}){
   const instruments=$('researchInstrumentFields');instruments.replaceChildren(el('legend','','工具变量（1–4 个）'));
   for(const c of profile.columns){const label=el('label','research-check'),input=el('input');input.type='checkbox';input.value=c.name;label.append(input, document.createTextNode(c.name));instruments.append(label);}
   for(const [key,id] of Object.entries({engine_id:'researchEngine',method:'researchMethod',outcome:'researchOutcome',unit:'researchUnit',time:'researchTime',treated:'researchTreated',cluster:'researchCluster',vcov:'researchVcov',missing:'researchMissing'}))if(preset[key]!=null)$(id).value=preset[key];
+  const engineSelect=$('researchEngine');if(preset.engine_id&&![...engineSelect.options].some(o=>o.value===preset.engine_id))engineSelect.value='statspai_cloud';
   if(preset.policy_year)$('researchYear').value=preset.policy_year;
   $('researchSameBatch').checked=Boolean(preset.same_batch);
   for(const n of predictors.querySelectorAll('input'))n.checked=(preset.predictors||[]).includes(n.value);
@@ -604,7 +605,7 @@ function setupResearch(){
   const aiNote=el('div','workspace-note');aiNote.id='researchAiNote';form.append(aiCandidate,aiNote);
   const transfer=el('div','research-prep-transfer');transfer.id='researchPrepTransfer';form.append(transfer);
   const params=el('details','research-parameters');params.open=true;params.append(el('summary','','方法与变量'));
-  const engine=researchField('researchEngine','软件与执行位置');engine.querySelector('select').replaceChildren(new Option('云端计算 · Stata 语法（无需安装）','statspai_cloud'),new Option('请先选择执行方式',''),new Option('浏览器 R / fixest（无需安装）','browser_webr'),new Option('云端原生 R（检测配置后开放）','r_native'),new Option('云端 Stata（授权及环境待验收）','stata_native'));params.append(engine,el('p','workspace-note','同一方案可切换：云端计算用 Stata 命令语法，浏览器 R 用 fixest；结果页会并列两种语言的对应代码，方便对照。云端计算会上传数据，浏览器 R 在本机执行并上传结果。切换方式须重新确认。'));
+  const engine=researchField('researchEngine','软件与执行位置');engine.querySelector('select').replaceChildren(new Option('云端计算 · Stata 语法（无需安装）','statspai_cloud'),new Option('请先选择执行方式',''),new Option('浏览器 R / fixest（无需安装）','browser_webr'));params.append(engine,el('p','workspace-note','同一方案可切换：云端计算用 Stata 命令语法，浏览器 R 用 fixest；结果页会并列两种语言的对应代码，方便对照。云端计算会上传数据，浏览器 R 在本机执行并上传结果。切换方式须重新确认。'));
   const method=researchField('researchMethod','计量方法');method.querySelector('select').replaceChildren(...Object.entries(researchNames).map(([v,t])=>new Option(t,v)));params.append(method,researchField('researchOutcome','结果变量 Y'));
   const predictors=el('fieldset');predictors.append(el('legend','','解释变量 / DID 控制变量'));const checks=el('div','research-predictors');checks.id='researchPredictors';predictors.append(checks);params.append(predictors);
   const panel=el('div');panel.id='researchPanelFields';panel.hidden=true;panel.append(researchField('researchUnit','个体编号'),researchField('researchTime','年份'));params.append(panel);
@@ -639,13 +640,13 @@ function setupResearch(){
   api('/api/research/status').then(s=>{
     researchRuntime=s;runtime.replaceChildren(el('summary','','更多执行方式'),el('strong','',s.engines.statspai_cloud?.ready?'云端计算已就绪（Stata 命令语法）':'云端计算尚未就绪；可主动选择浏览器 R 备用'));
     const engineSelect=$('researchEngine');if(!engineSelect.value)engineSelect.value=s.default_engine||'statspai_cloud';
-    for(const option of engineSelect.options){if(['statspai_cloud','r_native','stata_native'].includes(option.value)){const capability=s.engines[option.value];option.disabled=!capability?.ready;option.textContent=`${option.value==='statspai_cloud'?'云端计算（Stata 命令语法）':option.value==='r_native'?'云端原生 R':'云端 Stata'}（${capability?.status||'未配置'}）`;}}
+    for(const option of engineSelect.options)if(option.value==='statspai_cloud'){const capability=s.engines.statspai_cloud;option.disabled=!capability?.ready;option.textContent=`云端计算 · Stata 语法（${capability?.status||'未配置'}）`;}
     runtime.append(el('p','workspace-note','默认使用云端计算（Stata 命令语法）；也可切到浏览器 R / fixest。结果页并列两种语言的对应代码。不会在云端失败后自动改用其他软件。'));
     const browserChoice=button('使用浏览器 R / fixest','btn-primary',()=>{if(researchRunning){researchNotice('请等待或中断当前任务后切换执行方式。',true);return;}if(!['ols','panel_fe','did'].includes($('researchMethod').value)){researchNotice('浏览器 R 当前只开放线性回归、面板固定效应与同批 DID；其他方法请用云端计算（Stata 语法）。',true);return;}engineSelect.value='browser_webr';researchInvalidate();researchNotice('已选择浏览器 R / fixest。请载入数据、整理方案并重新确认；这不是云端执行。');});browserChoice.id='eaBrowserChoice';runtime.append(browserChoice);
     const state=el('p','workspace-note');state.id='eaRuntimeStatus';state.setAttribute('role','status');
     const initialize=button('检查并初始化浏览器 R','btn-secondary',async()=>{if(researchRunning)return;initialize.disabled=true;state.textContent='正在下载或初始化浏览器 R 与 fixest…';try{const r=await eaInitWebR();const version=await r.evalRString("paste('R',getRversion(),'· fixest',as.character(packageVersion('fixest')))");state.textContent=`浏览器执行环境已就绪：${version}。仍须选择执行方式并确认方案。`;if(typeof eaRefreshEnvironment==='function')eaRefreshEnvironment();}catch(e){runtime.open=true;state.textContent=`初始化失败：${e.message}。请检查下载网络后重试。`;}finally{initialize.disabled=false;}});runtime.append(initialize,state);
-    const detail=el('details');detail.append(el('summary','','查看各软件与模型状态'),el('p','',s.engines.r_native.reason));
-    for(const software of s.software)detail.append(el('span','research-chip',`${software.label}：${software.status}`));
+    const detail=el('details');detail.append(el('summary','','查看执行方式状态'));
+    for(const software of s.software.filter(x=>['statspai_cloud','browser_webr'].includes(x.id)))detail.append(el('span','research-chip',`${software.label}：${software.status}`));
     detail.append(el('p','muted',s.planner_mode==='online'?'候选方案模型已配置，真实接口待实测；学生确认后才执行。':'未连接在线模型，可使用课程、手动方案和自查清单。'));runtime.append(detail);aiCandidate.hidden=s.planner_mode!=='online';
   }).catch(e=>runtime.textContent=e.message);
   researchRenderLesson();
