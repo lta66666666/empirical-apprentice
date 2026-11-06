@@ -93,7 +93,7 @@ async def execute(payload,directory,development=False):
         (directory/'execution.log').write_text(log,encoding='utf-8')
         if code or not (directory/'result.json').exists():raise ValueError('StatsPAI calculation failed; '+log[-500:])
         result=json.loads((directory/'result.json').read_text(encoding='utf-8'))
-        result['warnings']=['显著性不自动证明因果；来源和研究设计仍需核对。']
+        result['warnings']=[*result.get('warnings',[]),'显著性不自动证明因果；来源和研究设计仍需核对。']
         if p['vcov']=='cluster':
             result['clusters']=int(result['inference']['df'])+1
             if result['clusters']<30:result['warnings'].append('聚类数少于30，常规聚类稳健推断可能不稳定；30只是教学提醒阈值。')

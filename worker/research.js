@@ -80,6 +80,8 @@ function normalized(data, plan) {
   const normalizedPlan = { ...plan, predictors: plan.predictors.map((name) => aliases[name]),
     labels: Object.fromEntries(Object.entries(aliases).map(([name, alias]) => [alias, name])) };
   for (const key of ['outcome', 'unit', 'time', 'treated', 'cluster']) if (normalizedPlan[key]) normalizedPlan[key] = aliases[normalizedPlan[key]];
+  if (normalizedPlan.endogenous) normalizedPlan.endogenous = aliases[normalizedPlan.endogenous];
+  normalizedPlan.instruments = (normalizedPlan.instruments || []).map((name) => aliases[name]);
   const csv = [data.headers.map((name) => aliases[name]).join(','), ...data.rows.map((row) => row.map(quoteCsv).join(','))].join('\n') + '\n';
   return { csv, plan: normalizedPlan };
 }
@@ -109,7 +111,7 @@ function validatePlan(input, data, blueprint, session) {
   if (panelMethods.includes(plan.method) && plan.vcov !== 'cluster') throw new Error('固定效应、DID 与事件研究仅开放单向聚类标准误，请选择聚类列。');
   if (!data.headers.includes(plan.outcome)) throw new Error('请选择数据中的结果变量。');
   if (plan.predictors.length > 12 || new Set(plan.predictors).size !== plan.predictors.length || plan.predictors.includes(plan.outcome)) throw new Error('解释变量不能重复或包含结果变量，最多 12 列。');
-  if (['panel_fe','event_study'].includes(plan.method) && !plan.predictors.length) throw new Error('请至少选择一个解释变量。');
+  if (plan.method==='panel_fe' && !plan.predictors.length) throw new Error('请至少选择一个解释变量。');
   if (panelMethods.includes(plan.method) && (!plan.unit || !plan.time || plan.unit === plan.time)) throw new Error('面板分析需要不同的个体列和年份列。');
   if (plan.method === 'did' && (!plan.treated || !Number.isInteger(plan.policy_year) || plan.policy_year < 1800 || plan.policy_year > 2200 || !plan.same_batch)) {
     throw new Error('本版 DID 仅支持同批实施：需核对组别、政策年份和适用条件。');
@@ -136,7 +138,7 @@ function validatePlan(input, data, blueprint, session) {
   const required = [plan.outcome, ...plan.predictors, plan.unit, plan.time, plan.treated, plan.cluster, plan.endogenous, ...plan.instruments].filter(Boolean);
   const absent = required.filter((name) => !data.headers.includes(name));
   if (absent.length) throw new Error('数据中没有这些列：' + absent.join(', '));
-  for (const name of [plan.outcome, ...plan.predictors, plan.endogenous, ...plan.instruments]) {
+  for (const name of [plan.outcome, ...plan.predictors, plan.endogenous, ...plan.instruments].filter(Boolean)) {
     if (!data.profile.columns.find((column) => column.name === name)?.numeric) throw new Error(`${name} 不是可用数值列。`);
   }
   const selected = [...new Set(required)];

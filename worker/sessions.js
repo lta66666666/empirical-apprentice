@@ -19,6 +19,7 @@ const fields = ['treatment', 'outcome', 'time_range', 'sample', 'policy_batches'
 const commonCards = ['question', 'sample', 'outcome', 'predictor', 'data_source', 'access'];
 const policyCards = ['policy_doc', 'release_date', 'effective_date', 'expansion_date', 'treated_list', 'comparison'];
 const methodAnswers = { ols: 'B', panel_fe: 'B' };
+const outcomeLabels = { independent_correct: '独立答对', corrected: '提示后修正', revealed: '查看示范', self_review: '自评已记录' };
 
 const answer = (value, status = 200) => Response.json(value, { status });
 const error = (message, status = 422) => answer({ detail: message }, status);
@@ -152,14 +153,15 @@ async function learningMarkdown(env, state) {
   for (const record of state.lesson_records) {
     lines.push(`### ${record.stage}. ${record.title}`);
     for (const step of record.steps) {
-      lines.push(`- 第 ${step.step_idx + 1} 题：${step.outcome || '未完成'}；尝试 ${step.attempts} 次；首次回答：${step.first_answer}；最后回答：${step.final_answer}`);
+      lines.push(`- 第 ${step.step_idx + 1} 题：${outcomeLabels[step.outcome] || '未完成'}；尝试 ${step.attempts} 次；首次回答：${step.first_answer}；最后回答：${step.final_answer}`);
       for (const event of step.history || []) lines.push(`  - ${event.at}：${event.answer}；${event.feedback}`);
     }
   }
   lines.push('', '## 阶段成果草稿（保存不代表人工审核通过）');
   for (const [id, artifact] of Object.entries(state.learning_artifacts)) {
     lines.push(`### 阶段 ${id}`);
-    for (const [key, value] of Object.entries(artifact)) lines.push(`- ${key}：${value || '待补充'}`);
+    const labels = new Map((lesson(Number(id))?.worksheet?.fields || []).map((field) => [field.key, field.label]));
+    for (const [key, value] of Object.entries(artifact)) lines.push(`- ${labels.get(key) || key}：${value || '待补充'}`);
   }
   lines.push('', '## 导学位置与对话',`- 当前阶段：${state.learning_context?.lesson_id||1}；题目：${(state.learning_context?.step_idx||0)+1}；显示：${state.learning_context?.view_mode||'directory'}`);
   for(const item of state.learning_context?.conversation||[])lines.push(`- ${item.role}：${item.content}`);
@@ -193,7 +195,6 @@ async function learningMarkdown(env, state) {
     if(!job.reflections.length)lines.push('- 解释练习待完成；执行完成不代表学习完成。');
     for (const [index, item] of job.reflections.entries()) lines.push(`- 第 ${index + 1} 次解释：${item.answer}\n  反馈：${item.feedback}`);
   }
-  lines.push('', '## 自动保存草稿（未提交，不作为已完成成果）');
   lines.push('', '## 边分析边学习 · 持久对话');
   for(const message of await practicalMessages(env,state.owner_id,state.session_id))lines.push(`- ${message.role}：${message.content}\n  检索材料：${JSON.stringify(message.retrieval||[])}`);
   lines.push('', '## 本机计算（Stata） · 本机批准执行，云端未独立复算');
@@ -445,12 +446,13 @@ export async function handleSessions(request, env, owner, path) {
       const rows = await env.DB.prepare(env.ACCOUNT_ID?'SELECT body FROM sessions WHERE owner IN (SELECT owner FROM account_owners WHERE user_id=?) AND last_activity>? ORDER BY created_at DESC LIMIT 100':'SELECT body FROM sessions WHERE owner=? AND last_activity>? ORDER BY created_at DESC LIMIT 100')
         .bind(env.ACCOUNT_ID||owner, Date.now() - RETENTION).all();
       return answer({ sessions: rows.results.map(({ body }) => {
-        const state = JSON.parse(body);
+        const state = JSON.parse(body), context = state.learning_context;
         return { session_id: state.session_id, created_at: state.created_at, entry_path: state.entry_path,
-          stage: state.stage, lesson_idx: state.lesson_idx, lesson_count: state.lesson_records.length,
+          stage: context ? (context.status === 'active' ? 'lesson' : context.status === 'completed' ? 'project_choice' : 'entry') : state.stage,
+          lesson_idx: context?.lesson_id ?? state.lesson_idx, lesson_count: state.lesson_records.length,
           case_answer_count: state.case_answers.length, case_completed_count: state.completed_case_ids.length,
           blueprint_filled: Object.values(state.project).filter((field) => field.value).length,
-          message_count: state.conversation.length };
+          message_count: context?.conversation?.length || state.conversation.length };
       }) });
     }
     return error('方法不支持。', 405);

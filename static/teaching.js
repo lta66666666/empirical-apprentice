@@ -183,67 +183,7 @@ window.Teaching = (() => {
         toast("成果草稿已保存，导出记录会包含它");
       }
     };
-    // AI 智能审核：先保存当前内容，再请求逐字段修改润色意见
-    const reviewBox=el("div","artifact-review");
-    const savedReview=latestState?.artifact_reviews?.[String(id)];
-    if(savedReview) renderArtifactReview(savedReview,reviewBox);
-    const aiBtn=button("AI 智能审核","btn-secondary artifact-ai",null);aiBtn.type="button";
-    aiBtn.textContent="成果智能审核未接入";aiBtn.disabled=true;aiBtn.title="当前可保存成果草稿，并由队友或老师人工复核。";
-    aiBtn.onclick=async()=>{
-      const fields=Object.fromEntries(Object.entries(inputs).map(([k,n])=>[k,n.value]));
-      if(!Object.values(fields).some(v=>v.trim())){toast("请先填写成果内容");return;}
-      reviewBox.replaceChildren(el("p","muted","正在请 AI 导师审核，请稍候…"));
-      aiBtn.disabled=true;
-      try{
-        // 直接保存，不触发整页重渲染（否则审核结果区会被重建掉）
-        latestState = await api(`/api/sessions/${sessionId}/artifacts/${id}`,{method:"PUT",body:{fields}});
-        const data=await api(`/api/sessions/${sessionId}/artifacts/${id}/review`,{method:"POST"});
-        latestState.artifact_reviews = {...latestState.artifact_reviews, [String(id)]:data};
-        renderArtifactReview(data, reviewBox);
-        try{storageRemove(draftKey(id));}catch{/* unavailable */}
-        status.textContent="已保存成果草稿，AI 审核意见见下方。";
-      }catch(e){
-        reviewBox.replaceChildren(el("p","review-error","审核未完成："+e.message));
-      }finally{
-        aiBtn.disabled=false;icons();
-      }
-    };
-    form.append(save,aiBtn,status);wrap.append(form,reviewBox);return wrap;
-  }
-
-  function renderArtifactReview(data, box){
-    box.replaceChildren();
-    box.append(el("span","eyebrow","AI 智能审核意见"));
-    if(data.format==="text"){ markdown(box, data.text); icons(); return; }
-    if(data.overall) box.append(el("p","review-overall",data.overall));
-    if(data.completeness&&data.completeness.length){
-      box.append(el("h4","review-h","完整性检查"));
-      const ul=el("ul","review-list");
-      data.completeness.forEach(x=>ul.append(el("li","",x)));
-      box.append(ul);
-    }
-    (data.field_reviews||[]).forEach(rv=>{
-      const card=el("div","review-field");
-      card.append(el("h4","",rv.label));
-      const ok=rv.issue.indexOf("无明显问题")===0;
-      card.append(el("p",ok?"review-ok":"review-issue",(ok?"✓ ":"⚠ ")+rv.issue));
-      if(rv.suggestion) card.append(el("p","review-suggest","修改建议："+rv.suggestion));
-      if(rv.polished){
-        const pol=el("div","review-polished");
-        const lab=el("span","review-pol-label","润色示范");pol.append(lab);
-        markdown(pol, rv.polished);
-        card.append(pol);
-      }
-      box.append(card);
-    });
-    if(data.source_advice) box.append(el("p","review-source","📎 来源核对："+data.source_advice));
-    if(data.next_steps&&data.next_steps.length){
-      box.append(el("h4","review-h","下一步"));
-      const ul=el("ul","review-list");
-      data.next_steps.forEach(x=>ul.append(el("li","",x)));
-      box.append(ul);
-    }
-    icons();
+    form.append(save,status);wrap.append(form);return wrap;
   }
   function selectPane(value,persist=false){
     pane=value;if(persist)window.eaSaveCourseCursor?.({pane:value});

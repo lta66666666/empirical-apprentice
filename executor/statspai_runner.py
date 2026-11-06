@@ -39,7 +39,8 @@ def stats_compute(directory, plan):
         plan.get('endogenous') if plan['method']=='iv_2sls' else '',
         *(plan.get('instruments') or []),
         plan.get('cluster') if plan['vcov']=='cluster' else ''] if v))
-    numeric = list(dict.fromkeys([plan['outcome'], *plan['predictors'], *panel_cols,
+    # 个体编号与聚类列可以是字符串（如 C00），只按组别使用，不强制转为数值。
+    numeric = list(dict.fromkeys([plan['outcome'], *plan['predictors'], *([plan['time']] if panel_cols else []),
         *([plan['treated']] if plan['method'] in ('did','event_study') else []),
         *([plan['endogenous']] if plan['method']=='iv_2sls' else []),
         *(plan.get('instruments') or [])]))
@@ -169,6 +170,11 @@ def event_study_compute(directory, plan, data, frame, versions, sp, np):
             'validation_scope': '当前受控配置；预趋势检验只是识别证据，不自动证明平行趋势'}
 
 
+def _num(value):
+    value = float(value)
+    return value if math.isfinite(value) else None
+
+
 def iv_compute(directory, plan, data, frame, versions, sp, np):
     endog = plan['endogenous']; instruments = list(plan['instruments']); exog = list(plan['predictors'])
     absorb = [plan['unit'], plan['time']] if plan.get('unit') else None
@@ -186,20 +192,22 @@ def iv_compute(directory, plan, data, frame, versions, sp, np):
         if name in ('Intercept', 'const', '_cons'): label = '(Intercept)'
         elif name == endog or name in exog: label = plan['labels'].get(name, name)
         else: continue
+        if not all(math.isfinite(float(row[k])) for k in ('estimate', 'std_error', 'p_value', 'conf_low', 'conf_high')):
+            raise ValueError('工具变量系数或推断数值无效')
         coefficients.append({'term': label, 'estimate': float(row['estimate']), 'std_error': float(row['std_error']),
                              'p_value': float(row['p_value']), 'ci_low': float(row['conf_low']), 'ci_high': float(row['conf_high'])})
     diagnostics = {}
     try:
         bundle = sp.iv_diag(data, y=plan['outcome'], endog=endog, instruments=instruments, exog=exog or None,
                             absorb=absorb, cluster=plan['cluster'] if plan['vcov'] == 'cluster' else None, n_boot=200)
-        diagnostics = {'first_stage_f': float(bundle.first_stage_F) if bundle.first_stage_F is not None else None,
-                       'effective_f': float(bundle.effective_F) if bundle.effective_F is not None else None,
-                       'kp_rk_lm': float(bundle.kp_rk_lm) if bundle.kp_rk_lm is not None else None,
-                       'kp_rk_lm_p': float(bundle.kp_rk_lm_pvalue) if bundle.kp_rk_lm_pvalue is not None else None,
-                       'kp_rk_f': float(bundle.kp_rk_f) if bundle.kp_rk_f is not None else None,
-                       'ar_stat': float(bundle.ar_stat) if bundle.ar_stat is not None else None,
-                       'ar_p': float(bundle.ar_pvalue) if bundle.ar_pvalue is not None else None,
-                       'ar_ci': [float(x) for x in bundle.ar_ci] if bundle.ar_ci is not None else None,
+        diagnostics = {'first_stage_f': _num(bundle.first_stage_F) if bundle.first_stage_F is not None else None,
+                       'effective_f': _num(bundle.effective_F) if bundle.effective_F is not None else None,
+                       'kp_rk_lm': _num(bundle.kp_rk_lm) if bundle.kp_rk_lm is not None else None,
+                       'kp_rk_lm_p': _num(bundle.kp_rk_lm_pvalue) if bundle.kp_rk_lm_pvalue is not None else None,
+                       'kp_rk_f': _num(bundle.kp_rk_f) if bundle.kp_rk_f is not None else None,
+                       'ar_stat': _num(bundle.ar_stat) if bundle.ar_stat is not None else None,
+                       'ar_p': _num(bundle.ar_pvalue) if bundle.ar_pvalue is not None else None,
+                       'ar_ci': [_num(x) for x in bundle.ar_ci] if bundle.ar_ci is not None else None,
                        'n_instruments': int(bundle.n_instruments), 'n_endog': int(bundle.n_endog)}
     except Exception as error:
         diagnostics = {'status': 'unavailable', 'reason': str(error)[:200]}
