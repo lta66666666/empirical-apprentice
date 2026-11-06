@@ -329,8 +329,8 @@ export async function handleResearch(request, env, owner, path) {
   const teachingRoute=/^\/api\/sessions\/([a-z0-9]{12})\/research\/teaching$/.exec(path);
   if(teachingRoute&&request.method==='GET')try{const state=await loadOwnedSession(env,owner,teachingRoute[1]);if(!state||state==='expired')return fault('练习不可读取。',404);const ref=Object.fromEntries(new URL(request.url).searchParams),lesson=await correspondingReference(env,owner,state,ref);return resultJson({card:lesson.card,reference:lesson.reference});}catch(e){return fault(e.message,e.status||422);}
   if (path === '/api/research/status' && request.method === 'GET') {
-    const engines=await engineCapabilities(env,owner);
-    return resultJson({r:engines.browser_webr,engines,default_engine:'statspai_cloud',software:[{id:'statspai_cloud',label:'云端计算',...engines.statspai_cloud},{id:'r',label:'云端原生 R',...engines.r_native},{id:'browser_webr',label:'浏览器 webR',...engines.browser_webr},{id:'stata',label:'Stata',...engines.stata_native},{id:'eviews',label:'EViews',...engines.eviews_native}],methods:enabledMethods,method_registry:methodRegistry,unsupported:['RDD','PSM'],planner_mode:env.MODEL_API_KEY&&env.MODEL_NAME&&env.MODEL_BASE_URL?'online':'rules',model_capabilities:modelCapabilities(env)});
+    const engines=await engineCapabilities(env,owner),visible={statspai_cloud:engines.statspai_cloud,browser_webr:engines.browser_webr};
+    return resultJson({r:engines.browser_webr,engines:visible,default_engine:'statspai_cloud',software:[{id:'statspai_cloud',label:'云端计算 · Stata 语法',...engines.statspai_cloud},{id:'browser_webr',label:'浏览器 R / fixest',...engines.browser_webr}],methods:enabledMethods,method_registry:methodRegistry,unsupported:['RDD','PSM'],planner_mode:env.MODEL_API_KEY&&env.MODEL_NAME&&env.MODEL_BASE_URL?'online':'rules',model_capabilities:modelCapabilities(env)});
   }
   if (path === '/api/research/candidate' && request.method === 'POST') {
     try {

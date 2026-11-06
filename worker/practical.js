@@ -54,11 +54,12 @@ function readProfile(body,state){
 function chooseIntent(body,question,u){
  if(body.intent==='stata_explain')return 'stata_explain';
  const asked=['knowledge','reflection','guided','analysis'].includes(body.intent)?body.intent:null;
- if(asked==='reflection'||asked==='guided')return asked;
+ if(asked==='reflection'||asked==='guided'||asked==='knowledge')return asked;
+ const answering=u.active_question&&(/不知道|不清楚|不确定|全部时期|是什么|什么单位/.test(question)||body.choice_id);
+ if(answering)return 'analysis';
  if(!body.choice_id&&isResearchHelpQuestion(question))return 'knowledge';
- if(u.active_question&&(/不知道|不清楚|不确定|全部时期|是什么|什么单位/.test(question)||body.choice_id))return 'analysis';
  if(asked)return asked;
- return /一步|逐步|带我/.test(question)?'guided':/解释.*结果|系数.*解释/.test(question)?'reflection':/讲解|是什么|假设|内生性|稳健性|代码/.test(question)?'knowledge':'analysis';
+ return /一步|逐步|带我/.test(question)?'guided':/解释.*结果|系数.*解释/.test(question)?'reflection':/讲解|假设|内生性|稳健性|代码/.test(question)?'knowledge':'analysis';
 }
 export async function handlePractical(request,env,owner,path){
  try{
