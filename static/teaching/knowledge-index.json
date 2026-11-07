@@ -2,142 +2,865 @@
   {
     "id": "did",
     "title": "双重差分 DID",
-    "keywords": ["DID", "双重差分", "倍差法", "diff-in-diff"],
+    "keywords": [
+      "DID",
+      "双重差分",
+      "倍差法",
+      "diff-in-diff"
+    ],
     "summary": "比较处理组与对照组政策前后的变化之差，用对照组扣除共同时间趋势。",
     "when": "同批实施、有合理对照组，并且政策前后都有观测。",
     "pitfall": "平行趋势不成立时，DID 会把处理组与对照组原本的差异当成政策效果。",
     "example": "试点变化 −20，对照变化 −5，DID = −20 − (−5) = −15。",
-    "source": "本课程阶段 5–6；主线手算小实验"
+    "source": "本课程阶段 5–6；主线手算小实验",
+    "content": "**核心思想：** DID 用“处理组前后变化 − 对照组前后变化”识别政策效应；前提是没有政策时两组趋势可比（平行趋势）。\n**2×2 表：** (处理后−处理前) − (对照后−对照前)。\n**回归形式：** Y_it = α + β·Treat_i×Post_t + γ·Treat_i + δ·Post_t + ε_it；面板中通常用个体与年份双向固定效应替代两组主效应。\n**关键假设：** 平行趋势、无预期效应、处理时点明确、对照组研究期内未受同一政策影响（SUTVA）。\n**Stata：** regress y treat##post, vce(cluster id)；面板用 xtset id year 后 xtreg y i.treat##i.post, fe vce(cluster id)。\n**误区：** 显著不等于因果；两组均值线看起来平行不等于平行趋势检验通过；聚类层级应接近处理分配层级。"
   },
   {
     "id": "parallel_trends",
     "title": "平行趋势",
-    "keywords": ["平行趋势", "平行趋势检验", "事前趋势", "pre-trends", "pre-trend test", "共同趋势", "事件研究检验"],
+    "keywords": [
+      "平行趋势",
+      "平行趋势检验",
+      "事前趋势",
+      "pre-trends",
+      "pre-trend test",
+      "共同趋势",
+      "事件研究检验"
+    ],
     "summary": "如果没有政策，处理组与对照组的变化应当可比；这是 DID 的核心识别假设。",
     "when": "做 DID 或事件研究之前，必须讨论并尽量检验。",
     "pitfall": "政策前系数不显著不等于证明了平行趋势；还要看系数趋势、区间宽度和设计。",
     "example": "政策前系数逐期下降但区间包含 0，仍要警惕趋势差异。",
-    "content": "**识别假设：** 没有政策时，处理组与对照组的潜在结果趋势应一致。\n\n**检验步骤：** 1) 设定相对时间，通常省略政策前一期作为基准；2) 事件研究回归中观察政策前各期系数是否接近 0；3) 对政策前系数做联合检验（Stata: testparm 或 test）；4) 同时报告图形、点估计与置信区间。\n\n**稳健性：** 更换基准期或窗口、安慰剂政策时点、调整对照组、加入地区趋势。\n\n**常见误区：** 不拒绝原假设不等于平行趋势成立；系数显著也不必然否定 DID，但要解释预期效应与对照组污染。\n\n**分批 DID：** TWFE 事件研究可能用已处理单位作对照；应使用 never-treated 或 not-yet-treated（如 csdid、Sun–Abraham）。",
+    "content": "**识别假设：** 没有政策时，处理组与对照组的潜在结果趋势应一致。它不是“检验通过证书”，而是 DID 解释因果的前提。\n**检验步骤：** 1) 明确政策实施期，构造相对时间；2) 通常省略政策前一期作为基准；3) 事件研究回归中观察政策前各期系数是否接近 0；4) 对政策前系数做联合检验（Stata: testparm 或 test）；5) 同时报告图形、点估计与置信区间。\n**稳健性：** 更换基准期或窗口、安慰剂政策时点、调整对照组、加入地区趋势。\n**常见误区：** 不拒绝原假设不等于平行趋势成立（可能功效不足）；政策前系数显著也不必然否定 DID，但要解释预期效应、政策前调整与对照组污染。\n**分批 DID：** TWFE 事件研究可能用已处理单位作对照；应使用 never-treated 或 not-yet-treated（如 csdid、Sun–Abraham）。",
     "source": "本课程阶段 7"
   },
   {
     "id": "twfe",
     "title": "双向固定效应",
-    "keywords": ["双向固定效应", "TWFE", "个体固定效应", "年份固定效应"],
+    "keywords": [
+      "双向固定效应",
+      "TWFE",
+      "个体固定效应",
+      "年份固定效应"
+    ],
     "summary": "同时控制个体不随时间变化的差异和所有个体共同经历的时间冲击。",
     "when": "面板数据中想控制不可观测的个体特征与共同年份因素。",
     "pitfall": "分批实施时，TWFE 可能把已处理单位当作对照，产生负权重或禁止比较。",
     "example": "交错 DID 中 TWFE 系数可能与异质性稳健估计量方向相反。",
-    "source": "本课程阶段 4–6；进阶阅读 Callaway & Sant'Anna"
+    "source": "本课程阶段 4–6；进阶阅读 Callaway & Sant'Anna",
+    "content": "**模型：** Y_it = α_i + λ_t + βX_it + ε_it，同时吸收个体不随时间变化的差异和所有单位共同经历的时间冲击。\n**估计：** 组内变换先去个体均值再去年份均值，等价于 LSDV。\n**解释：** β 来自同一单位随时间的变化，识别“偏离个体均值后的 X–Y 关系”，不是横截面差异。\n**Stata：** xtset id year；xtreg y x, fe vce(cluster id)；高维固定效应用 reghdfe y x, absorb(id year) vce(cluster id)。\n**局限：** 不能消除随时间变化的遗漏变量；控制中介或碰撞变量会引入偏误；单向 FE 与双向 FE 的解释不同。"
   },
   {
     "id": "event_study",
     "title": "事件研究",
-    "keywords": ["事件研究", "动态效应", "event study", "事件时间"],
+    "keywords": [
+      "事件研究",
+      "动态效应",
+      "event study",
+      "事件时间"
+    ],
     "summary": "把政策效应按相对政策年份展开，用来查看事前趋势和事后动态。",
     "when": "有多个政策前年份，想检验平行趋势或观察效应随时间变化。",
     "pitfall": "基准期要明确；不要把全部相对年份和基准期一起放进回归造成共线。",
     "example": "以 t=−1 为基准，报告 t=−3 到 t=3 的系数与区间。",
-    "source": "本课程阶段 7；教学示意图"
+    "source": "本课程阶段 7；教学示意图",
+    "content": "**用途：** 把政策效应拆成政策前后每一期的动态系数，并可视化政策前趋势。\n**设定：** 生成相对时间 k=t−E_i，事件研究回归 Y_it=α_i+λ_t+Σβ_k·1(k)_it+ε；通常省略 k=−1 作为基准。\n**读法：** k<0 的 β_k 应接近 0 且联合不显著；k≥0 反映动态效应；同时看置信区间，不只盯 p 值。\n**Stata：** 可用 eventdd、eventstudyinteract 或 csdid；联合检验用 testparm pre_*。\n**注意：** 基准期选择会影响所有系数；政策前系数显著要解释预期效应；TWFE 事件研究在分批实施下可能偏误。"
   },
   {
     "id": "clustering",
     "title": "聚类标准误",
-    "keywords": ["聚类", "cluster", "标准误", "稳健标准误"],
+    "keywords": [
+      "聚类",
+      "cluster",
+      "标准误",
+      "稳健标准误"
+    ],
     "summary": "允许同一单位内部的观测误差相关，避免把重复观测当成独立信息。",
     "when": "面板数据、重复观测，或处理在组层面分配时。",
     "pitfall": "聚类数太少时推断不稳定；30 只是教学提醒阈值，不是硬规则。",
     "example": "城市—年份面板通常按城市聚类。",
-    "source": "本课程阶段 4；分析方案窗口"
+    "source": "本课程阶段 4；分析方案窗口",
+    "content": "**何时聚类：** 误差在更高层单位内相关（同一城市多年、同一学校多学生）。聚类层级应接近处理分配层级。\n**代价：** 聚类数少（常见 <30–50）时常规聚类标准误偏乐观；需要 wild cluster bootstrap 或 CR2 等修正。\n**Stata：** regress y x, vce(cluster id)；xtreg ..., fe vce(cluster id)；reghdfe ..., vce(cluster id)；双向聚类需专门命令。\n**误区：** robust 只处理异方差，不处理组内相关；聚类数不是越多越好，而是覆盖误差相关层级。"
   },
   {
     "id": "log_coef",
     "title": "对数系数怎么解释",
-    "keywords": ["对数", "log", "ln", "系数解释", "百分比"],
+    "keywords": [
+      "对数",
+      "log",
+      "ln",
+      "系数解释",
+      "百分比"
+    ],
     "summary": "结果变量取对数时，系数近似表示百分比变化；精确换算是 exp(β)−1。",
     "when": "结果变量是 ln(收入)、ln(专利数)、ln(碳排放) 等对数形式。",
     "pitfall": "把 −0.22 直接说成“减少 22%”不准确；正确约为 −19.75%。",
     "example": "β=−0.22 → exp(−0.22)−1 ≈ −19.75%。",
-    "source": "本课程阶段 7"
+    "source": "本课程阶段 7",
+    "content": "**半弹性（y 取对数，x 不取）：** β≈x 增加 1 单位时 y 变化的百分比；精确值 100×(exp(β)−1)%。\n**弹性（两边都取对数）：** β≈x 增加 1% 时 y 变化的百分比。\n**y 不取对数、x 取对数：** β 表示 x 增加 1% 时 y 变化的绝对量（约 β/100 单位）。\n**注意：** 对数变换会改变样本（y=0 被排除）；系数大小依赖单位；不能把 log 系数直接说成“增加 β 元”。"
   },
   {
     "id": "ci_pvalue",
     "title": "置信区间与 p 值",
-    "keywords": ["置信区间", "p值", "显著", "区间", "95%"],
+    "keywords": [
+      "置信区间",
+      "p值",
+      "显著",
+      "区间",
+      "95%"
+    ],
     "summary": "区间表达估计的不确定性；跨零表示零效应仍在相容范围内，而不是证明无效。",
     "when": "解读任何回归系数或政策效应时。",
     "pitfall": "只看星号、不报区间；把“不显著”当成“没有效果”。",
     "example": "估计 −2，区间 [−8, 4]：不能写“政策被证明无效”。",
-    "source": "本课程阶段 7；ASA 统计解释声明"
+    "source": "本课程阶段 7；ASA 统计解释声明",
+    "content": "**p 值：** 在原假设与模型假设下，观察到当前或更极端结果的概率；不是“原假设为真的概率”。\n**置信区间：** 点估计 ± 临界值×标准误；95% CI 不跨 0 与双侧 5% 检验通常一致，但区间更能表达不确定性。\n**报告：** 系数、标准误、CI、样本量、聚类/自由度设置；不要只报星号。\n**误区：** p>0.05 不等于效应为 0；多重比较需校正；统计显著不等于经济显著或因果。"
   },
   {
     "id": "missing",
     "title": "缺失值怎么处理",
-    "keywords": ["缺失", "缺失值", "补值", "NA", "空值"],
+    "keywords": [
+      "缺失",
+      "缺失值",
+      "补值",
+      "NA",
+      "空值"
+    ],
     "summary": "先查缺失原因，再决定删除、补值或保留；缺失不能默认等于 0。",
     "when": "数据清洗与字段核对阶段。",
     "pitfall": "直接填 0 或机械删除会引入偏差，且掩盖数据合并问题。",
     "example": "本例用模拟补充表恢复 1 个单元格，不新增样本行。",
-    "source": "本课程阶段 4"
+    "source": "本课程阶段 4",
+    "content": "**机制：** MCAR（完全随机缺失）、MAR（条件随机缺失）、MNAR（非随机缺失）。处理方式取决于机制。\n**常用：** 完整案例删除简单但可能偏；多重插补适合 MAR；MNAR 需要敏感性分析或模型。\n**Stata：** misstable summarize；mi set；mi register imputed；mi impute mvn 或 chained；mi estimate。\n**注意：** 不要用均值填补做正式推断；插补模型应包含分析变量与结果；报告缺失率与处理规则。"
   },
   {
     "id": "winsor",
     "title": "缩尾与异常值",
-    "keywords": ["缩尾", "winsor", "异常值", "极端值", "截尾"],
+    "keywords": [
+      "缩尾",
+      "winsor",
+      "异常值",
+      "极端值",
+      "截尾"
+    ],
     "summary": "按分位数把极端值拉回边界，减少少数观测对估计的影响。",
     "when": "结果或解释变量存在明显极端值，且已核对不是录入错误。",
     "pitfall": "缩尾比例要有依据，不能为了显著而反复调整。",
     "example": "常用 1%/99% 缩尾，并报告缩尾前后结果对比。",
-    "source": "数据清洗通用规范"
+    "source": "数据清洗通用规范",
+    "content": "**缩尾：** 把极端值替换为第 p 与 1−p 分位点（如 1%/99%）；截尾则直接删除。\n**何时：** 极端值可能由测量错误或离群导致，但处理规则必须事先确定，不能按结果显著性调整。\n**Stata：** winsor2 y, cuts(1 99) replace；或 egen pct=pctile(y), p(1 99) 后 replace。\n**注意：** 缩尾会改变样本与系数；报告缩尾比例、分位点与稳健性。"
   },
   {
     "id": "psm",
     "title": "倾向得分匹配",
-    "keywords": ["PSM", "倾向得分", "匹配", "propensity"],
+    "keywords": [
+      "PSM",
+      "倾向得分",
+      "匹配",
+      "propensity"
+    ],
     "summary": "按可观测特征为处理组寻找相似的对照单位，缓解组间差异。",
     "when": "处理组与对照组差异较大，且有较丰富的协变量。",
     "pitfall": "只能平衡可观测特征，无法解决不可观测的选择性；匹配后仍要检验平行趋势。",
     "example": "PSM-DID 不是自动修复按钮，匹配后仍需讨论识别假设。",
-    "source": "进阶方法阅读"
+    "source": "进阶方法阅读",
+    "content": "**思想：** 用可观测协变量估计倾向得分，给处理组找相似的对照组，缓解选择偏差。\n**步骤：** 设定处理变量与协变量 → 估计 logit/probit → 匹配（最近邻/半径/核）→ 检查共同支撑与平衡性 → 估计 ATT。\n**Stata：** teffects psmatch (y) (t x1 x2, logit), atet；或 psmatch2 t x1 x2, outcome(y) neighbor(1) common。\n**局限：** 只能处理可观测混杂；共同支撑差、匹配质量差时结果不可信；匹配后标准误需考虑匹配不确定性。"
   },
   {
     "id": "scm",
     "title": "合成控制法",
-    "keywords": ["合成控制", "SCM", "单一处理", "合成对照"],
+    "keywords": [
+      "合成控制",
+      "SCM",
+      "单一处理",
+      "合成对照"
+    ],
     "summary": "用多个对照单位的加权组合构造一个政策前高度相似的反事实。",
     "when": "处理单位很少（例如只有一个城市或一个省）。",
     "pitfall": "权重过拟合、事前拟合不好、缺少安慰剂检验都会让结论不可信。",
     "example": "用 30 个对照城市轮流假装受处理，做安慰剂分布。",
-    "source": "进阶案例 case_004"
+    "source": "进阶案例 case_004",
+    "content": "**适用：** 单一或少数处理单位、较长时间面板，用“合成对照组”拟合处理单位政策前的轨迹。\n**步骤：** 选择未受政策影响的 donor pool → 用政策前数据估计权重 → 比较政策后差距 → 安慰剂/排列检验。\n**Stata：** synth、synth_runner（不同实现语法略有差异）。\n**注意：** donor pool 不能包含受同一政策溢出影响的单位；政策前拟合差、权重集中、安慰剂分布都需报告。"
   },
   {
     "id": "rdd",
     "title": "断点回归",
-    "keywords": ["断点回归", "RDD", "门槛", "cutoff", "McCrary"],
+    "keywords": [
+      "断点回归",
+      "RDD",
+      "门槛",
+      "cutoff",
+      "McCrary"
+    ],
     "summary": "利用政策资格在某个连续变量门槛处的跳跃来识别效应。",
     "when": "政策按明确门槛划定，例如收入低于某线获得资格。",
     "pitfall": "不检查驱动变量是否被操纵、把远离门槛的样本拉进来，都会破坏识别。",
     "example": "做 McCrary 密度检验，并报告不同带宽下的稳定性。",
-    "source": "进阶案例 case_005"
+    "source": "进阶案例 case_005",
+    "content": "**思想：** 在 cutoff 附近处理概率发生跳跃；比较 cutoff 两侧局部样本识别效应。\n**类型：** Sharp RDD（cutoff 决定处理）；Fuzzy RDD（cutoff 只提高处理概率，用 IV）。\n**关键：** 运行变量不能被操纵（McCrary 密度检验）；协变量在 cutoff 处连续；带宽与核函数选择；局部线性回归。\n**Stata：** rdrobust y x, c(cutoff)；fuzzy 用 rdrobust y x, c(cutoff) fuzzy(t)；rddensity 做密度检验。\n**注意：** 远离 cutoff 的样本不能外推；带宽对结果敏感，要报告多种带宽。"
   },
   {
     "id": "iv",
     "title": "工具变量与 2SLS",
-    "keywords": ["工具变量", "IV", "2SLS", "弱工具", "内生性"],
+    "keywords": [
+      "工具变量",
+      "IV",
+      "2SLS",
+      "弱工具",
+      "内生性"
+    ],
     "summary": "用外生工具变量隔离内生解释变量的部分，再用两阶段最小二乘估计。",
     "when": "存在遗漏变量、反向因果或测量误差等内生性问题。",
     "pitfall": "工具变量必须相关且满足排除性限制；弱工具会让推断失真。",
     "example": "报告第一阶段 F、弱工具检验和过度识别检验。",
-    "source": "进阶方法；同批 2SLS 模板"
+    "source": "进阶方法；同批 2SLS 模板",
+    "content": "**何时用：** 解释变量与误差相关（内生性），且存在满足相关性与排除性约束的工具变量。\n**2SLS：** 第一阶段用工具变量预测内生变量；第二阶段用预测值回归结果变量；标准误需考虑第一阶段估计。\n**检验：** 第一阶段 F（弱工具，经验上 >10 但仍需谨慎）；过度识别 Sargan/Hansen；内生性 Durbin-Wu-Hausman；排除性约束主要靠理论。\n**Stata：** ivreg2 y (x=z) controls, robust first；ivregress 2sls；weakiv。\n**误区：** 工具变量外生性无法用统计检验证明；弱工具会导致偏误方向不可控；LATE 只识别依从者效应。"
   },
   {
     "id": "staggered",
     "title": "分批实施与稳健估计",
-    "keywords": ["分批", "交错", "staggered", "异质性稳健", "负权重"],
+    "keywords": [
+      "分批",
+      "交错",
+      "staggered",
+      "异质性稳健",
+      "负权重"
+    ],
     "summary": "不同单位在不同时间受处理时，传统 TWFE 可能产生偏误，应使用异质性稳健估计量。",
     "when": "政策分多批推开，且效应可能随时间变化。",
     "pitfall": "把已处理单位当成对照，会把处理效应本身混入比较。",
     "example": "Callaway & Sant'Anna、Sun-Abraham 等只用尚未处理或从未处理的单位做对照。",
-    "source": "进阶阅读；分批实施警示"
+    "source": "进阶阅读；分批实施警示",
+    "content": "**问题：** 政策分批实施时，TWFE 会把已处理单位当作对照，产生负权重与偏误；事件研究也可能污染基准。\n**稳健方法：** Callaway & Sant'Anna（csdid）、Sun & Abraham（eventstudyinteract）、Borusyak 等、de Chaisemartin & D'Haultfœuille。\n**选择：** 有 never-treated 时优先 never-treated；没有时用 not-yet-treated；报告不同对照组与估计量的差异。\n**Stata：** csdid y, ivar(id) time(year) gvar(first_treat) method(dripw)；estat event；eventstudyinteract。\n**注意：** 平行趋势仍需检验；不同估计量的目标参数不同，不能混着解释。"
+  },
+  {
+    "id": "kb_ols",
+    "title": "OLS 线性回归与基本假定",
+    "keywords": [
+      "OLS",
+      "最小二乘",
+      "线性回归",
+      "regress",
+      "古典假定"
+    ],
+    "summary": "OLS 用最小化残差平方和估计条件均值关系；系数解释依赖模型设定与识别假设。",
+    "when": "连续结果变量、横截面或面板数据的基础建模。",
+    "pitfall": "显著不等于因果；异方差、遗漏变量与内生性不会因为 regress 自动消失。",
+    "example": "regress income education experience, vce(robust)。",
+    "content": "**假定：** 线性于参数、随机抽样、无完全共线、零条件均值（或外生性）、同方差（用于常规标准误）。\n**估计：** β=(X'X)^{-1}X'y；残差平方和最小。\n**解释：** β_j 是在其他解释变量不变时，X_j 增加一单位对 y 条件均值的影响。\n**Stata：** regress y x1 x2；异方差稳健 vce(robust)；聚类 vce(cluster id)。\n**注意：** 零条件均值是因果解释的关键；同方差只影响标准误，不影响系数无偏性。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第3章、第5章；PDF 第28–78页",
+    "methods": [
+      "ols"
+    ],
+    "task_stages": [
+      "plan",
+      "execute",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_hetero",
+    "title": "异方差：检验与稳健标准误",
+    "keywords": [
+      "异方差",
+      "heteroskedasticity",
+      "Breusch-Pagan",
+      "White",
+      "robust"
+    ],
+    "summary": "误差方差随解释变量变化时，OLS 系数仍可能无偏，但常规标准误与 t/F 检验失效。",
+    "when": "横截面数据、收入/规模差异大、残差图呈喇叭形。",
+    "pitfall": "robust 标准误不解决内生性、遗漏变量或组内相关。",
+    "example": "regress y x, vce(robust)；estat hettest。",
+    "content": "**后果：** 系数仍可能无偏，但常规标准误错误，t/F 检验失效。\n**检验：** 残差图；Breusch-Pagan/Cook-Weisberg（estat hettest）；White 检验（estat imtest, white）。\n**处理：** vce(robust) 或 vce(cluster)；方差形式已知时可用 WLS/FGLS；不要只看检验 p 值决定是否稳健。\n**Stata：** regress y x, vce(robust)；estat hettest；estat imtest, white。\n**注意：** robust 不解决内生性、遗漏变量或组内相关。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第7章，PDF 第102页",
+    "methods": [
+      "ols"
+    ],
+    "task_stages": [
+      "plan",
+      "execute",
+      "explain"
+    ],
+    "topic": "result_reading"
+  },
+  {
+    "id": "kb_autocorr",
+    "title": "自相关：检验与 HAC 标准误",
+    "keywords": [
+      "自相关",
+      "序列相关",
+      "DW",
+      "Breusch-Godfrey",
+      "Newey-West",
+      "HAC"
+    ],
+    "summary": "误差在时间上相关时，常规标准误偏小；需要 HAC 或 FGLS。",
+    "when": "时间序列、面板长序列、政策前后连续观测。",
+    "pitfall": "DW 不适用于含滞后因变量的模型；自相关不等于伪回归。",
+    "example": "newey y x, lag(3)；xtserial y x。",
+    "content": "**后果：** 标准误偏小、t 值偏大；但只要解释变量与误差同期无关，系数仍可能一致。\n**检验：** DW（主要适用于一阶、无滞后因变量）；Breusch-Godfrey（bgodfrey）；面板用 xtserial。\n**处理：** Newey-West/HAC 标准误（newey）；FGLS/Prais-Winsten；动态面板用 GMM。\n**Stata：** newey y x, lag(n)；prais y x；xtserial y x。\n**注意：** 时间序列回归要先判断平稳性，避免伪回归。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第8章，PDF 第115页",
+    "methods": [
+      "ols",
+      "panel_fe"
+    ],
+    "task_stages": [
+      "plan",
+      "execute"
+    ],
+    "topic": "result_reading"
+  },
+  {
+    "id": "kb_multicollinearity",
+    "title": "多重共线性与 VIF",
+    "keywords": [
+      "多重共线性",
+      "共线性",
+      "VIF",
+      "collinearity"
+    ],
+    "summary": "解释变量高度相关会放大标准误，但不破坏 OLS 的无偏性。",
+    "when": "变量之间相关系数高、单个系数不显著但联合检验显著。",
+    "pitfall": "不能只看 VIF 就删除有理论意义的变量。",
+    "example": "regress y x1 x2；estat vif。",
+    "content": "**后果：** 系数标准误变大、单个系数不显著，但联合检验可能显著；不影响 BLUE 性质。\n**检验：** VIF（经验 >10 警示）、条件数、相关系数矩阵。\n**处理：** 合并/剔除重复变量、改变模型设定、增加样本；不要仅因 VIF 高就删除有理论意义的变量。\n**Stata：** regress 后 estat vif；collin。\n**注意：** 多重共线性是样本问题，不是内生性；删除变量可能引入遗漏变量偏误。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第9.6节，PDF 第138页",
+    "methods": [
+      "ols",
+      "panel_fe"
+    ],
+    "task_stages": [
+      "plan",
+      "execute"
+    ],
+    "topic": "data_check"
+  },
+  {
+    "id": "kb_omitted",
+    "title": "遗漏变量偏误与敏感性分析",
+    "keywords": [
+      "遗漏变量",
+      "OVB",
+      "omitted variable",
+      "内生性",
+      "Oster"
+    ],
+    "summary": "遗漏变量会通过其与解释变量的相关关系污染系数；标准误无法补救。",
+    "when": "无法随机分配、观测数据、担心不可观测混杂。",
+    "pitfall": "控制变量不是越多越好；控制中介/碰撞变量会引入新偏误。",
+    "example": "用固定效应、IV 或 Oster 边界讨论偏误方向。",
+    "content": "**OVB 公式：** 遗漏变量偏误 = 被遗漏变量的真实系数 × 该变量对已纳入解释变量的回归系数。\n**后果：** 系数方向与大小都可能偏；标准误与显著性不能补救。\n**应对：** 理论控制、固定效应、工具变量、代理变量、敏感性分析（如 Oster 边界）。\n**Stata：** 没有一键修复；可用 psacalc/Oster 做敏感性分析。\n**注意：** 控制变量不是越多越好；控制中介或碰撞变量会引入新偏误。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第9.1节，PDF 第131页",
+    "methods": [
+      "ols",
+      "panel_fe",
+      "iv_2sls"
+    ],
+    "task_stages": [
+      "prepare",
+      "plan",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_sample_selection",
+    "title": "样本选择、截断与 Heckman",
+    "keywords": [
+      "样本选择",
+      "Heckman",
+      "截断",
+      "Tobit",
+      "逆米尔斯比"
+    ],
+    "summary": "样本不是随机可得时，直接回归可能产生选择偏差；Heckman 用选择方程修正。",
+    "when": "只观察到部分样本（就业、贷款、上市、存活）。",
+    "pitfall": "排除性约束必须靠理论；正态误差假设敏感。",
+    "example": "heckman wage x, select(participate=z x2)。",
+    "content": "**截断 vs 选择：** 截断是只观察到某一范围的 y；样本选择是先决定是否进入样本，进入后 y 可观测。\n**Heckman：** 选择方程 + 结果方程，利用排除性约束构造逆米尔斯比；至少一个变量影响选择但不直接影响结果。\n**Stata：** heckman y x, select(sel=z x2)；两步法 heckman ..., twostep。\n**注意：** 排除性约束靠理论；正态误差假设敏感；不要用 Heckman 当万能药。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第14.4节，PDF 第250页",
+    "methods": [
+      "ols"
+    ],
+    "task_stages": [
+      "prepare",
+      "plan",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_binary",
+    "title": "二值选择模型：Logit 与 Probit",
+    "keywords": [
+      "Logit",
+      "Probit",
+      "二值选择",
+      "边际效应",
+      "margins"
+    ],
+    "summary": "结果变量为 0/1 时，用非线性模型估计概率；系数不能直接解释为概率变化。",
+    "when": "是否参与、是否通过、是否发生。",
+    "pitfall": "完全分离、稀有事件与固定效应 logit 的样本损失。",
+    "example": "logit y x；margins, dydx(*)。",
+    "content": "**模型：** Logit/Probit 估计 P(y=1|X)，系数是潜变量尺度，不是概率的边际效应。\n**解释：** 用 margins/dydx 计算平均边际效应；优势比（logit）解释倍数；伪 R² 仅作参考。\n**Stata：** logit y x；margins, dydx(*)；logistic；probit。\n**注意：** 完全分离会导致估计不稳定；稀有事件偏差；固定效应 logit 会丢掉不随结果变化的单位。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第11章，PDF 第184页",
+    "methods": [
+      "ols"
+    ],
+    "task_stages": [
+      "plan",
+      "execute",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_count",
+    "title": "计数模型：Poisson 与负二项",
+    "keywords": [
+      "Poisson",
+      "泊松",
+      "泊松回归",
+      "负二项",
+      "计数模型",
+      "过度分散",
+      "发生率比"
+    ],
+    "summary": "计数结果用 Poisson/负二项；系数经指数化后解释为发生率比。",
+    "when": "专利数、事故数、就诊次数等非负整数结果。",
+    "pitfall": "方差大于均值时应考虑负二项；零膨胀要区分结构性零。",
+    "example": "poisson patents x, exposure(year)；nbreg patents x。",
+    "content": "**Poisson：** 假定均值=方差；系数解释为发生率比（IRR=exp(β)）。\n**过度分散：** 方差>均值时用负二项回归；检验用 estat gof / dispersion。\n**暴露变量：** 用 offset 或 exposure 处理不同观察时长。\n**Stata：** poisson y x, exposure(t)；nbreg y x；estat gof；margins, dydx(*)。\n**注意：** 零膨胀模型适用于结构性零过多；不要用线性回归处理计数结果。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第13章，PDF 第224页",
+    "methods": [
+      "ols"
+    ],
+    "task_stages": [
+      "plan",
+      "execute",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_time_series",
+    "title": "时间序列：平稳性、单位根与协整",
+    "keywords": [
+      "时间序列",
+      "平稳性",
+      "单位根",
+      "ADF",
+      "协整",
+      "误差修正"
+    ],
+    "summary": "非平稳序列直接回归可能产生伪相关；先检验平稳性，再考虑协整或差分。",
+    "when": "宏观、金融、年度/季度/月度数据。",
+    "pitfall": "结构突变与季节性会影响检验；协整需要理论依据。",
+    "example": "tsset year；dfuller y；vecm。",
+    "content": "**核心：** 先判断平稳性；非平稳序列直接回归可能产生伪相关。\n**步骤：** 画时序图 → 单位根检验（ADF/DF-GLS/KPSS）→ 差分/去趋势 → ARMA/ARDL → 协整检验（EG/Johansen）→ 误差修正模型。\n**Stata：** tsset date；dfuller；kpss；arima；vecm；newey。\n**注意：** 结构突变、季节性与异常值会影响检验；协整关系要有理论依据。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第20–22章，PDF 第376页起",
+    "methods": [
+      "ols"
+    ],
+    "task_stages": [
+      "plan",
+      "execute",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_survival",
+    "title": "生存分析：Kaplan-Meier 与 Cox",
+    "keywords": [
+      "生存分析",
+      "Cox",
+      "Kaplan-Meier",
+      "风险比",
+      "删失"
+    ],
+    "summary": "分析事件发生时间，需处理右删失；Cox 模型给出风险比。",
+    "when": "企业存活、患者复发、政策持续期。",
+    "pitfall": "比例风险假设、删失机制与竞争风险。",
+    "example": "stset time, failure(event)；stcox x1 x2。",
+    "content": "**核心：** 分析“事件发生时间”，需处理右删失。\n**方法：** Kaplan-Meier 生存曲线；Cox 比例风险模型（半参数）；参数模型（Weibull 等）。\n**解释：** Cox 系数 exp(β) 是风险比（hazard ratio）；比例风险假设需检验。\n**Stata：** stset time, failure(event)；sts graph；stcox x1 x2；estat phtest；streg。\n**注意：** 删失机制、时间起点、竞争风险都会影响结果。",
+    "source": "杨维忠、张甜《Stata统计分析从入门到精通》第15章，PDF 第688页",
+    "methods": [
+      "ols"
+    ],
+    "task_stages": [
+      "plan",
+      "execute",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_factor",
+    "title": "因子分析与主成分分析",
+    "keywords": [
+      "因子分析",
+      "主成分",
+      "PCA",
+      "载荷",
+      "KMO",
+      "varimax"
+    ],
+    "summary": "因子分析寻找潜在维度；PCA 用于降维。两者目标不同。",
+    "when": "问卷量表、多个高度相关指标的综合。",
+    "pitfall": "样本量不足、变量方向不一致、载荷过低仍强行解释。",
+    "example": "factor q1-q10, pcf；rotate, varimax。",
+    "content": "**因子分析 vs PCA：** 因子分析假设潜在因子解释变量间相关；PCA 是降维，不区分共同/独特方差。\n**步骤：** 相关性/KMO/Bartlett 检验 → 提取因子（主轴/最大似然）→ 旋转（varimax/promax）→ 解释载荷 → 计算因子得分。\n**Stata：** factor v1-v10, pcf；rotate, varimax；predict f1 f2；pca。\n**注意：** 样本量、变量方向与量表一致性；载荷小于 0.4 的项需谨慎解释。",
+    "source": "杨维忠、张甜《Stata统计分析从入门到精通》第11章，PDF 第459页",
+    "methods": [
+      "ols"
+    ],
+    "task_stages": [
+      "plan",
+      "execute",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_mediation",
+    "title": "中介效应：机制检验的边界",
+    "keywords": [
+      "中介效应",
+      "mediation",
+      "间接效应",
+      "Baron-Kenny",
+      "bootstrap"
+    ],
+    "summary": "中介分析试图解释 X 通过 M 影响 Y 的机制；统计中介不等于因果机制。",
+    "when": "有明确理论机制、M 在 X 之后、Y 之前。",
+    "pitfall": "序贯可忽略性、反向因果与未观测混杂会使间接效应不可识别。",
+    "example": "sem (M<-X)(Y<-M X)；bootstrap 间接效应。",
+    "content": "**中介效应：** X→M→Y，检验间接效应 a×b；常用 Baron-Kenny 三步，但逐步回归不是因果识别。\n**现代做法：** 用 bootstrap 检验间接效应；结构方程/因果中介分析；需满足序贯可忽略性等假设。\n**Stata：** sem (M<-X)(Y<-M X)；bootstrap；medeff/medsem（用户命令）。\n**注意：** 中介变量若受结果反向影响、或存在未观测混杂，间接效应不可识别；不能把统计中介当成因果机制。",
+    "source": "陈强《计量经济学及Stata应用》；杨维忠《Stata统计分析从入门到精通》回归章节",
+    "methods": [
+      "ols",
+      "panel_fe"
+    ],
+    "task_stages": [
+      "prepare",
+      "plan",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_moderation",
+    "title": "调节效应与交互项",
+    "keywords": [
+      "调节效应",
+      "交互项",
+      "moderation",
+      "margins",
+      "简单斜率"
+    ],
+    "summary": "X 对 Y 的关系随 Z 变化时，用交互项检验调节效应。",
+    "when": "异质性、情境依赖、政策效果因群体而异。",
+    "pitfall": "主效应解释依赖编码；分组回归不能替代交互检验。",
+    "example": "regress y c.x##c.z；margins, dydx(x) at(z=(...))。",
+    "content": "**调节效应：** Y 与 X 的关系随 Z 变化；用 X×Z 交互项检验。\n**解释：** 交互项系数表示 Z 每增加一单位，X 对 Y 的斜率变化；主效应解释依赖变量编码。\n**Stata：** regress y c.x##c.z；margins, dydx(x) at(z=(...))；marginsplot。\n**注意：** 连续变量中心化不改变交互项显著性但改善解释；不要用分组回归代替交互检验；因果解释仍需识别策略。",
+    "source": "杨维忠、张甜《Stata统计分析从入门到精通》回归与交互章节",
+    "methods": [
+      "ols",
+      "panel_fe"
+    ],
+    "task_stages": [
+      "prepare",
+      "plan",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_data_cleaning",
+    "title": "数据清洗与可复现日志",
+    "keywords": [
+      "数据清洗",
+      "重复值",
+      "缺失",
+      "destring",
+      "do文件",
+      "日志"
+    ],
+    "summary": "清洗规则要事先确定并留痕；不要把“调到显著”当成清洗目标。",
+    "when": "拿到原始 CSV/DTA/TSV 后。",
+    "pitfall": "猜单位、按结果删样本、无日志的临时修改。",
+    "example": "import delimited；duplicates report id year；misstable summarize。",
+    "content": "**流程：** 读取 → 变量类型/标签 → 重复键 → 缺失/异常 → 单位与量纲 → 保存清洗日志。\n**Stata：** import delimited/use；describe；codebook；duplicates report id year；destring, replace；misstable；label define。\n**注意：** 不猜单位；不按结果显著性删样本；所有剔除规则写入日志；保留原始文件与清洗后文件。",
+    "source": "杨维忠、张甜《Stata统计分析从入门到精通》第1–2章；王天夫、李博柏《Stata实用教程》",
+    "methods": [],
+    "task_stages": [
+      "data",
+      "health",
+      "reports"
+    ],
+    "topic": "software_operation"
+  },
+  {
+    "id": "kb_stata_ops",
+    "title": "Stata 常用命令与 do 文件习惯",
+    "keywords": [
+      "Stata",
+      "regress",
+      "xtreg",
+      "reghdfe",
+      "ivreg2",
+      "esttab",
+      "do文件"
+    ],
+    "summary": "把数据导入、清洗、估计、导出写成可重复的 do 文件，并保留日志。",
+    "when": "任何 Stata 分析。",
+    "pitfall": "旧教材语法与当前 Stata 版本差异；不同命令默认样本与自由度不同。",
+    "example": "log using analysis.log, replace；use data.dta, clear；xtset id year。",
+    "content": "**常用：** use/import delimited；xtset id year；regress y x, vce(cluster id)；xtreg y x, fe；reghdfe；ivreg2；csdid；outreg2/esttab 导出；coefplot/eventdd 绘图。\n**习惯：** do 文件分块、每步 log using、路径用相对路径、运行前 clear。\n**注意：** 旧教材命令以当前 Stata 帮助为准；不同命令默认样本与自由度可能不同。",
+    "source": "陈强《高级计量经济学及Stata应用》第4章；杨维忠《Stata统计分析从入门到精通》；王天夫《Stata实用教程》",
+    "methods": [],
+    "task_stages": [
+      "data",
+      "execute",
+      "reports"
+    ],
+    "topic": "command_syntax"
+  },
+  {
+    "id": "kb_result_reading",
+    "title": "回归结果怎么读：系数、标准误与区间",
+    "keywords": [
+      "回归结果",
+      "系数",
+      "标准误",
+      "p值",
+      "置信区间",
+      "R2"
+    ],
+    "summary": "先核对样本、单位与推断设置，再解释系数方向、大小与不确定性。",
+    "when": "拿到任何回归表。",
+    "pitfall": "只看星号、不看样本与聚类；把相关写成因果。",
+    "example": "报告 β、SE、95% CI、N、固定效应与聚类层级。",
+    "content": "**先看：** 样本量、实际估计样本、因变量单位、系数、标准误、CI、p、R²/伪 R²、固定效应与聚类设置。\n**解释：** 系数是“在其他变量不变时”的平均变化；因果解释需识别假设；经济显著性看系数相对均值/标准差。\n**报告：** 不省略失败项与样本损失；说明软件版本、包版本、代码哈希。\n**误区：** 星号不是结论；不显著不等于无效应；R² 高不代表因果。",
+    "source": "陈强《高级计量经济学及Stata应用》第3.6–3.7节，PDF 第35–38页",
+    "methods": [
+      "ols",
+      "panel_fe",
+      "did"
+    ],
+    "task_stages": [
+      "execute",
+      "explain",
+      "reports"
+    ],
+    "topic": "result_reading"
+  },
+  {
+    "id": "kb_model_selection",
+    "title": "模型设定与检验：F、LR、AIC/BIC",
+    "keywords": [
+      "模型选择",
+      "F检验",
+      "似然比",
+      "AIC",
+      "BIC",
+      "RESET"
+    ],
+    "summary": "模型选择应基于理论、识别策略与设定检验，而不是只看 R²。",
+    "when": "在嵌套/非嵌套模型之间选择、检验函数形式。",
+    "pitfall": "数据驱动选模型会夸大显著性；R² 不能证明因果。",
+    "example": "test；lrtest；estat ic；linktest；ovtest。",
+    "content": "**嵌套模型：** F 检验/似然比检验；非嵌套可用 AIC/BIC 或 J 检验。\n**函数形式：** 残差图、RESET、连接函数；不要用 R² 选模型。\n**Stata：** test；lrtest；estat ic；linktest；ovtest。\n**注意：** 模型选择应基于理论与识别策略，不能只看拟合优度。",
+    "source": "陈强《高级计量经济学及Stata应用》第9.3–9.5节，PDF 第133–135页",
+    "methods": [
+      "ols"
+    ],
+    "task_stages": [
+      "plan",
+      "execute"
+    ],
+    "topic": "result_reading"
+  },
+  {
+    "id": "kb_ddd",
+    "title": "三重差分 DDD",
+    "keywords": [
+      "三重差分",
+      "DDD",
+      "triple difference",
+      "三重交互"
+    ],
+    "summary": "在 DID 基础上再加一个维度，控制随第三维变化的冲击或检验群体差异。",
+    "when": "有第三个分组维度且需要更严格的反事实。",
+    "pitfall": "不是所有加交互项都是 DDD；平行趋势需在更细层组成立。",
+    "example": "regress y i.treat##i.post##i.group, vce(cluster id)。",
+    "content": "**三重差分：** 在 DID 基础上再加一个维度，比较“处理组 vs 对照组的 DID”之差。\n**用途：** 控制随第三个维度变化的冲击，或检验政策在不同群体的差异。\n**假设：** 平行趋势需在更细层组成立；三重交互项解释复杂；样本与固定效应设定要匹配。\n**Stata：** regress y i.treat##i.post##i.group, vce(cluster id)；或 reghdfe 高维 FE。\n**注意：** 不是所有“加交互项”都是 DDD；要明确第三个维度的识别逻辑。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第18.7节，PDF 第358页",
+    "methods": [
+      "did"
+    ],
+    "task_stages": [
+      "prepare",
+      "plan",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_random_effects",
+    "title": "随机效应与 Hausman 检验",
+    "keywords": [
+      "随机效应",
+      "RE",
+      "Hausman",
+      "豪斯曼",
+      "FGLS"
+    ],
+    "summary": "随机效应把个体差异视为随机抽样；Hausman 检验用于比较 FE 与 RE。",
+    "when": "个体效应可能与解释变量不相关、想估计不随时间变化的变量。",
+    "pitfall": "RE 的关键假设是个体效应与 X 不相关；Hausman 不显著不等于 RE 一定正确。",
+    "example": "xtreg y x, re；hausman fe re；xtoverid。",
+    "content": "**模型：** RE 假设个体效应与解释变量不相关，用可行广义最小二乘（FGLS）加权。\n**检验：** Hausman 检验比较 FE 与 RE；p 小拒绝 RE。稳健 Hausman 可用 xtoverid。\n**Stata：** xtset id year；xtreg y x, re；hausman fe re；xtoverid。\n**注意：** FE 允许个体效应与 X 相关，但无法估计不随时间变化的变量；RE 的聚类标准误与假设需单独核对。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第15.7、15.11节，PDF 第269–272页",
+    "methods": [
+      "panel_fe"
+    ],
+    "task_stages": [
+      "plan",
+      "execute",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_tobit",
+    "title": "Tobit、截断与归并数据",
+    "keywords": [
+      "Tobit",
+      "截断",
+      "归并",
+      "censored",
+      "truncreg"
+    ],
+    "summary": "结果变量在界限处堆积或被截断时，普通 OLS 会产生偏误；Tobit 用最大似然处理归并。",
+    "when": "支出为 0 的大量样本、上限/下限观测、只观察到超过阈值的样本。",
+    "pitfall": "Tobit 依赖正态同方差假设；截断与归并是不同机制。",
+    "example": "tobit y x, ll(0)；truncreg y x, ll(0)。",
+    "content": "**Tobit：** 结果变量在某个界限被归并（如 y<=0 记为 0），用最大似然同时估计潜变量与观测机制。\n**截断 vs 归并：** 截断是只观察 y>c 的样本；Tobit 允许在界限处堆积。\n**Stata：** tobit y x, ll(0)；truncreg y x, ll(0)。\n**注意：** 系数是潜变量尺度；不要对归并数据直接用 OLS；正态同方差假设敏感。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第14章，PDF 第238页起",
+    "methods": [
+      "ols"
+    ],
+    "task_stages": [
+      "plan",
+      "execute",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_dynamic_panel",
+    "title": "动态面板与 GMM",
+    "keywords": [
+      "动态面板",
+      "GMM",
+      "Arellano-Bond",
+      "Blundell-Bond",
+      "Nickell偏误"
+    ],
+    "summary": "含滞后因变量的面板模型用 FE 会产生 Nickell 偏误；差分/系统 GMM 用滞后项作工具变量。",
+    "when": "面板时间较长、存在滞后因变量、内生性。",
+    "pitfall": "工具变量过多会弱化 Hansen 检验；GMM 不是万能药。",
+    "example": "xtabond2 y L.y x, gmm(L.y) iv(x) twostep robust。",
+    "content": "**问题：** 滞后因变量与个体效应相关，FE 产生 Nickell 偏误；需要 GMM。\n**方法：** Arellano-Bond 差分 GMM、Blundell-Bond 系统 GMM；用滞后项作工具变量。\n**检验：** AR(1)/AR(2) 序列相关、Hansen/Sargan 过度识别；工具变量数量要克制。\n**Stata：** xtabond2 y L.y x, gmm(L.y) iv(x) twostep robust；xtdpd。\n**注意：** 系统 GMM 需要额外假设；结果对工具变量集与滞后阶数敏感。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第16.11–16.12节，PDF 第304–306页",
+    "methods": [
+      "panel_fe"
+    ],
+    "task_stages": [
+      "plan",
+      "execute",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_quantile",
+    "title": "分位数回归",
+    "keywords": [
+      "分位数回归",
+      "quantile",
+      "qreg",
+      "异质性"
+    ],
+    "summary": "估计 X 对 Y 不同分位点的影响，能看到均值回归看不到的分布异质性。",
+    "when": "收入分布、尾部效应、异常值稳健性。",
+    "pitfall": "分位数系数不能直接与 OLS 均值系数比较因果。",
+    "example": "qreg y x, q(0.5)；sqreg y x, q(0.1 0.5 0.9)。",
+    "content": "**方法：** 最小化加权绝对残差，估计条件分位点；对异常值较稳健。\n**解释：** β_τ 是 X 对 Y 第 τ 分位点的边际影响，不同分位点可有不同斜率。\n**Stata：** qreg y x, q(0.5)；sqreg y x, q(0.1 0.5 0.9)；bsqreg。\n**注意：** 标准误通常用 bootstrap；与 OLS 均值系数不是同一个目标参数。",
+    "source": "陈强《高级计量经济学及Stata应用》相关分位数回归章节；杨维忠《Stata统计分析从入门到精通》回归章节",
+    "methods": [
+      "ols"
+    ],
+    "task_stages": [
+      "plan",
+      "explain"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_threshold",
+    "title": "门槛/门限模型",
+    "keywords": [
+      "门槛模型",
+      "门限",
+      "threshold",
+      "xthreg",
+      "Hansen"
+    ],
+    "summary": "允许 X 对 Y 的影响在某个门槛值两侧不同，估计门槛与分段斜率。",
+    "when": "非线性关系、政策效果随规模/地区变化。",
+    "pitfall": "门槛值由数据估计，需 bootstrap 检验；不要强行切段。",
+    "example": "xthreg y x1 x2, rx(x1) qx(x1) thnum(1)。",
+    "content": "**思想：** 在门槛值两侧分别估计斜率，检验门槛是否真实存在。\n**步骤：** 设定门槛变量与候选值 → 网格搜索最小残差平方和 → bootstrap 检验门槛存在性 → 报告分段系数。\n**Stata：** xthreg（面板门槛）、threshold（用户命令，语法随版本变化）。\n**注意：** 门槛估计带来额外不确定性；不能把连续异质性强行切成两段而不检验。",
+    "source": "陈强《高级计量经济学及Stata应用》非线性/门槛相关章节；杨维忠《Stata统计分析从入门到精通》",
+    "methods": [
+      "panel_fe"
+    ],
+    "task_stages": [
+      "plan",
+      "execute"
+    ],
+    "topic": "research_concept"
+  },
+  {
+    "id": "kb_multinomial",
+    "title": "多项与有序选择模型",
+    "keywords": [
+      "多项Logit",
+      "有序Logit",
+      "mlogit",
+      "oprobit",
+      "多值选择"
+    ],
+    "summary": "结果有多个类别时用多项/有序选择模型；系数解释依赖基准类别。",
+    "when": "选择类别、满意度等级、就业状态。",
+    "pitfall": "多项 Logit 的 IIA 假设；有序模型的比例优势假设。",
+    "example": "mlogit y x；oprobit y x；margins, dydx(*)。",
+    "content": "**多项 Logit/Probit：** 结果有 J 个无序类别，估计相对基准类别的对数几率。\n**有序 Logit/Probit：** 结果是有序等级，假设比例优势；需检验该假设。\n**Stata：** mlogit y x；oprobit y x；margins, dydx(*)。\n**注意：** 系数不是概率；要看 margins；不要把二值模型逐类拆分替代多项模型。",
+    "source": "陈强《高级计量经济学及Stata应用》第2版，第12章，PDF 第207页起",
+    "methods": [
+      "ols"
+    ],
+    "task_stages": [
+      "plan",
+      "execute",
+      "explain"
+    ],
+    "topic": "research_concept"
   }
 ]

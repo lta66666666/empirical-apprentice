@@ -105,7 +105,22 @@
  function paintKnowledge(){const card=knowledgeCard||stataCard||contextCard||lastReply?.dialogue?.learning_card||{title:'从研究问题开始',summary:'先说明你希望了解什么，再逐步核对研究对象、结果指标和数据。',example:'例如：想了解低碳城市试点政策是否影响城市碳排放。',reminder:'还不知道答案也可以直接说，我会帮你梳理。',content:'研究问题先确定对象和希望观察的结果。方法取决于问题和实际数据，不能只凭一个主题自动选择。'};const signature=JSON.stringify(card);if(signature===knowledgeSignature)return;knowledgeSignature=signature;
  knowledgeBody.replaceChildren(el('h3','',card.title),el('p','',card.summary));if(card.example)knowledgeBody.append(el('div','coach-knowledge-example','例子：'+card.example));if(card.reminder)knowledgeBody.append(el('p','coach-reminder',card.reminder));if(card.content)knowledgeBody.append(button('完整讲解','text-btn',()=>openReading(card.title,card.content,card)));if(card.source||card.version||card.review_status)knowledgeBody.append(sourceDetails(card));if(knowledgeCard)knowledgeBody.append(button('返回当前知识','text-btn',()=>{knowledgeCard=null;paintKnowledge();}));}
  function knowledgeCardFrom(k){return {title:k.title,summary:k.summary,example:k.example,reminder:k.pitfall,content:k.content||`**什么时候用：** ${k.when}\n\n**常见误区：** ${k.pitfall}\n\n**例子：** ${k.example}`,source:k.source};}
- function paintKnowledgeBrowser(){if(!knowledgeIndex.length){knowledgeList.replaceChildren(el('p','muted','知识库加载中…'));return;}const raw=knowledgeSearch.value.trim().toLowerCase(),q=raw.replace(/检验|测试|方法|怎么样|如何/g,'').trim()||raw,items=knowledgeIndex.filter(k=>!q||[k.title,...(k.keywords||[])].join(' ').toLowerCase().includes(q)||(k.keywords||[]).some(kw=>kw.toLowerCase().includes(raw))).slice(0,8);knowledgeList.replaceChildren();if(!items.length){knowledgeList.append(el('p','muted','没有匹配的知识点。'));return;}for(const k of items)knowledgeList.append(button(k.title,'text-btn',()=>{knowledgeCard=knowledgeCardFrom(k);paintKnowledge();if(innerWidth<1200)showSidebar(left);}));}
+ function knowledgeScore(card,raw,normalized){
+  const title=String(card.title||'').toLowerCase(),keys=(card.keywords||[]).join(' ').toLowerCase(),body=((card.summary||'')+' '+(card.content||'')).toLowerCase();let score=0;
+  for(const q of [raw,normalized]){if(!q)continue;if(title.includes(q))score+=8;if(keys.includes(q))score+=6;if(body.includes(q))score+=3;}
+  if(score===0&&normalized.length>=2){const grams=[...new Set(Array.from({length:normalized.length-1},(_,i)=>normalized.slice(i,i+2)))];for(const g of grams){if(title.includes(g))score+=2;else if(keys.includes(g))score+=1;}}
+  return score;
+ }
+ function paintKnowledgeBrowser(){
+  if(!knowledgeIndex.length){knowledgeList.replaceChildren(el('p','muted','知识库加载中…'));return;}
+  const raw=knowledgeSearch.value.trim().toLowerCase(),normalized=raw.replace(/怎么做|怎么用|如何|什么|为什么|请问|一下|方法|检验|测试|步骤|的|了|吗/g,'').trim()||raw,matches=[];
+  for(const card of knowledgeIndex){const score=raw?knowledgeScore(card,raw,normalized):1;if(score>0)matches.push({card,score});}
+  matches.sort((a,b)=>b.score-a.score||a.card.title.localeCompare(b.card.title));
+  const items=matches.slice(0,8).map(item=>item.card);
+  knowledgeList.replaceChildren();
+  if(!items.length){knowledgeList.append(el('p','muted','没有匹配的知识点。'));return;}
+  for(const k of items)knowledgeList.append(button(k.title,'text-btn',()=>{knowledgeCard=knowledgeCardFrom(k);paintKnowledge();if(innerWidth<1200)showSidebar(left);}));
+ }
  knowledgeSearch.oninput=paintKnowledgeBrowser;
  fetch('/static/teaching/knowledge-index.json').then(r=>r.ok?r.json():[]).then(list=>{knowledgeIndex=Array.isArray(list)?list:[];paintKnowledgeBrowser();paintFeed();}).catch(()=>{knowledgeList.replaceChildren(el('p','muted','知识库暂时不可用。'));});
  function paintMaterials(){paintDemoBar();paintCompleted();rightBody.replaceChildren();const summary=latestState?.research_summary||{},fields=summary.fields||{},gap=summary.next_gap||lastReply?.dialogue?.next_gap;
