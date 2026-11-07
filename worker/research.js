@@ -103,6 +103,7 @@ function validatePlan(input, data, blueprint, session) {
     same_batch: input.same_batch === true, engine_id: input.engine_id || 'statspai_cloud',
     first_treat: input.first_treat || '', control_group: input.control_group || '', absorbing_confirmed: input.absorbing_confirmed === true,
   };
+  if (!['statspai_cloud','browser_webr'].includes(plan.engine_id)) throw new Error('该执行方式已下线，请重新选择云端计算（Stata 语法）或浏览器 R。');
   if (!engineMetadata[plan.engine_id]) throw new Error('执行引擎未接入。');
   for(const key of ['software','execution_location'])if(input[key]!==undefined && input[key]!==engineMetadata[plan.engine_id][key])throw new Error('软件、位置与引擎不一致，请重新整理方案。');
   Object.assign(plan,engineMetadata[plan.engine_id]); delete plan.label;

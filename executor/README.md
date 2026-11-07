@@ -60,7 +60,7 @@ python -m executor.verify
 python -m executor.verify_lifecycle
 ```
 
-`EA_STATA_EXECUTABLE` 仅用于自有软件的本机开发验证；不设置时跳过 Stata。启动本机节点和独立 Wrangler 数据目录后执行 `node scripts/cloud-smoke.mjs`。复现 ZIP 的原生 R 命令：`Rscript --vanilla estimate.R .`；Stata 在包目录运行 estimate.do。不要解析屏幕显示表格。数值证据在站点 outputs（忽略、不发布），摘要见 EXECUTION_ACCEPTANCE.md。
+`EA_STATA_EXECUTABLE` 仅用于自有软件的本机开发验证；不设置时跳过 Stata。本机云端链路验收改用 `node scripts/verify-experience-site.mjs`（需本地网站与执行器）。复现 ZIP 的原生 R 命令：`Rscript --vanilla estimate.R .`；Stata 在包目录运行 estimate.do。不要解析屏幕显示表格。数值证据在站点 outputs（忽略、不发布），摘要见 EXECUTION_ACCEPTANCE.md。
 
 ## 2026-10-08 网站入口调整
 

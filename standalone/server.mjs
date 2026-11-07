@@ -21,7 +21,14 @@ const stopInterpretations=startInterpretationDispatcher(env);
 const server=http.createServer(async(req,res)=>{
   const requestId=crypto.randomUUID(),started=Date.now();
   try{
-    if(req.url==='/healthz'&&['GET','HEAD'].includes(req.method)){try{await storage.DB.prepare('SELECT 1').first();res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(req.method==='HEAD'?'':JSON.stringify({status:'ok'}));}catch{res.writeHead(503);res.end();}return;}
+    if(req.url==='/healthz'&&['GET','HEAD'].includes(req.method)){
+      const database=storage.DB.prepare('SELECT 1').first().then(()=>true).catch(()=>false);
+      const executor=env.EXECUTOR_URL?fetch(env.EXECUTOR_URL,{signal:AbortSignal.timeout(1500)}).then(r=>r.status<500?'ok':'down').catch(()=>'down'):'not_configured';
+      const [dbOk,executorState]=await Promise.all([database,executor]);
+      res.writeHead(dbOk?200:503,{'Content-Type':'application/json','Cache-Control':'no-store'});
+      res.end(req.method==='HEAD'?'':JSON.stringify({status:dbOk?'ok':'degraded',executor:executorState}));
+      return;
+    }
     // webR 运行时（含 18 MB wasm）直接从磁盘流式返回：正确 MIME + 不经过 base64 解码。
     if(req.url.startsWith('/static/webr/')&&['GET','HEAD'].includes(req.method)){
       const name=req.url.slice('/static/webr/'.length).split('?')[0];

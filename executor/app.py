@@ -40,6 +40,9 @@ def update(task):
     db.execute('UPDATE tasks SET body=?,status=? WHERE id=?', (json.dumps(task, ensure_ascii=False, allow_nan=False), task['status'], task['id']))
     db.commit()
 
+def log_event(event, **fields):
+    print(json.dumps({'event': event, **fields}, ensure_ascii=False, default=str), flush=True)
+
 
 async def json_body(request):
     """解析 JSON 请求体；格式错误返回 422，而不是未捕获异常导致的 500。"""
@@ -97,53 +100,53 @@ def validate(body):
     # Normalize aliases only; arbitrary formulas, scripts and paths never enter templates.
     p = body.get('plan', {})
     if body.get('engine_id') not in ('statspai_cloud', 'r_native', 'stata_native') or p.get('method') not in ('ols', 'panel_fe', 'did', 'staggered_did', 'event_study', 'iv_2sls'):
-        raise ValueError('Unsupported engine or method')
+        raise ValueError('执行引擎或方法未开放。')
     if body.get('software') != {'r_native':'r','stata_native':'stata','statspai_cloud':'python'}[body['engine_id']] or body.get('execution_location') != 'cloud_native':
-        raise ValueError('Engine metadata mismatch')
+        raise ValueError('执行引擎元数据不一致。')
     text = body.get('csv', '')
     if not isinstance(text, str) or len(text.encode()) > 2_000_000:
-        raise ValueError('CSV exceeds 2 MB')
+        raise ValueError('CSV 超过 2 MB 上限。')
     rows = list(csv.reader(io.StringIO(text)))
     if not 2 <= len(rows) <= 20001 or not 1 <= len(rows[0]) <= 60 or len(set(rows[0])) != len(rows[0]):
-        raise ValueError('Invalid row or column limits')
+        raise ValueError('行数或列数超出限制。')
     if any(not re.fullmatch(r'v\d+', n) for n in rows[0]) or any(len(row)!=len(rows[0]) for row in rows):
-        raise ValueError('Only rectangular normalized CSV is accepted')
+        raise ValueError('仅接受规整的标准化 CSV。')
     fields = [p.get(k, '') for k in ('outcome','unit','time','treated','first_treat','cluster','endogenous')] + p.get('predictors', []) + p.get('instruments', [])
     if len(p.get('predictors', []))>12 or len(p.get('instruments', []))>4 or any(n and n not in rows[0] for n in fields):
-        raise ValueError('Invalid variable mapping')
+        raise ValueError('变量映射无效。')
     if not p.get('outcome') or p.get('vcov') not in ('iid','hetero','cluster') or p.get('missing') not in ('drop','block'):
-        raise ValueError('Invalid plan')
+        raise ValueError('方案参数无效。')
     if p['vcov']=='cluster' and not p.get('cluster'):
-        raise ValueError('Cluster variable required')
+        raise ValueError('聚类标准误需要聚类列。')
     panel = p['method'] in ('panel_fe','did','staggered_did','event_study')
     if panel and (not p.get('unit') or not p.get('time') or p['unit']==p['time']):
-        raise ValueError('Panel mapping required')
+        raise ValueError('面板分析需要个体列与年份列。')
     if p.get('method')=='iv_2sls' and bool(p.get('unit')) != bool(p.get('time')):
-        raise ValueError('IV fixed effects require both unit and time')
-    if panel and p['vcov']!='cluster':raise ValueError('Panel methods require one-way clustering')
-    if p['method']=='iv_2sls' and p.get('unit') and p['vcov']!='cluster':raise ValueError('IV with fixed effects requires clustering')
+        raise ValueError('工具变量加入固定效应时需同时提供个体列与年份列。')
+    if panel and p['vcov']!='cluster':raise ValueError('面板类方法仅开放单向聚类。')
+    if p['method']=='iv_2sls' and p.get('unit') and p['vcov']!='cluster':raise ValueError('带固定效应的工具变量需聚类标准误。')
     if p['method'] in ('did','event_study') and (p.get('same_batch') is not True or not isinstance(p.get('policy_year'), int) or not 1800<=p['policy_year']<=2200 or not p.get('treated')):
-        raise ValueError('Only confirmed same-batch DID and event study are supported')
+        raise ValueError('仅支持已确认的同批 DID 与事件研究。')
     if p['method']=='staggered_did':
         if not p.get('first_treat') or p.get('control_group') not in ('nevertreated','notyettreated') or p.get('absorbing_confirmed') is not True:
-            raise ValueError('Invalid staggered DID setting')
+            raise ValueError('分批 DID 设定无效。')
     if p['method']=='event_study':
         window=p.get('window'); reference=p.get('reference_period')
         if not (isinstance(window,list) and len(window)==2 and all(isinstance(v,int) for v in window) and 1<=window[0]<=5 and 1<=window[1]<=5):
-            raise ValueError('Invalid event-study window')
+            raise ValueError('事件研究窗口无效。')
         if not isinstance(reference,int) or reference>-1 or reference<-window[0]:
-            raise ValueError('Invalid event-study reference period')
+            raise ValueError('事件研究基期无效。')
     if p['method']=='iv_2sls':
         endogenous=p.get('endogenous'); instruments=p.get('instruments') or []
         if not endogenous or not 1<=len(instruments)<=4 or len(set(instruments))!=len(instruments) or endogenous in instruments or endogenous==p.get('outcome') or endogenous in p.get('predictors',[]) or any(name in (p.get('outcome'),*p.get('predictors',[])) for name in instruments):
-            raise ValueError('Invalid IV mapping')
+            raise ValueError('工具变量映射无效。')
     for key in ('input_sha256','plan_sha256'):
         if not re.fullmatch('[0-9a-f]{64}', str(body.get(key, ''))):
-            raise ValueError('Missing evidence hash')
+            raise ValueError('缺少证据哈希。')
     if hashlib.sha256(text.encode()).hexdigest()!=body.get('normalized_sha256'):
-        raise ValueError('Normalized input hash mismatch')
+        raise ValueError('标准化输入哈希不一致。')
     if not re.fullmatch(r'[0-9a-f-]{36}', str(body.get('id',''))) or not re.fullmatch(r'[a-z0-9]{12}', str(body.get('session_id',''))):
-        raise ValueError('Invalid identifier')
+        raise ValueError('任务标识无效。')
     return len(rows)-1
 
 async def worker():
@@ -160,13 +163,17 @@ async def worker():
         task = json.loads(row['body'])
         if time.time()-row['created']>QUEUE_WAIT:
             task.pop('payload',None)
-            task.update(status='failed', error=f'Queue wait exceeded {int(QUEUE_WAIT // 60)} minutes; reconfirm and resubmit')
+            task.update(status='failed', error=f'排队超过 {int(QUEUE_WAIT // 60)} 分钟，请重新确认后再提交。')
             update(task)
+            log_event('task_expired', task_id=task['id'], wait_ms=int((time.time()-row['created'])*1000))
             continue
         directory = ROOT / task['id']
         directory.mkdir(exist_ok=True)
         task['status']='preparing'; update(task)
         payload=task.pop('payload')
+        method=(payload.get('plan') or {}).get('method','')
+        started_at=time.time()
+        log_event('task_started', task_id=task['id'], method=method, queue_wait_ms=int((started_at-row['created'])*1000))
         (directory/'normalized.csv').write_text(payload['csv'],encoding='utf-8')
         (directory/'parameters.json').write_text(json.dumps(payload['plan'],ensure_ascii=False),encoding='utf-8')
         task['status']='estimating'; update(task)
@@ -177,7 +184,7 @@ async def worker():
             task.update(status='saving', result=result); update(task)
             task.update(status='succeeded', artifacts=artifacts, completed=time.time())
         except asyncio.CancelledError:
-            task.update(status='interrupted',error='Execution cancelled or service stopped; reconfirm to rerun')
+            task.update(status='interrupted',error='计算已取消或服务停止，请重新确认后再运行。')
         except Exception as error:
             try:
                 log = (directory/'execution.log').read_text(encoding='utf-8') if (directory/'execution.log').exists() else ''
@@ -189,13 +196,14 @@ async def worker():
             # Contains only server-created UUID child directory.
             shutil.rmtree(directory)
             update(task)
+            log_event('task_finished', task_id=task['id'], method=method, status=task['status'], duration_ms=int((time.time()-started_at)*1000), error=str(task.get('error',''))[:160])
         if asyncio.current_task().cancelling():
             raise asyncio.CancelledError
 
 @asynccontextmanager
 async def lifespan(app):
     for row in db.execute("SELECT body FROM tasks WHERE status IN ('preparing','estimating','saving','running')").fetchall():
-        task=json.loads(row['body']); task.update(status='interrupted',error='Node restarted during execution'); update(task)
+        task=json.loads(row['body']); task.update(status='interrupted',error='执行节点在计算期间重启，请重新确认后再运行。'); update(task)
     # Clear abandoned input directories only inside this executor's data root.
     for child in ROOT.iterdir():
         if child.is_dir() and re.fullmatch(r'(?:[0-9a-f-]{36}|import-[a-zA-Z0-9_-]+)',child.name): shutil.rmtree(child)

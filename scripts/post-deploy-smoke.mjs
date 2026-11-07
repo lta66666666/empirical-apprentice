@@ -18,6 +18,7 @@ await step('healthz 200', async () => {
   assert.equal(response.status, 200);
   const body = await response.json().catch(() => null);
   assert.equal(body?.status, 'ok');
+  assert.notEqual(body?.executor, 'down', '执行器不可达');
 });
 
 await step('登录页 200 且带 X-Request-Id', async () => {

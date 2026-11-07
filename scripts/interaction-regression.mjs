@@ -41,7 +41,7 @@ try{
   const stale=await call('/api/sessions/'+sid+'/variable-dictionary','PUT',{dictionary:{income:'旧值'},state_version:b.state_version});assert.equal(stale.status,409);
   const missing=await worker.fetch(new Request(origin+'/api/sessions/'+sid+'/variable-dictionary',{method:'PUT',headers:{Origin:origin,Cookie:credentials,'Content-Type':'application/json'},body:JSON.stringify({dictionary:{}})}),env);assert.equal(missing.status,409);version=a.state_version;pass('双快照与旧客户端写入冲突不丢失新版本');
   const example=(await call('/api/research/examples/ols')).value;
-  const plan=(await call('/api/sessions/'+sid+'/research/plan','POST',{filename:example.filename,text:example.text,candidate:{...example.plan,engine_id:'browser_webr'}}));assert.equal(plan.status,200);
+  const plan=(await call('/api/sessions/'+sid+'/research/plan','POST',{filename:example.filename,text:example.text,candidate:{...example.plan,engine_id:'browser_webr'},state_version:version}));assert.equal(plan.status,200);
   const payload={filename:example.filename,text:example.text,plan:plan.value.plan,confirmation_token:plan.value.confirmation.token,confirmed:true,source:example.source||'模拟教学来源',dictionary:example.dictionary,simulated:true,request_id:crypto.randomUUID()};
   const submitted=await Promise.all([call('/api/sessions/'+sid+'/research/jobs','POST',payload),call('/api/sessions/'+sid+'/research/jobs','POST',payload)]);assert.ok(submitted.every(r=>r.status===202),JSON.stringify(submitted.map(r=>({status:r.status,detail:r.value.detail}))));assert.equal(submitted[0].value.id,submitted[1].value.id);const job=submitted[0].value;
   assert.equal((await call('/api/sessions/'+sid+'/research/jobs','POST',{...payload,source:'不同内容'})).status,409);pass('并发任务提交幂等与同编号不同内容拒绝');
