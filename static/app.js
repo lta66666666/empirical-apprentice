@@ -88,7 +88,7 @@ function updateControls() {
   $("userInput").disabled = false;
   $("exportBtn").disabled = !latestState;
   $("exportRecordBtn").disabled = !latestState;
-  document.querySelectorAll('.module-toolbar button,.course-card button').forEach(n=>n.disabled=busy);if($('eaOperationStatus'))$('eaOperationStatus').textContent=busy?'正在处理当前操作…':'';
+  document.querySelectorAll('.course-card button').forEach(n=>n.disabled=busy);if($('eaOperationStatus'))$('eaOperationStatus').textContent=busy?'正在处理当前操作…':'';
   $('waiting').hidden = !busy;
   $("learningScroll").setAttribute("aria-busy", String(busy));
 }

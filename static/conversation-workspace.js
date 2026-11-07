@@ -27,14 +27,15 @@
  for(const item of sources){const raw=typeof item==='string'?item:item?.url||item?.source,title=typeof item==='object'?item?.title||item?.name:'';if(title)detail.append(el('p','',title));if(typeof raw==='string'&&(/^(https:\/\/|\/static\/)/.test(raw))){const link=el('a','','查看原始材料');link.href=raw;link.target='_blank';link.rel='noopener noreferrer';detail.append(link);}else if(raw)detail.append(el('p','',String(raw)));}
  for(const ref of card.references||[]){const page=ref.page_verified?['印刷页 '+(ref.printed_page??'未核对'),'PDF第 '+ref.pdf_page+' 页'].join('；'):'';detail.append(el('p','',`${ref.author||''}《${ref.title}》${ref.chapter?' · '+ref.chapter:''}${page?' · '+page:''}`));if(ref.edition)detail.append(el('p','muted',ref.edition));}if(card.version)detail.append(el('p','muted','材料版本：'+card.version));if(card.review_status)detail.append(el('p','muted','审校说明：'+card.review_status));return detail;}
  const toolbar=document.querySelector('.module-toolbar'),home=toolbar.querySelector('a'),brand=toolbar.querySelector('strong'),more=el('details','coach-more'),menu=el('div','coach-menu');
- more.append(el('summary','','更多'),menu);for(const n of [...toolbar.children])if(n!==home&&n!==brand&&n.id!=='eaOperationStatus')menu.append(n);
- const operationStatus=toolbar.querySelector('#eaOperationStatus');toolbar.replaceChildren(home,brand,button('知识','text-btn coach-sidebar-toggle',()=>showSidebar(left)),button('研究','text-btn coach-sidebar-toggle',()=>showSidebar(right)),more);if(operationStatus)toolbar.append(operationStatus);
+ more.append(el('summary','','更多'),menu);const kept=[];for(const n of [...toolbar.children]){if(n===home||n===brand||n.id==='eaOperationStatus')continue;if(/^(历史练习|减少动画|退出|边分析边学|定向导学)$/.test(n.textContent.trim()))menu.append(n);else kept.push(n);}
+ const operationStatus=toolbar.querySelector('#eaOperationStatus');toolbar.replaceChildren(home,brand,button('知识','text-btn coach-sidebar-toggle',()=>showSidebar(left)),button('研究','text-btn coach-sidebar-toggle',()=>showSidebar(right)),...kept,more);if(operationStatus)toolbar.append(operationStatus);
  const sideDialog=el('dialog','coach-side-dialog');sideDialog.append(button('关闭','text-btn',()=>sideDialog.close()));document.body.append(sideDialog);
  function restoreSidebar(){const p=sideDialog.querySelector('aside');if(p)shell.insertBefore(p,p===left?shell.firstChild:null);}
  function showSidebar(panel){restoreSidebar();sideDialog.append(panel);sideDialog.showModal();}sideDialog.addEventListener('close',restoreSidebar);
  let history=[],shown=8,lastReply=null,lastRendered='',queryBusy=false,dataEpoch=0,lastSession='',knowledgeSignature='',paintedIds=[],rows=new Map(),staleQuestions=new Set();
  let workspaceNavigation=0;let restoredViewSession=null;let demoRequest=null,demoBusy=false,contextCard=null,contextIdentity='';let demoReturn=storageGet('ea_demo_return')||null,skippedGaps=new Set(),knowledgeCard=null,knowledgeIndex=[];
  const demoPanel=el('section','coach-demo');
+ const demoLabels={did:'低碳城市试点政策（教学模拟）',ols:'教育与收入（教学模拟）',panel_fe:'数字化与生产率（教学模拟）'};
  async function startDemo(fixtureId='did',force=false){
   if(demoBusy)return;demoBusy=true;const previous=sessionId,account=window.EA_ACCOUNT?.id;demoButton.disabled=true;parts.status.textContent='正在保存当前草稿并准备独立示范…';
   try{if(!force){if(window.eaBeforeLeave&&!await window.eaBeforeLeave())return;window.eaPreserveInputs?.();window.eaRememberResearchInput?.();if(window.eaFlushAllDrafts&&!await eaFlushAllDrafts(previous))throw Error('当前草稿未保存，请先处理保存错误；原研究保留。');}
@@ -48,10 +49,10 @@
  window.eaStartDemo=startDemo;
  async function reviewDemo(){if(!researchData){parts.status.textContent='正在恢复模拟数据，请稍候再核对。';return;}window.eaAnalysisEngine='statspai_cloud';openController('plan','核对模拟方案');await researchMakePlan();}
  async function exitDemo(){let data;try{const back=demoReturn||storageGet('ea_demo_return');data=back?await api('/api/sessions/'+back):await api('/api/sessions',{method:'POST'});}catch{data=await api('/api/sessions',{method:'POST'});}renderState(data);await window.eaWorkbenchRestoration;eaSetTask('research');demoReturn=null;storageRemove('ea_demo_return');parts.status.textContent='已退出示范，回到你的研究。';}
- function paintDemoBar(){const f=latestState?.demo_fixture;demoBar.hidden=!f;if(!f)return;const name=researchNames[f.fixture_id]||'教学模拟';demoBar.replaceChildren(el('span','coach-demo-tag','示范模式'),el('span','coach-demo-text',name+' · 模拟数据，不代表真实结论'),button('核对示范方案','text-btn',reviewDemo),button('退出示范','btn-secondary',exitDemo));}
+ function paintDemoBar(){const f=latestState?.demo_fixture;demoBar.hidden=!f;if(!f)return;const name=demoLabels[f.fixture_id]||researchNames[f.fixture_id]||'教学模拟';demoBar.replaceChildren(el('span','coach-demo-tag','示范模式'),el('span','coach-demo-text',name+' · 模拟数据，不代表真实结论'),button('核对示范方案','text-btn',reviewDemo),button('退出示范','btn-secondary',exitDemo));}
  function showDemo(){demoPanel.replaceChildren();const f=latestState?.demo_fixture;
   if(f){demoPanel.append(el('p','muted','示范数据已载入；请从上方示范条或右栏核对方案。'));return;}
-  demoPanel.append(el('h1','','你想研究什么？'),el('p','coach-welcome','直接告诉我你的目标；也可以先用完整模拟案例体验。'),demoButton,el('p','muted','新建独立示范，保留你的当前研究；核对后才会计算。'),el('p','coach-steps','零基础路径：点示范 → 核对方案 → 确认后计算'),button('分步带我走','text-btn',async()=>{await window.eaPerformAnalysisAction?.({action_id:'guide',command:'start'});paintGuide();}));
+  demoPanel.append(el('h1','','你想研究什么？'),el('p','coach-welcome','直接告诉我你的目标；也可以先用完整模拟案例体验。'),demoButton,button('先判断选题可行性（无需数据）','text-btn',()=>eaSetTask('prepare')),el('p','muted','新建独立示范，保留你的当前研究；核对后才会计算。'),el('p','coach-steps','零基础路径：点示范 → 核对方案 → 确认后计算'),button('分步带我走','text-btn',async()=>{await window.eaPerformAnalysisAction?.({action_id:'guide',command:'start'});paintGuide();}));
  }
  const earlier=button('更早对话','text-btn coach-earlier',()=>{const height=stream.scrollHeight,position=stream.scrollTop;shown+=10;paintFeed({older:true,height,position});});
  const newest=button('查看最新回复','text-btn coach-newest',()=>{stream.scrollTop=stream.scrollHeight;newest.hidden=true;});newest.hidden=true;center.insertBefore(newest,dock);

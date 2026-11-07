@@ -29,9 +29,16 @@ function renderPreparation(data){
   select.value=prep.question_type;
   select.onchange=()=>mutate('preparation/type',{question_type:select.value},{method:'PUT'});
   type.append(select);root.append(type);
-  const status=el('section','ea-prep-summary');status.append(el('h4','',`资料版本 ${data.research_revision||0} · 当前缺口`),el('p','',data.suitability?.next||'先填写研究问题。'));
-  for(const item of data.suitability?.blockers||[])status.append(el('p','resource-caution',item));
-  status.append(button('检查资料与适用条件','btn-secondary',()=>mutate('actions',{action:'check_suitability'})));root.append(status);
+  const suit=data.suitability||{},satisfiedList=suit.satisfied||[],missingList=suit.missing||[],total=satisfiedList.length+missingList.length;
+  const status=el('section','ea-prep-summary');
+  status.append(el('span','section-kicker','选题可行性初判 · 不需要上传数据'));
+  status.append(el('h4','',`资料版本 ${data.research_revision||0} · 已具备 ${satisfiedList.length} / ${total} 项关键信息`));
+  const meter=el('progress');meter.max=Math.max(1,total);meter.value=satisfiedList.length;meter.setAttribute('aria-label',`已具备 ${satisfiedList.length} / ${total} 项关键信息`);status.append(meter);
+  status.append(el('p','',missingList.length?`还缺：${missingList.join('、')}。补齐后可继续核对方法适用性。`:'关键信息已齐，可进入数据准备；方法适用性仍须结合数据核对。'));
+  if(satisfiedList.length)status.append(el('p','workspace-note',`已记录：${satisfiedList.join('、')}。`));
+  status.append(el('p','workspace-note',suit.source_warning||'结构检查不认证来源真实性；来源状态由学生核对。'));
+  for(const item of suit.blockers||[])status.append(el('p','resource-caution',item));
+  status.append(button('更新可行性结论','btn-secondary',()=>mutate('actions',{action:'check_suitability'})));root.append(status);
   if(prep.question_type==='policy_evaluation'){
     const field=el('label','prep-field','实施类型（与当前样本对应）'),mode=el('select');
     for(const [value,label]of [['unknown','尚未确定'],['single_batch','同批实施'],['staggered','分批实施']])mode.append(new Option(label,value));

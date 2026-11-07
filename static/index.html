@@ -9,12 +9,13 @@
   <link rel="stylesheet" href="/static/teaching.css?v=20260930i">
   <link rel="stylesheet" href="/static/learning-polish.css?v=8">
   <link rel="stylesheet" href="/static/research.css?v=18">
-  <link rel="stylesheet" href="/static/task-workbench.css?v=17">
+  <link rel="stylesheet" href="/static/task-workbench.css?v=19">
   <link rel="stylesheet" href="/static/practical-conversation.css?v=19">
   <script defer src="/static/vendor/marked.umd.js"></script>
   <script defer src="/static/vendor/lucide.min.js"></script>
   <script defer src="/static/teaching.js?v=20260930i"></script>
-  <script defer src="/static/app.js?v=20261105"></script>
+  <script defer src="/static/app.js?v=20261106"></script>
+  <script defer src="/static/report-view.js?v=1"></script>
 <link rel="stylesheet" href="/static/ui/components.css"><link rel="stylesheet" href="/static/ui/theme.css"></head>
 <body class="ea-ui">
   <div role="status" style="padding:7px 18px;background:linear-gradient(90deg,#0b3d3a,#0f5f57);color:#dff3ee;font:13px/1.5 system-ui,sans-serif;letter-spacing:.02em">演示环境 · 云端计算已上线，执行前请核对方案。</div>
@@ -46,7 +47,7 @@
           <span class="section-kicker">从一个问题开始</span><h2>研究，可以一步一步来。</h2><p class="entry-lead">不必先懂模型。选择适合你的起点，完成一次有反馈的练习。</p>
           <div class="entry-cards">
             <button class="entry-card recommended" data-path="zero"><span class="entry-icon"><i data-lucide="sprout"></i></span><span class="entry-copy"><span class="entry-title">我完全没接触过实证研究 <span class="badge">推荐</span></span><span class="entry-desc">8 阶段图解教学：从找政策、读数据，到动手计算和写研究备忘录</span></span><i data-lucide="arrow-up-right"></i></button>
-            <button class="entry-card" data-path="prepare"><span class="entry-icon"><i data-lucide="notebook-pen"></i></span><span class="entry-copy"><span class="entry-title">有想法，还没有数据</span><span class="entry-desc">先整理研究问题、来源与可得性；不需要先上传 CSV</span></span><i data-lucide="arrow-up-right"></i></button>
+            <button class="entry-card" data-path="prepare"><span class="entry-icon"><i data-lucide="notebook-pen"></i></span><span class="entry-copy"><span class="entry-title">先验证选题可行性</span><span class="entry-desc">不用上传 CSV：先记录研究问题、来源与可得性，得到缺口清单和下一步建议</span></span><i data-lucide="arrow-up-right"></i></button>
             <button class="entry-card" data-path="data"><span class="entry-icon"><i data-lucide="file-spreadsheet"></i></span><span class="entry-copy"><span class="entry-title">已有数据，制定分析方案</span><span class="entry-desc">检查字段和缺失，学习适用方法，核对后再运行 R</span></span><i data-lucide="arrow-up-right"></i></button>
           </div>
           <div class="entry-secondary"><button class="text-btn" data-path="free">直接提问</button><button class="text-btn" id="eaQuickDemo">90 秒示范 · 跑一次 DID</button></div>
@@ -102,7 +103,7 @@
           <section class="resource-section"><span class="eyebrow">从哪里找政策</span><h3>先找原文，再记信息</h3><ol class="guide-list"><li>搜“政策关键词 + 通知 / 试点名单”，优先进入发布机关官网。</li><li>核对文件名、文号、发布机关和原文链接。</li><li>分别记录发布日期、实施日期、覆盖对象和批次。</li><li>沿附件与地方文件核实落地情况，不把新闻摘要当作政策原文。</li></ol></section>
           <details class="resource-section"><summary>真实文件与概念速查</summary><span class="eyebrow">真实文件 · 阅读示例</span><h3>电力现货市场建设试点</h3><p>发改办能源〔2017〕1453号</p><a class="source-link" href="https://www.ndrc.gov.cn/xxgk/zcfb/tz/201709/t20170905_962552.html" target="_blank" rel="noopener noreferrer">国家发展改革委原文 <i data-lucide="external-link"></i></a><p class="resource-caution">发布不等于实施。各地启动时间、数据可得性与可比对象还需要核实。</p><h3>概念速查</h3><details><summary>处理组与对照组</summary><p>处理组受到政策干预；对照组帮助推测没有政策时会怎样。没有受到政策并不自动意味着适合作对照。</p></details><details><summary>什么是 DID？</summary><p>比较两组在政策前后的变化之差。在平行趋势等识别假设成立时，才可能将差异解释为政策效应。</p></details><details><summary>什么是面板数据？</summary><p>同一批单位在多个时期的观测。例如每一行是一个城市在某年的能源使用量。</p></details></details>
         </section>
-        <section id="pane-records" role="tabpanel" aria-labelledby="tab-records" hidden><div id="recordContent"></div><section id="taskCard" class="resource-section" hidden><h3>研究任务单</h3><div id="taskContent"></div></section><button id="exportRecordBtn" class="btn-secondary full-width"><i data-lucide="download"></i>导出完整学习记录</button><div class="report-actions"><a class="btn-secondary" id="learningReportMd" download="learning-report.md">学生学习报告.md</a><a class="btn-secondary" id="learningReportPdf" download="learning-report.pdf">学生学习报告.pdf</a></div><p class="storage-note">记录属于当前浏览器，保存在服务器；最近活动 7 天后拒绝访问，物理清理接口已实现，云端定时调度待恢复；到期后一小时内删除尚未验收。可手动删除或提前导出；清除浏览器身份凭证后无法自动找回。</p></section>
+        <section id="pane-records" role="tabpanel" aria-labelledby="tab-records" hidden><div id="recordContent"></div><section id="taskCard" class="resource-section" hidden><h3>研究任务单</h3><div id="taskContent"></div></section><button id="exportRecordBtn" class="btn-secondary full-width"><i data-lucide="download"></i>导出完整学习记录</button><div class="report-actions"><button class="btn-secondary" id="viewLearningReport" type="button"><i data-lucide="file-text"></i>在线查看完整报告</button><a class="btn-secondary" id="learningReportMd" download="learning-report.md">学生学习报告.md</a><a class="btn-secondary" id="learningReportPdf" download="learning-report.pdf">学生学习报告.pdf</a></div><p class="storage-note">记录属于当前浏览器，保存在服务器；最近活动 7 天后拒绝访问，物理清理接口已实现，云端定时调度待恢复；到期后一小时内删除尚未验收。可手动删除或提前导出；清除浏览器身份凭证后无法自动找回。</p></section>
       </div>
     </aside>
   </main>
@@ -111,14 +112,14 @@
 <script defer src="/static/analysis.js"></script>
 <script defer src="/static/plan-normalization.js"></script>
 <script defer src="/static/ai-interpretation.js"></script>
-<script defer src="/static/research.js?v=23"></script>
+<script defer src="/static/research.js?v=24"></script>
 <script defer src="/static/webr-execution.js"></script>
 <script defer src="/static/pdf-export.js"></script>
 <script defer src="/static/learning-motion.js"></script>
 <script defer src="/static/tutorial.js"></script>
-<script defer src="/static/preparation.js?v=10"></script>
+<script defer src="/static/preparation.js?v=11"></script>
 <script defer src="/static/research-drafts.js?v=14"></script>
-<script defer src="/static/task-workbench.js?v=17"></script>
+<script defer src="/static/task-workbench.js?v=18"></script>
 <script defer src="/static/agent-evidence.js?v=15"></script>
 <script defer src="/static/ui-refinement.js?v=19"></script>
 <script defer src="/static/sample-evidence.js"></script>

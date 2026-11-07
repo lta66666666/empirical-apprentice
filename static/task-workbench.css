@@ -69,3 +69,39 @@ body{background:#f0f5f7;line-height:1.65}
 button:focus-visible,a:focus-visible,summary:focus-visible,select:focus-visible,textarea:focus-visible,input:focus-visible{outline:3px solid #298c82;outline-offset:3px}button:disabled{opacity:.55;cursor:not-allowed}.ea-stage-hidden{display:none!important}
 @media(max-width:720px){.ea-step-actions{align-items:stretch}.ea-step-actions>.research-check{padding:12px;font-size:14px}.ea-report-overview h2{font-size:23px}.ea-report-card{padding:16px}.ea-report-card .research-actions{display:grid;grid-template-columns:1fr;width:100%}.ea-report-card .research-actions>*{width:100%;box-sizing:border-box;justify-content:center;text-align:center}.ea-evidence-controls select{width:100%}.ea-feedback-preview{padding:14px}.entry-card{min-height:118px!important}.research-runtime>button{display:block;width:100%;margin:10px 0}.ea-agent-record{padding:14px}.ea-agent-record summary{overflow-wrap:anywhere}.ea-coefficient-selector{max-width:100%}.ea-step-actions .research-check.ea-stage-hidden{display:none!important}}
 #pane-records>.report-actions[hidden],#exportRecordBtn[hidden]{display:none!important}.ea-step-actions>.research-check[hidden]{display:none!important}
+
+/* V18: no-data feasibility entry, wider report reading surface, and clearer panel rhythm. */
+.ea-feasibility-entry{display:flex;align-items:center;gap:6px;margin:0 0 18px;font-size:14px;color:#506971}
+.ea-feasibility-entry .text-btn{min-height:40px;font-size:14px}
+.ea-prep-summary progress{width:100%;height:8px;margin:10px 0 12px;accent-color:#087e75}
+.ea-prep-summary h4{font-size:19px;margin:6px 0}
+.analysis-top{padding:24px 28px;gap:24px;align-items:start}
+.analysis-primary>#pane-research{padding:28px}
+.analysis-dock{padding:16px 28px 20px}
+#appDialog{width:min(720px,calc(100vw - 32px))}
+#appDialog #dialogBody{max-height:min(62dvh,560px);overflow:auto;font-size:14px;line-height:1.75}
+.ea-report-view{width:min(1120px,calc(100vw - 24px));max-height:93dvh;padding:0;overflow:hidden;border-radius:18px}
+.ea-report-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 30px;border-bottom:1px solid var(--ea-line);background:#fff}
+.ea-report-head h2{font-size:23px;margin:0}
+.ea-report-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.ea-report-toolbar .btn-secondary,.ea-report-toolbar .text-btn{min-height:42px;font-size:14px}
+.ea-report-meta{margin:0;padding:12px 30px 0;font-size:13px;color:#587071}
+.ea-report-body{max-height:calc(92dvh - 150px);overflow:auto;padding:18px 30px 40px;font-size:16px;line-height:1.85}
+.ea-report-body h1{font-size:27px;line-height:1.35;margin:8px 0 16px}
+.ea-report-body h2{font-size:20px;line-height:1.5;margin:32px 0 14px;padding:10px 14px;background:#edf7f3;border-left:4px solid #087e75;border-radius:6px}
+.ea-report-body h3{font-size:17px;margin:22px 0 8px}
+.ea-report-body ul,.ea-report-body ol{padding-left:24px;margin:10px 0 18px}
+.ea-report-body li{margin:6px 0}
+.ea-report-body>blockquote{margin:0 0 18px;padding:12px 16px;background:#f6faf8;border-left:3px solid #b9d8cd;color:#4f6a64}
+.ea-report-body table{width:100%;margin:16px 0;font-size:14px}
+.ea-report-body th{background:#f0f7f4}
+.ea-report-body pre{overflow-x:auto}
+@media(max-width:720px){.ea-report-head{padding:16px 18px;align-items:flex-start;flex-direction:column}.ea-report-meta{padding:10px 18px 0}.ea-report-body{padding:16px 18px 30px;font-size:16px}.ea-report-view{width:calc(100vw - 16px);max-height:94dvh}.ea-report-body{max-height:calc(94dvh - 190px)}.analysis-top{padding:16px;gap:16px}.analysis-primary>#pane-research{padding:18px}.analysis-dock{padding:12px 16px 16px}}
+@media print{
+ body.ea-printing-report>*{display:none!important}
+ body.ea-printing-report #eaReportView{display:block!important;position:static;width:auto;max-height:none;overflow:visible;border:0;border-radius:0;box-shadow:none;padding:0}
+ body.ea-printing-report .ea-report-head,body.ea-printing-report .ea-report-toolbar,body.ea-printing-report .ea-report-meta{display:none!important}
+ body.ea-printing-report .ea-report-body{max-height:none;overflow:visible;padding:0;font-size:12pt;line-height:1.7}
+ body.ea-printing-report .ea-report-body h2{break-after:avoid;background:none;border-left:0;padding:0}
+ body.ea-printing-report .ea-report-body table{font-size:10pt}
+}
