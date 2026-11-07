@@ -2,7 +2,7 @@
 
 日期：2026-11-07
 范围：需求分析 → 方案设计 → 代码实现 → 测试验证 → 部署上线
-基线证据：`npm run ci` 113 项、`scripts/verify-experience-site.mjs` 13 项、公网 Chromium 实测、容器内 StatsPAI 实测、线上 API 边界测试
+基线证据：`npm run ci` 115 项、`scripts/verify-experience-site.mjs` 13 项、公网 Chromium 实测、容器内 StatsPAI 实测、线上 API 边界测试
 
 ## 结论
 
@@ -53,7 +53,7 @@
 | `scripts/cloud-smoke.mjs` 断言已下线的 `r_native` | 第 13、18 行；当前产品必失败 | P2 |
 | 两个回归脚本 schema 漂移 | `research-understanding-regression.mjs` 旧 mock、`interaction-regression.mjs` 未带 `state_version` | P2 |
 | 两个 DOM 测试缺依赖 | `conversation-first-regression.mjs` 缺 `jsdom`、`webr-lifecycle-regression.mjs` 缺 DOM 桩 | P2 |
-| 无失败注入 / 弱网 / 并发压测 | 现有用例以正常路径为主 | P2 |
+| 无失败注入 / 弱网 / 并发压测 | 现有用例以正常路径为主 | P2（已修） | 已新增 `scripts/failure-injection.mjs`，覆盖模型 5xx、执行器提交超时与轮询中断、并发重复提交、排队超时 |
 | 无覆盖率统计 | CI 无覆盖率报告 | P3 |
 
 ### 5. 部署上线
@@ -90,7 +90,7 @@
 | O13 | 执行器错误文案英文 | P2 | S | 用户体验一致 | 校验错误、排队超时、中断与重启提示已统一为中文 | 低 | ✅ 已落地 |
 | O14 | `sessions.js` / `research.js` 过大 | P2 | M | 降低维护成本与回归风险 | 按职责拆出 project、learning、case 三个模块，保持现有导出不变 | 中（需回归 113 项 CI） | 待办 |
 | O15 | 健康检查不覆盖执行器 | P2 | S | 提前发现"网站正常但算不出来" | `/healthz` 已并行探测执行器可达性并返回 `executor: ok/down/not_configured`，数据库失败仍返回 503 | 低 | ✅ 已落地 |
-| O16 | 无失败注入 / 弱网 / 并发压测 | P2 | M | 稳定性信心 | 增加四类脚本化用例：模型 5xx、执行器超时、重复提交、队列排队超时 | 中 | 待办 |
+| O16 | 无失败注入 / 弱网 / 并发压测 | P2 | M | 稳定性信心 | 已新增 `scripts/failure-injection.mjs`：模型连续 5xx 保留资料并可重试；执行器提交超时/轮询中断保持 `queued` 且恢复后按落盘快照重提；并发重复提交同 `id`、同编号不同内容 409；排队超时同步为 `failed` 并保留中文原因 | 低（仅测试与网络异常文案） | ✅ 已落地 |
 | O17 | 无覆盖率统计 | P3 | S | 质量趋势 | `npm run coverage`（c8 包裹 CI，仅上报不设阈值）；基线：整体语句 32.14%、分支 52.41%、函数 35.06%，standalone 行覆盖 100%、worker 31.58% | 低 | 已完成（需先 `npm ci`） |
 | O18 | `/api/health` 硬编码 `browser_webr` | P3 | S | 信息准确 | 已改为 `execution_locations: ['statspai_cloud','browser_webr']` | 低 | ✅ 已落地 |
 | O19 | "整理方案 → 确认 → 运行"三步 | P3 | M | 演示节奏更快 | 仅在"方案未变更且引擎就绪"时提供"确认并运行"，保留教学确认语义 | 中（涉及教学流程语义） | 待办 |
@@ -121,7 +121,7 @@
 
 ### 可维护性
 
-- 已具备：方法注册表单一来源、双语模板随任务落盘并带 `sha256` / `template_version`、113 项 CI 覆盖关键契约。
+- 已具备：方法注册表单一来源、双语模板随任务落盘并带 `sha256` / `template_version`、115 项 CI 覆盖关键契约。
 - 残余风险：两个旧回归脚本漂移、`cloud-smoke` 失效、两个大型模块。
 - 结论：可维护，但需按 O9、O10、O14 清理测试债与模块体量。
 
@@ -134,7 +134,7 @@
 ### 无新增风险确认
 
 - 本轮改动均为"只增不减"或"只删元数据"：日志为附加输出，`X-Request-Id` 为附加响应头，`method_registry.engines` 无任何业务逻辑读取，构建期门禁只在失败时阻断。
-- 回归证据：`node --check` 通过、CI 114 项通过（含镜像内构建期门禁）、本地全链路 E2E 13 项通过、`build-prototype.mjs` 构建成功、线上冒烟 5 项通过。
+- 回归证据：`node --check` 通过、CI 115 项通过（含镜像内构建期门禁）、本地全链路 E2E 13 项通过、`build-prototype.mjs` 构建成功、线上冒烟 5 项通过。
 - 部署回滚：线上镜像保留 `20261105` 与 `20261107-df9b102` 两个标签，执行 `sudo env IMAGE_TAG=<旧标签> docker compose up -d` 即可回滚，无需数据迁移（未改表结构）。
 
 ## 五、建议执行顺序
@@ -149,4 +149,7 @@ O1 + O2 + O3 已上线：镜像内 CI 114 项通过后产出版本化镜像 `202
 O7 + O8 + O9 + O13 + O15 已落地：旧引擎提前 422、执行器任务日志、失效冒烟脚本清理、错误文案统一、健康检查覆盖执行器。O10 仅修复 `interaction-regression.mjs` 的 `state_version`，其余断言需按当前课程与对话流重写，暂不纳入本轮。
 
 **批次 D（观察项）**
-O11 + O12 + O14 + O16 + O17 + O18 + O19。验收：安全头以 Report-Only 观察一周无违规后再强制；模块拆分后 CI 全绿。
+O11 + O12 + O14 + O17 + O18 + O19。验收：安全头以 Report-Only 观察一周无违规后再强制；模块拆分后 CI 全绿。
+
+**批次 E（已完成）**
+O16 已落地：`scripts/failure-injection.mjs` 四类故障用例接入 CI，`node scripts/ci-check.mjs` 通过 115 项；执行节点超时/连接失败的底层异常已统一为中文提示，弱网轮询只记录 `sync_error`，不伪造终态。

@@ -14,7 +14,7 @@ export async function nodeRequest(env,owner,path,body,method=body===undefined?'G
   const canonical=[method,route,stamp,id,owner,await digest(raw)].join('\n');
   const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(env.EXECUTOR_SECRET),{name:'HMAC',hash:'SHA-256'},false,['sign']);
   const signature=[...new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(canonical)))].map(b=>b.toString(16).padStart(2,'0')).join('');
-  const response=await fetch(new URL(route,url),{method,headers:{'Content-Type':'application/json','X-EA-Time':stamp,'X-EA-Request':id,'X-EA-Owner':owner,'X-EA-Signature':signature},...(body!==undefined?{body:raw}:{}),signal:AbortSignal.timeout(15000)});
+  let response;try{response=await fetch(new URL(route,url),{method,headers:{'Content-Type':'application/json','X-EA-Time':stamp,'X-EA-Request':id,'X-EA-Owner':owner,'X-EA-Signature':signature},...(body!==undefined?{body:raw}:{}),signal:AbortSignal.timeout(15000)});}catch(error){throw Error(error?.name==='TimeoutError'||error?.name==='AbortError'?'执行节点响应超时，请稍后重试。':'执行节点连接失败，请稍后重试。');}
   const result=await response.json();if(!response.ok){const e=new Error(String(result.detail||'执行节点请求失败').slice(0,500));e.status=response.status;throw e;}return result;
 }
 export async function engineCapabilities(env,owner){
