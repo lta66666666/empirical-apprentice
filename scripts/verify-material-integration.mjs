@@ -17,6 +17,8 @@ try{
  }
  assert.throws(()=>knowledgeOptions({source_id:'arbitrary'}));
  for(const [q,id]of [['数值标签和编码','textbook_labels'],['非平衡面板','textbook_unbalanced'],['教材勘误版本','textbook_errata'],['显著性水平置信度','textbook_significance'],['工作目录找不到文件','textbook_paths']])assert.equal((await knowledgeContext(q))[0].id,id);
+ assert.equal((await knowledgeContext('平行趋势检验'))[0].id,'textbook_parallel_trends');
+ assert.equal((await knowledgeContext('pre-trend test'))[0].id,'textbook_parallel_trends');
  const scoped=await knowledgeContext('',{source_id:'wang_stata_1'});assert.ok(scoped.length);assert.ok(scoped.every(c=>c.references.some(r=>r.source_id==='wang_stata_1')));
  const json=JSON.stringify(catalog);assert.doesNotMatch(json,/C:\\|xwechat|z-library|api_key|front_text/i);
  const index=await readFile('static/teaching/source-index.html','utf8');assert.ok(index.includes('17张自编教学卡'));for(const c of textbookCards)assert.ok(index.includes('id="'+c.id.replace('textbook_','')+'"'));

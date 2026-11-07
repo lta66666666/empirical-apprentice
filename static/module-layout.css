@@ -78,6 +78,15 @@ body.coach-minimal>div[role=status]{display:none!important}
 body.module-analysis .module-toolbar{position:relative;z-index:40;flex-shrink:0}
 .coach-minimal .module-records{position:relative;inset:auto;z-index:auto;flex:1;min-height:0;width:100%;max-width:1120px;margin:0 auto;padding:24px;box-sizing:border-box;overflow:auto;background:#fff;border:1px solid var(--ea-line);border-radius:16px}
 .coach-minimal .module-records>.btn-secondary{margin-bottom:18px}
+
+/* Collapsible side columns: the center conversation stays primary; each column can be hidden independently. */
+@media(min-width:1200px){.coach-minimal .module-toolbar>.coach-sidebar-toggle{display:inline-flex!important}}
+.coach-sidebar-toggle[aria-pressed=false]{opacity:.62}
+body.coach-minimal.ea-side-knowledge-hidden .coach-knowledge{display:none!important}
+body.coach-minimal.ea-side-research-hidden .coach-materials{display:none!important}
+body.coach-minimal.ea-side-knowledge-hidden .analysis-shell{grid-template-columns:minmax(0,1fr) 280px}
+body.coach-minimal.ea-side-research-hidden .analysis-shell{grid-template-columns:240px minmax(0,1fr)}
+body.coach-minimal.ea-side-knowledge-hidden.ea-side-research-hidden .analysis-shell{grid-template-columns:minmax(0,1fr)}
 @media(max-width:600px){
  .coach-minimal .analysis-shell{padding:6px;}
  .coach-feed{padding:14px 16px;}

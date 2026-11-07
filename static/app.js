@@ -506,10 +506,9 @@ async function removePast(id, body) {
 function exportDialog() {
   if (!latestState) return;
   dialog("导出学习记录",
-    el("p", "", "包含课程作答、个人蓝图、研究任务与对话。Markdown、JSON 和 PDF 都在当前浏览器导出；PDF 使用本机中文字体排版。"),
+    el("p", "", "包含课程作答、个人蓝图、研究任务与对话。Markdown 和 PDF 都在当前浏览器导出；PDF 使用本机中文字体排版。"),
     [
       button("Markdown 文档", "btn-secondary", () => downloadRecord("md")),
-      button("JSON 数据", "btn-secondary", () => downloadRecord("json")),
       button("PDF 文档", "btn-primary", () => eaDownloadPdf(`/api/sessions/${sessionId}/learning-report/md`, `实证学徒_学习报告_${sessionId}.pdf`).catch(e=>toast("PDF 导出失败："+e.message))),
     ]);
 }
