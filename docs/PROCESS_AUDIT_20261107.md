@@ -91,7 +91,7 @@
 | O14 | `sessions.js` / `research.js` 过大 | P2 | M | 降低维护成本与回归风险 | 按职责拆出 project、learning、case 三个模块，保持现有导出不变 | 中（需回归 113 项 CI） | 待办 |
 | O15 | 健康检查不覆盖执行器 | P2 | S | 提前发现"网站正常但算不出来" | `/healthz` 已并行探测执行器可达性并返回 `executor: ok/down/not_configured`，数据库失败仍返回 503 | 低 | ✅ 已落地 |
 | O16 | 无失败注入 / 弱网 / 并发压测 | P2 | M | 稳定性信心 | 已新增 `scripts/failure-injection.mjs`：模型连续 5xx 保留资料并可重试；执行器提交超时/轮询中断保持 `queued` 且恢复后按落盘快照重提；并发重复提交同 `id`、同编号不同内容 409；排队超时同步为 `failed` 并保留中文原因 | 低（仅测试与网络异常文案） | ✅ 已落地 |
-| O17 | 无覆盖率统计 | P3 | S | 质量趋势 | `npm run coverage`（c8 包裹 CI，仅上报不设阈值）；基线：整体语句 32.14%、分支 52.41%、函数 35.06%，standalone 行覆盖 100%、worker 31.58% | 低 | 已完成（需先 `npm ci`） |
+| O17 | 无覆盖率统计 | P3 | S | 质量趋势 | `npm run coverage`（c8 包裹 CI，仅上报不设阈值）；基线（115 项 CI，含 O16 失败注入）：整体语句/行 32.14%、分支 52.45%、函数 36.9%，standalone 行覆盖 100%、worker 31.58% | 低 | 已完成（`npm run coverage` 需先安装 c8） |
 | O18 | `/api/health` 硬编码 `browser_webr` | P3 | S | 信息准确 | 已改为 `execution_locations: ['statspai_cloud','browser_webr']` | 低 | ✅ 已落地 |
 | O19 | "整理方案 → 确认 → 运行"三步 | P3 | M | 演示节奏更快 | 仅在"方案未变更且引擎就绪"时提供"确认并运行"，保留教学确认语义 | 中（涉及教学流程语义） | 待办 |
 
