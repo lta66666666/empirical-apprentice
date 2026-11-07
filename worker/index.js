@@ -23,7 +23,8 @@ function staticResponse(path) {
   const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.csv': 'text/csv', '.md': 'text/markdown', '.svg': 'image/svg+xml', '.zip': 'application/zip' };
   const ext = /\.[a-z0-9]+$/i.exec(key)?.[0] || '';
   const binary = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
-  return new Response(binary, { headers: { ...headers, 'Content-Type': (types[ext] || 'application/octet-stream') + (['.html', '.js', '.css', '.json', '.csv', '.md', '.svg'].includes(ext) ? '; charset=utf-8' : '') } });
+  const cacheable = ['.js', '.css', '.svg', '.woff', '.woff2'].includes(ext);
+  return new Response(binary, { headers: { ...headers, 'Cache-Control': cacheable ? 'public, max-age=300' : 'no-store', 'Content-Type': (types[ext] || 'application/octet-stream') + (['.html', '.js', '.css', '.json', '.csv', '.md', '.svg'].includes(ext) ? '; charset=utf-8' : '') } });
 }
 
 const page = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>实证学徒 · Sites 技术试验</title>
@@ -124,7 +125,7 @@ export default {
     }
     if (path === '/api/health' && request.method === 'GET') {
       return Response.json({ status: 'ok', demo_mode: !env.MODEL_API_KEY,
-        execution_location: 'browser_webr', storage: !!env.DB && !!env.FILES }, { headers });
+        execution_locations: ['statspai_cloud', 'browser_webr'], storage: !!env.DB && !!env.FILES }, { headers });
     }
     if (path === '/api/cases' && request.method === 'GET') {
       return Response.json(Object.values(practiceCases).map((item) => ({ case_id: item.case_id,
