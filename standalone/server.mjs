@@ -19,6 +19,7 @@ async function clean(){if(cleaning)return;cleaning=true;try{const result=await c
 const timer=setInterval(clean,15*60*1000);timer.unref();
 const stopInterpretations=startInterpretationDispatcher(env);
 const server=http.createServer(async(req,res)=>{
+  const requestId=crypto.randomUUID(),started=Date.now();
   try{
     if(req.url==='/healthz'&&['GET','HEAD'].includes(req.method)){try{await storage.DB.prepare('SELECT 1').first();res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(req.method==='HEAD'?'':JSON.stringify({status:'ok'}));}catch{res.writeHead(503);res.end();}return;}
     // webR 运行时（含 18 MB wasm）直接从磁盘流式返回：正确 MIME + 不经过 base64 解码。
@@ -56,8 +57,13 @@ const server=http.createServer(async(req,res)=>{
     const response=await worker.fetch(request,env);
     for(const [key,value]of response.headers)if(key!=='set-cookie')res.setHeader(key,value);
     const cookies=response.headers.getSetCookie();if(cookies.length)res.setHeader('Set-Cookie',cookies);
+    res.setHeader('X-Request-Id',requestId);
+    if(response.status>=500)console.error(JSON.stringify({event:'upstream_error',request_id:requestId,method:req.method,path:req.url,status:response.status,duration_ms:Date.now()-started}));
     res.writeHead(response.status);res.end(req.method==='HEAD'?undefined:Buffer.from(await response.arrayBuffer()));
-  }catch(error){const malformed=error instanceof SyntaxError;if(!res.headersSent)res.writeHead(malformed?400:500,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({detail:malformed?'请求格式无效':'Request failed; consult local server log'}));}
+  }catch(error){const malformed=error instanceof SyntaxError,status=malformed?400:500;
+    if(!malformed)console.error(JSON.stringify({event:'request_failed',request_id:requestId,method:req.method,path:req.url,status,duration_ms:Date.now()-started,error:String(error?.message||error).slice(0,300),where:String(error?.stack||'').split('\n')[1]?.trim().slice(0,200)}));
+    if(!res.headersSent)res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','X-Request-Id':requestId});
+    res.end(JSON.stringify({detail:malformed?'请求格式无效':'Request failed; consult local server log',request_id:requestId}));}
 });
 server.listen(port,process.env.BIND_ADDRESS||'127.0.0.1',()=>console.log(`Local: ${origin.origin} · persistent data enabled`));
 if(process.env.EA_CLEANUP_ON_START==='true')await clean();
