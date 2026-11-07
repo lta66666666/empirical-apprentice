@@ -1,7 +1,10 @@
 services:
   joycode:
-    build: .
-    image: empirical-apprentice-joycode:20261105
+    build:
+      context: .
+      args:
+        IMAGE_TAG: ${IMAGE_TAG:-latest}
+    image: empirical-apprentice-joycode:${IMAGE_TAG:-latest}
     container_name: empirical-apprentice-joycode
     restart: unless-stopped
     env_file:

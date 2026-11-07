@@ -7,8 +7,8 @@
 ## 结论
 
 1. 未发现阻断性缺陷。核心链路（注册 → 研究准备 → 方案确认 → 云端 StatsPAI / 浏览器 webR → 双语言代码 → 导出）可稳定运行。
-2. 本轮已落地 2 项低风险补强：方法注册表元数据一致性、5xx 请求追踪与结构化日志。本地 CI 与全链路 E2E 均通过，**线上部署待授权**。
-3. 其余 17 项按 P1 / P2 / P3 排期，全部可在单容器内回滚，不引入架构级改动。
+2. 本轮已落地 5 项低风险补强：方法注册表元数据一致性、5xx 请求追踪与结构化日志、构建期 CI 门禁、镜像版本标签与回滚能力、部署后自动冒烟。线上构建与冒烟均已通过。
+3. 其余 14 项按 P1 / P2 / P3 排期，全部可在单容器内回滚，不引入架构级改动。
 
 ## 一、流程节点梳理与问题识别
 
@@ -75,12 +75,12 @@
 
 | ID | 优化项 | 优先级 | 成本 | 预期收益 | 落地建议 | 风险 | 状态 |
 |---|---|---|---|---|---|---|---|
-| O1 | 构建门禁未包含 CI | P1 | S | 防止带病镜像上线 | `Dockerfile` 在 `build-prototype.mjs` 后追加 `node scripts/ci-check.mjs`；或部署脚本先跑 `npm run ci` | 低（构建时长 +约 1 分钟） | 待办 |
-| O2 | 镜像无版本标识，回滚困难 | P1 | S | 一键回滚 | 构建时 `--build-arg IMAGE_TAG=$(git rev-parse --short HEAD)`，保留上一版镜像 | 低 | 待办 |
-| O3 | 部署后无自动冒烟 | P1 | S | 上线即发现回归 | 部署脚本末尾串行执行：`/healthz` → `/api/research/status` → 一次最小 OLS 任务 | 低 | 待办 |
+| O1 | 构建门禁未包含 CI | P1 | S | 防止带病镜像上线 | 已改为镜像内先 `build-prototype.mjs` 再 `ci-check.mjs`，失败即中止构建，旧容器继续服务 | 低（构建 +约 5 秒） | ✅ 已落地 |
+| O2 | 镜像无版本标识，回滚困难 | P1 | S | 一键回滚 | 已支持 `IMAGE_TAG` 构建参数与镜像标签，写入 `org.opencontainers.image.revision`；旧标签镜像保留 | 低 | ✅ 已落地 |
+| O3 | 部署后无自动冒烟 | P1 | S | 上线即发现回归 | 已新增 `scripts/post-deploy-smoke.mjs`，检查健康、登录页、静态资源、400 请求 ID，可选已登录状态核对 | 低 | ✅ 已落地 |
 | O4 | 无跨浏览器验证 | P1 | M | 覆盖评委可能使用的 Safari / Firefox | Playwright 增加 `firefox` / `webkit` 用例：登录 + 云端 DID + 双语言代码展示 | 中（webR 在非 Chromium 内核可能受限，需单独标注） | 待办 |
 | O5 | 方法注册表残留已下线引擎 | P2 | S | 对外元数据一致 | 已删除 `r_native` / `stata_native` 声明 | 低 | ✅ 已落地 |
-| O6 | 5xx 无日志、无请求 ID | P2 | S | 故障可定位 | 已增加 `X-Request-Id`、`upstream_error` / `request_failed` 结构化日志与响应 `request_id` | 低 | ✅ 已落地（待部署） |
+| O6 | 5xx 无日志、无请求 ID | P2 | S | 故障可定位 | 已增加 `X-Request-Id`、`upstream_error` / `request_failed` 结构化日志与响应 `request_id` | 低 | ✅ 已落地 |
 | O7 | 旧草稿带旧引擎进入执行阶段才失败 | P2 | S | 提前 422，减少无效等待 | 方案确认白名单收敛为 `statspai_cloud` / `browser_webr`；旧草稿给出"请重新选择执行方式"提示 | 中（需兼容历史草稿） | 待办 |
 | O8 | 执行器任务生命周期无结构化日志 | P2 | S | 队列与失败可观测 | `executor/app.py` 在 queued / estimating / succeeded / failed 各打一行 JSON（任务 ID、方法、耗时、状态） | 低 | 待办 |
 | O9 | `cloud-smoke.mjs` 断言已下线引擎 | P2 | S | 消除必失败的测试债 | 重写为云端 Stata 语法路径，或删除并在 README 注明由 `verify-experience-site.mjs` 覆盖 | 低 | 待办 |
@@ -133,18 +133,17 @@
 
 ### 无新增风险确认
 
-- 本轮两处改动均为"只增不减"或"只删元数据"：日志为附加输出，`X-Request-Id` 为附加响应头，`method_registry.engines` 无任何业务逻辑读取。
-- 回归证据：`node --check` 通过、CI 113 项通过、本地全链路 E2E 13 项通过、`build-prototype.mjs` 构建成功。
-- 部署回滚：`git revert` 对应提交 → 重新 `docker compose build && up -d`，无需数据迁移（未改表结构）。
-- 未部署项：线上仍为上一版（功能不受影响），部署需单独授权。
+- 本轮改动均为"只增不减"或"只删元数据"：日志为附加输出，`X-Request-Id` 为附加响应头，`method_registry.engines` 无任何业务逻辑读取，构建期门禁只在失败时阻断。
+- 回归证据：`node --check` 通过、CI 114 项通过（含镜像内构建期门禁）、本地全链路 E2E 13 项通过、`build-prototype.mjs` 构建成功、线上冒烟 5 项通过。
+- 部署回滚：线上镜像保留 `20261105` 与 `20261107-df9b102` 两个标签，执行 `sudo env IMAGE_TAG=<旧标签> docker compose up -d` 即可回滚，无需数据迁移（未改表结构）。
 
 ## 五、建议执行顺序
 
-**批次 A（已完成，待部署）**
-O5 + O6。验收：线上 `/api/research/status` 的 `method_registry.engines` 不再出现 `r_native` / `stata_native`；人为触发 500 时响应含 `request_id` 且 stderr 有对应日志。
+**批次 A（已完成并上线）**
+O5 + O6。线上 `/api/research/status` 的 `method_registry.engines` 已不再出现 `r_native` / `stata_native`；请求均带 `X-Request-Id`，畸形 JSON 请求可回传同一 ID。
 
-**批次 B（提交前，约半天）**
-O1 + O2 + O3 + O4（Firefox / Safari 至少各跑一条主流程）。验收：部署脚本一条命令完成构建、门禁、冒烟；失败即中止并保留上一版镜像。
+**批次 B（已完成）**
+O1 + O2 + O3 已上线：镜像内 CI 114 项通过后产出版本化镜像 `20261107-df9b102`，旧镜像 `20261105` 保留；部署后冒烟 5 项全部通过。O4（Firefox / Safari）仍需额外安装 Playwright 浏览器，单独排期。
 
 **批次 C（提交后一个迭代）**
 O7 + O8 + O9 + O10 + O13 + O15。验收：CI 恢复全部可执行用例；旧草稿收到明确 422；执行器日志可按任务 ID 追踪。

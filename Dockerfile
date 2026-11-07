@@ -1,6 +1,9 @@
 FROM node:24.14.0-bookworm-slim
+ARG IMAGE_TAG=dev
+LABEL org.opencontainers.image.revision=$IMAGE_TAG
 RUN apt-get update && apt-get install -y --no-install-recommends python3.11 python3.11-venv ca-certificates \
     && rm -rf /var/lib/apt/lists/* && python3.11 -m venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
 WORKDIR /app
 # 国内构建加速：PyPI 走清华镜像；statspai 仍按 requirements 中的 GitHub 固定提交拉取
 ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple PIP_DEFAULT_TIMEOUT=60
@@ -15,8 +18,9 @@ COPY standalone ./standalone
 COPY executor ./executor
 COPY .openai/hosting.json ./.openai/hosting.json
 COPY package.json ./package.json
+COPY Dockerfile ./Dockerfile
 COPY deploy/joycode ./deploy/joycode
-RUN mkdir -p docs && node scripts/build-prototype.mjs && cp deploy/joycode/start.sh /bin/start.sh \
+RUN mkdir -p docs outputs && node scripts/build-prototype.mjs && node scripts/ci-check.mjs && cp deploy/joycode/start.sh /bin/start.sh \
     && sed -i 's/\r$//' /bin/start.sh && chmod 755 /bin/start.sh \
     && mkdir -p /data/web /data/executor && chown -R node:node /data
 USER node
