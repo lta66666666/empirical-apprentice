@@ -1,11 +1,15 @@
 FROM node:24.14.0-bookworm-slim
 ARG IMAGE_TAG=dev
 LABEL org.opencontainers.image.revision=$IMAGE_TAG
-RUN apt-get update && apt-get install -y --no-install-recommends python3.11 python3.11-venv ca-certificates \
+# 构建加速：Debian 源切换到腾讯云镜像（境内实测 45 MB/s，官方源仅约 15 kB/s）
+RUN for f in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources; do \
+      if [ -f "$f" ]; then sed -i 's|deb.debian.org|mirrors.tencent.com|g' "$f"; fi; \
+    done \
+    && apt-get update && apt-get install -y --no-install-recommends python3.11 python3.11-venv ca-certificates \
     && rm -rf /var/lib/apt/lists/* && python3.11 -m venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
 WORKDIR /app
-# 国内构建加速：PyPI 走清华镜像；statspai 仍按 requirements 中的 GitHub 固定提交拉取
+# 国内构建加速：PyPI 走清华镜像；statspai 固定提交走 ghfast.top 代理（内容仍为同一 commit）
 ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple PIP_DEFAULT_TIMEOUT=60
 COPY deploy/joycode/requirements-linux.txt /app/deploy/joycode/requirements-linux.txt
 RUN /opt/venv/bin/pip install --no-cache-dir -r deploy/joycode/requirements-linux.txt
