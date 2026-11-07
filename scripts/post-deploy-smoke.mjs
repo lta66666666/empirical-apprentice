@@ -26,6 +26,18 @@ await step('登录页 200 且带 X-Request-Id', async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type') || '', /text\/html/);
   assert.ok(response.headers.get('x-request-id'), '缺少 X-Request-Id（非 standalone 部署可豁免）');
+  assert.equal(response.headers.get('x-frame-options'), 'DENY');
+  assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  assert.match(response.headers.get('content-security-policy-report-only') || '', /report-uri \/api\/csp-report/);
+});
+
+await step('CSP 上报端点返回 204', async () => {
+  const response = await fetch(base + '/api/csp-report', {
+    method: 'POST',
+    headers: { Origin: origin, 'Content-Type': 'application/csp-report' },
+    body: JSON.stringify({ 'csp-report': { 'document-uri': origin + '/login', 'violated-directive': 'script-src', 'blocked-uri': 'inline' } }),
+  });
+  assert.equal(response.status, 204);
 });
 
 await step('静态资源可访问', async () => {

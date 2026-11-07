@@ -109,8 +109,10 @@ statsmodels==0.15.0
     #   -r empirical_apprentice_joycode/deploy/joycode/requirements.in
     #   linearmodels
     #   statspai
-# 构建加速：同一固定提交经 ghfast.top 国内代理拉取（实测 1.88 MB/s，直连 github.com 约 32 kB/s）
-statspai @ https://ghfast.top/https://github.com/brycewang-stanford/StatsPAI/archive/9f12d999d23a5bc2f2fa5fca38fe498aeea38752.zip
+# 构建加速：固定提交源码包预置到构建上下文（文件名含 commit，满足 direct_url 审计校验）
+# 获取命令：wget -O vendor/statspai-9f12d999d23a5bc2f2fa5fca38fe498aeea38752.zip \
+#   https://github.com/brycewang-stanford/StatsPAI/archive/9f12d999d23a5bc2f2fa5fca38fe498aeea38752.zip
+statspai @ file:///app/vendor/statspai-9f12d999d23a5bc2f2fa5fca38fe498aeea38752.zip
     # via -r empirical_apprentice_joycode/deploy/joycode/requirements.in
 tabulate==0.10.0
     # via

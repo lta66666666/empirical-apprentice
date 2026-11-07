@@ -13,6 +13,11 @@ const headers = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'require-corp',
   'Cross-Origin-Resource-Policy': 'same-origin',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  // 先以 Report-Only 观察违规（含内联启动脚本），确认无新增后再收紧为强制策略。
+  'Content-Security-Policy-Report-Only': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; report-uri /api/csp-report",
   'Cache-Control': 'no-store',
 };
 
@@ -78,6 +83,18 @@ export default {
     const preview=env.AUTH_ROLLOUT==='preview';
     if(preview&&['/','/app','/static/index.html'].includes(path))return staticResponse(path);
     if(preview&&path==='/trial')return new Response(page,{headers:{...headers,'Content-Type':'text/html; charset=utf-8'}});
+    // CSP 违规上报：仅记录必要字段，不接受任何写操作，返回 204 避免浏览器重试。
+    if(path==='/api/csp-report'&&request.method==='POST'){
+      try{
+        const body=(await request.text()).slice(0,2000);
+        const report=JSON.parse(body)?.['csp-report']||{};
+        console.warn(JSON.stringify({event:'csp_violation',
+          document_uri:String(report['document-uri']||'').slice(0,300),
+          violated_directive:String(report['violated-directive']||report['effective-directive']||'').slice(0,200),
+          blocked_uri:String(report['blocked-uri']||'').slice(0,300)}));
+      }catch{}
+      return new Response(null,{status:204,headers});
+    }
     if(path.startsWith('/api/auth/'))return authEndpoint(request,env,path);
     if(['/','/app','/home','/login','/register','/learn','/analysis','/static/index.html','/static/home.html','/trial'].includes(path)){
       const user=env.DB?await identity(request,env):null;

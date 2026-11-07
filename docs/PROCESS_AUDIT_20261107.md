@@ -86,12 +86,12 @@
 | O9 | `cloud-smoke.mjs` 断言已下线引擎 | P2 | S | 消除必失败的测试债 | 已删除脚本，`executor/README.md` 改指向 `verify-experience-site.mjs` | 低 | ✅ 已落地 |
 | O10 | 旧回归脚本 schema 漂移 / 缺依赖 | P2 | M | 恢复自动化覆盖 | `interaction-regression.mjs` 已补 `state_version`；其余断言仍按旧课程/对话流，需重写；`jsdom` 依赖仍缺 | 中（测试专用，不影响产品） | 部分完成 |
 | O11 | 静态资源全部 `no-store` | P2 | S | 降低重复访问流量、加快二次打开 | 已对 js/css/svg/woff 设 `public, max-age=300`，HTML 与接口保持 `no-store` | 中（需确认发版后版本串确实更新） | ✅ 已落地 |
-| O12 | 缺 CSP 等安全响应头 | P2 | M | 降低 XSS / 点击劫持面 | 先 `Content-Security-Policy-Report-Only` 收集违规，再切白名单；同步加 `X-Frame-Options`、`Referrer-Policy` | 中（页面存在内联脚本，需逐项放行） | 待办 |
+| O12 | 缺 CSP 等安全响应头 | P2 | M | 降低 XSS / 点击劫持面 | 已加 `Content-Security-Policy-Report-Only`（含 `report-uri /api/csp-report`）、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy`；上报端点仅记录违规字段并返回 204 | 中（页面存在内联脚本，需观察违规后再收紧） | 已完成（Report-Only） |
 | O13 | 执行器错误文案英文 | P2 | S | 用户体验一致 | 校验错误、排队超时、中断与重启提示已统一为中文 | 低 | ✅ 已落地 |
 | O14 | `sessions.js` / `research.js` 过大 | P2 | M | 降低维护成本与回归风险 | 按职责拆出 project、learning、case 三个模块，保持现有导出不变 | 中（需回归 113 项 CI） | 待办 |
 | O15 | 健康检查不覆盖执行器 | P2 | S | 提前发现"网站正常但算不出来" | `/healthz` 已并行探测执行器可达性并返回 `executor: ok/down/not_configured`，数据库失败仍返回 503 | 低 | ✅ 已落地 |
 | O16 | 无失败注入 / 弱网 / 并发压测 | P2 | M | 稳定性信心 | 增加四类脚本化用例：模型 5xx、执行器超时、重复提交、队列排队超时 | 中 | 待办 |
-| O17 | 无覆盖率统计 | P3 | S | 质量趋势 | CI 接入 `c8`，仅上报不设硬阈值 | 低 | 待办 |
+| O17 | 无覆盖率统计 | P3 | S | 质量趋势 | CI 接入 `c8`，仅上报不设硬阈值 | 低 | 暂缓（本机磁盘空间不足，c8 安装失败） |
 | O18 | `/api/health` 硬编码 `browser_webr` | P3 | S | 信息准确 | 已改为 `execution_locations: ['statspai_cloud','browser_webr']` | 低 | ✅ 已落地 |
 | O19 | "整理方案 → 确认 → 运行"三步 | P3 | M | 演示节奏更快 | 仅在"方案未变更且引擎就绪"时提供"确认并运行"，保留教学确认语义 | 中（涉及教学流程语义） | 待办 |
 

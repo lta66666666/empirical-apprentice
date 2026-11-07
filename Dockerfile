@@ -9,10 +9,12 @@ RUN for f in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources; do \
     && rm -rf /var/lib/apt/lists/* && python3.11 -m venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
 WORKDIR /app
-# 国内构建加速：PyPI 走清华镜像；statspai 固定提交走 ghfast.top 代理（内容仍为同一 commit）
+# 国内构建加速：PyPI 走清华镜像；statspai 固定提交源码包预置在 vendor/（48MB，按 sha256 校验，不入库）
 ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple PIP_DEFAULT_TIMEOUT=60
+COPY vendor/statspai-9f12d999d23a5bc2f2fa5fca38fe498aeea38752.zip /app/vendor/
 COPY deploy/joycode/requirements-linux.txt /app/deploy/joycode/requirements-linux.txt
-RUN /opt/venv/bin/pip install --no-cache-dir -r deploy/joycode/requirements-linux.txt
+RUN echo "d4c8c0d3a437bb3e46e7ca9c74324bbc54bf16deaa55d14c43a0cd321a74460c  /app/vendor/statspai-9f12d999d23a5bc2f2fa5fca38fe498aeea38752.zip" | sha256sum -c - \
+    && /opt/venv/bin/pip install --no-cache-dir -r deploy/joycode/requirements-linux.txt
 COPY worker ./worker
 COPY static ./static
 COPY scripts ./scripts

@@ -51,3 +51,5 @@ next-env.d.ts
 /deploy/backups/
 
 /local_stata/.venv/
+# 构建用固定提交源码包（48MB），按 Dockerfile 内 sha256 校验，不入库
+/vendor/*.zip
