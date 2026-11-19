@@ -193,8 +193,16 @@ async def worker():
             task.update(status='failed',error=str(error)[:500],execution_log=log)
         finally:
             active.pop(task['id'],None)
-            # Contains only server-created UUID child directory.
-            shutil.rmtree(directory)
+            # Contains only server-created UUID child directory; MCP Stata may release the cwd late.
+            for attempt in range(4):
+                try:
+                    shutil.rmtree(directory)
+                    break
+                except OSError as error:
+                    if attempt==3:
+                        log_event('cleanup_deferred',task_id=task['id'],error=f'{type(error).__name__}: {error}')
+                        break
+                    await asyncio.sleep(.25)
             update(task)
             log_event('task_finished', task_id=task['id'], method=method, status=task['status'], duration_ms=int((time.time()-started_at)*1000), error=str(task.get('error',''))[:160])
         if asyncio.current_task().cancelling():

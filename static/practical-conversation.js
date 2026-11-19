@@ -39,7 +39,11 @@
   }
   const local=el('details','pc-local');local.id='pcLocalStata';local.append(el('summary','','本机计算 · 配对、批准与结果（试验）'));
   local.append(el('p','','真实 Stata 需要有效安装和许可；本机助手在站内仅保留代码教学，不执行计算。网页无法直接访问电脑的 localhost。原始输入留在本机。'));
+  const steps=el('ol','pc-local-steps');
+  for(const [n,t] of [['01','下载并安装 Windows 助手'],['02','填写站点并生成六位配对码'],['03','本机核对代码并批准执行']]){const li=el('li');li.append(el('b','',n),document.createTextNode(t));steps.append(li);}
+  local.append(steps);
   const kit=el('a','btn-secondary','下载 Windows 本机助手');kit.href='/static/local-stata-assistant.zip';kit.download='local-stata-assistant.zip';local.append(kit);
+  const manual=el('a','btn-secondary','安装与配对手册');manual.href='/static/local-assistant-guide.html';manual.target='_blank';manual.rel='noopener';local.append(manual);
   const open=el('a','btn-secondary','打开本机批准窗口');open.href='http://127.0.0.1:8767/';open.target='_blank';open.rel='noopener';local.append(open);
   const pairCode=el('input');pairCode.placeholder='助手生成的六位配对码';pairCode.inputMode='numeric';pairCode.maxLength=6;pairCode.setAttribute('aria-label','六位配对码');local.append(pairCode);
   const localState=el('p','muted'),localFields=el('div','pc-local-fields'),taskList=el('div');localState.setAttribute('role','status');local.append(localState);
@@ -64,7 +68,7 @@
   const sameLabel=el('label','research-check'),same=el('input');same.type='checkbox';sameLabel.append(same,document.createTextNode('已核对同批实施，不存在分批或时点冲突'));
   const dropLabel=el('label','research-check'),drop=el('input');drop.type='checkbox';dropLabel.append(drop,document.createTextNode('允许删除选定变量的缺失行；否则阻止执行'));
   localFields.prepend(method);localFields.append(el('p','','解释变量／DID控制变量'),predictors,year,sameLabel,dropLabel);local.append(localFields);
-  const goal=el('textarea');goal.rows=2;goal.placeholder='操作目标与需要解释的问题';const code=el('textarea');code.rows=12;code.placeholder='待本机预览批准的 Stata 代码（输入为 normalized.csv，列映射见上方）';code.hidden=true;local.append(goal,code);window.eaLocalCode=code;window.eaLocalCodeMode=()=>{mode.value="code";mode.onchange();};
+  const goal=el('textarea');goal.rows=2;goal.placeholder='操作目标与需要解释的问题';goal.setAttribute('aria-label','操作目标与需要解释的问题');const code=el('textarea');code.rows=12;code.placeholder='待本机预览批准的 Stata 代码（输入为 normalized.csv，列映射见上方）';code.setAttribute('aria-label','本机 Stata 代码预览');code.hidden=true;local.append(goal,code);window.eaLocalCode=code;window.eaLocalCodeMode=()=>{mode.value="code";mode.onchange();};
   const localDictionary=el('details'),unitFields=el('div');localDictionary.append(el('summary','','本机数据变量字典：含义、单位、口径与来源'),el('p','muted','填写不会自动核实来源。未知内容请标为待核实；提交将改变资料版本，需要重新确认。'),unitFields,button('保存变量字典，重新核对方案','btn-secondary',async()=>{const dictionary=Object.fromEntries([...unitFields.querySelectorAll('input')].map(n=>[n.dataset.column,n.value]));if(await mutate('variable-dictionary',{dictionary},{method:'PUT'})){localConfirmed=false;confirm.checked=false;localState.textContent='字典已保存，资料版本变化，请重新核对。';}}));advanced.append(localDictionary);
   const ai=button('AI 生成待批准代码','btn-secondary',()=>localAction(ai,'正在生成待本机预览的代码，期间可继续编辑…',async c=>{const serial=formSerial,question=goal.value,original=code.value;const result=await call('tasks/code',{question},'POST',c.session);if(!current(c))return;if(serial!==formSerial||original!==code.value||question!==goal.value){const proposal=el('details','pc-code-proposal');proposal.open=true;proposal.append(el('summary','','代码建议已返回；保留当前人工编辑'),el('pre','',result.code),el('p','',result.explanation),button('确认替换为这份建议代码','btn-secondary',()=>{if(!window.confirm('用这份建议替换当前代码？替换后需要重新核对并在本机批准。'))return;code.value=result.code;code.dispatchEvent(new Event('input'));proposal.remove();}));local.append(proposal);localState.textContent='代码建议已保存为预览，没有覆盖你等待期间的修改。';return;}code.value=result.code;code.dispatchEvent(new Event('input'));localState.textContent=result.explanation;}));ai.hidden=true;local.append(ai);
   const confirmLabel=el('label','research-check'),confirm=el('input');confirm.type='checkbox';confirmLabel.append(confirm,document.createTextNode('已核对以上输入摘要、方案和代码；仍需在本机批准执行'));local.append(confirmLabel);

@@ -500,9 +500,19 @@ export async function handleResearch(request, env, owner, path) {
       job.reflections.push(item); job.reflection = item;
       job.record_version=(job.record_version||1)+1;
       job.last_activity=Date.now();
-      const saved=await env.DB.prepare("UPDATE jobs SET body=?,last_activity=? WHERE id=? AND owner=? AND COALESCE(json_extract(body,'$.record_version'),1)=?")
+      let saved=await env.DB.prepare("UPDATE jobs SET body=?,last_activity=? WHERE id=? AND owner=? AND COALESCE(json_extract(body,'$.record_version'),1)=?")
         .bind(JSON.stringify(job),job.last_activity,job.id,job.owner,previousVersion).run();
-      if(!saved.meta.changes)return fault('结果记录已变化。解释草稿保留，请读取最新记录后再提交。',409);
+      if(!saved.meta.changes){
+        // AI 解读、复算等后台更新可能先写入新版本；解释内容本身未变，重读后仅重试一次版本写入。
+        const fresh=await getJob(env,job.owner,job.id);
+        if(!fresh)return fault('任务记录已变化，请重新读取后再提交解释。',409);
+        if(fresh.reflections.length!==job.reflections.length-1)return fault('解释记录已在另一标签页修订。草稿保留，请读取最新反馈后再提交。',409);
+        const freshVersion=fresh.record_version||1;
+        fresh.reflections.push(item);fresh.reflection=item;fresh.record_version=freshVersion+1;fresh.last_activity=Date.now();
+        saved=await env.DB.prepare("UPDATE jobs SET body=?,last_activity=? WHERE id=? AND owner=? AND COALESCE(json_extract(body,'$.record_version'),1)=?")
+          .bind(JSON.stringify(fresh),fresh.last_activity,fresh.id,fresh.owner,freshVersion).run();
+        if(!saved.meta.changes)return fault('结果记录已变化。解释草稿保留，请读取最新记录后再提交。',409);
+      }
       return resultJson(item);
     }
     if (tail === 'rerun' && request.method === 'POST') {

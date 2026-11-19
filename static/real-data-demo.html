@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>真实数据来源 · 实证学徒</title>
+<style>
+:root{--ink:#17352d;--muted:#62756e;--teal:#087e75;--clay:#c2683d;--line:#dfe8e3;--soft:#f5f8f6}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:var(--ink);font:16px/1.7 "Noto Serif CJK SC","Songti SC",Georgia,serif}
+main{max-width:860px;margin:0 auto;padding:44px 24px 60px}
+h1{font-size:30px;line-height:1.25;margin:0 0 8px}
+.sub{color:var(--muted);margin:0 0 28px}
+h2{font-size:18px;margin:34px 0 12px;border-bottom:1px solid var(--line);padding-bottom:7px}
+p{margin:10px 0}
+a{color:var(--teal);text-decoration-thickness:1px;text-underline-offset:3px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0 4px}
+.stat{border:1px solid var(--line);border-radius:10px;padding:14px 15px;background:var(--soft)}
+.stat b{display:block;font-family:ui-monospace,Consolas,monospace;font-size:24px;line-height:1.3;color:var(--teal)}
+.stat span{font-size:13px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:500;white-space:nowrap}
+td.num{font-family:ui-monospace,Consolas,monospace;text-align:right;white-space:nowrap}
+.note{border-left:3px solid var(--clay);background:#fbf6f2;padding:12px 15px;margin:16px 0;font-size:14px;color:#5c4032}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin:26px 0 8px}
+.btn{display:inline-block;border:1px solid var(--teal);color:var(--teal);border-radius:8px;padding:9px 15px;text-decoration:none;font-size:14px}
+.btn.solid{background:var(--teal);color:#fff}
+.hash-cell{word-break:break-all;font-family:ui-monospace,Consolas,monospace;font-size:13px;text-align:left}
+.copy-btn{margin-left:8px;padding:3px 9px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--teal);font:12px/1.6 system-ui,sans-serif;cursor:pointer}
+.copy-btn:hover{background:var(--soft)}
+.copy-status{min-height:1.4em;margin:0;color:var(--muted);font-size:13px}
+footer{margin-top:42px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+@media (max-width:640px){main{padding:30px 18px 46px}h1{font-size:24px}.stats{grid-template-columns:repeat(2,1fr)}table{font-size:13px}th,td{padding:8px 6px}}
+</style>
+</head>
+<body>
+<main>
+  <h1>真实数据来源</h1>
+  <p class="sub">World Bank · World Development Indicators · 中国 2000–2023 · CC BY 4.0</p>
+
+  <div class="stats">
+    <div class="stat"><b>24</b><span>年度观测</span></div>
+    <div class="stat"><b>3</b><span>WDI 指标</span></div>
+    <div class="stat"><b>0</b><span>缺失值</span></div>
+    <div class="stat"><b>2026-11-09</b><span>抓取日期</span></div>
+  </div>
+
+  <h2>来源与许可</h2>
+  <table>
+    <tr><th>发布机构</th><td>World Bank（世界银行）</td></tr>
+    <tr><th>数据集</th><td>World Development Indicators (WDI)</td></tr>
+    <tr><th>覆盖</th><td>中国（CHN），2000–2023，年度</td></tr>
+    <tr><th>指标</th><td><code>IT.NET.USER.ZS</code> 互联网使用率；<code>SL.GDP.PCAP.EM.KD</code> 人均产出（2021 PPP 美元）；<code>NE.GDI.TOTL.ZS</code> 资本形成（% GDP）</td></tr>
+    <tr><th>许可</th><td>CC BY 4.0，署名 World Bank</td></tr>
+    <tr><th>引用</th><td><a href="https://datacatalog.worldbank.org/dataset/world-development-indicators" target="_blank" rel="noopener">World Bank. World Development Indicators</a></td></tr>
+    <tr><th>SHA256</th><td class="hash-cell"><code id="hashValue">504602230ad052d9fd24a5db10b8f3524bce9011fa96f7c59eea0173b3b0542e</code><button class="copy-btn" type="button" id="copyHash">复制</button></td></tr>
+  </table>
+
+  <h2>真实数据描述性复核（Stata 18）</h2>
+  <p>被解释变量为 <code>ln(人均产出)</code>，Newey–West 标准误。只做描述性核对，不作因果解释。</p>
+  <table>
+    <thead><tr><th>模型</th><th>变量</th><th>系数</th><th>p</th></tr></thead>
+    <tbody>
+      <tr><td>水平值 + 年份趋势<br><span class="sub" style="margin:0">N=24，R²=0.996</span></td><td>互联网使用率</td><td class="num">−0.00135</td><td class="num">0.549</td></tr>
+      <tr><td></td><td>资本形成</td><td class="num">0.01789</td><td class="num">&lt;0.001</td></tr>
+      <tr><td></td><td>年份</td><td class="num">0.07969</td><td class="num">&lt;0.001</td></tr>
+      <tr><td>一阶差分<br><span class="sub" style="margin:0">N=23，R²=0.129</span></td><td>使用率变化</td><td class="num">−0.000982</td><td class="num">0.252</td></tr>
+      <tr><td></td><td>资本形成变化</td><td class="num">0.004387</td><td class="num">0.055</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    样本只有 24 个国家年度点，指标口径粗，存在遗漏变量与反向因果。结果没有显示显著正向关联，<b>不能据此否定数字化作用，也不能宣称因果效应</b>。随机 DID 演示使用的是另一份模拟城市面板，与本页真实数据分开。
+  </div>
+
+  <div class="actions">
+    <a class="btn solid" href="/static/real-data/world-bank-china-2000-2023.csv" download>下载真实数据 CSV</a>
+    <a class="btn" href="/static/real-data/source.json" target="_blank" rel="noopener">查看来源元数据</a>
+    <a class="btn" href="/static/judge-guide.html">验收指南</a>
+    <a class="btn" href="/home">返回首页</a>
+  </div>
+  <p id="copyStatus" class="copy-status" role="status" aria-live="polite"></p>
+
+  <footer>实证学徒 · 真实数据来源 · World Bank WDI · 2026-11-09</footer>
+</main>
+<script defer src="/static/real-data-actions.js"></script>
+</body>
+</html>

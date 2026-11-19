@@ -68,7 +68,7 @@ with TestClient(app) as client:
     evidence['checks'].append('completed results survive restart')
 
 async def local_stata():
-    if not os.getenv('EA_STATA_EXECUTABLE'):return
+    if not (os.getenv('EA_STATA_EXECUTABLE') or os.getenv('EA_STATA_MCP_URL')):return
     for method in ('ols','panel_fe','did'):
         body=payload(method,'stata_native')
         with tempfile.TemporaryDirectory(prefix='ea-stata-',dir=ROOT) as tmp:

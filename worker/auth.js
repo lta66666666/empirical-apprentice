@@ -28,9 +28,15 @@ export async function identity(request,env){
   const owners=await env.DB.prepare('SELECT owner FROM account_owners WHERE user_id=?').bind(row.id).all();return {...row,owners:owners.results.map(x=>x.owner)};
 }
 async function loginSession(request,env,user){const token=[...crypto.getRandomValues(new Uint8Array(32))].map(x=>x.toString(16).padStart(2,'0')).join('');await env.DB.prepare('INSERT INTO auth_sessions VALUES(?,?,?)').bind(await digest(token),user.id,Date.now()+WEEK).run();return json({user:{id:user.id,username:user.username},redirect:'/home'},200,{'Set-Cookie':authCookie(request,token)});}
+export function originAllowed(request,env){
+  const origin=request.headers.get('Origin');
+  if(!origin)return false;
+  if(origin===new URL(request.url).origin)return true;
+  return (env.EA_ALLOWED_ORIGINS||'').split(',').map(x=>x.trim()).filter(Boolean).includes(origin);
+}
 export async function authEndpoint(request,env,path){
   if(!env.DB)return json({detail:'账号存储暂时不可用'},503);
-  if(!['GET','HEAD'].includes(request.method)&&request.headers.get('Origin')!==new URL(request.url).origin)return json({detail:'请求来源不允许'},403);
+  if(!['GET','HEAD'].includes(request.method)&&!originAllowed(request,env))return json({detail:'请求来源不允许'},403);
   const user=await identity(request,env);
   if(path==='/api/auth/me')return user?json({user:{id:user.id,username:user.username},retention_days:7}):json({detail:'请先登录'},401);
   if(path==='/api/auth/logout'&&request.method==='POST'){const token=cookie(request,'ea_auth');if(token)await env.DB.prepare('DELETE FROM auth_sessions WHERE token_hash=?').bind(await digest(token)).run();return json({logged_out:true},200,{'Set-Cookie':authCookie(request,'',0)});}

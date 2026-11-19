@@ -1,0 +1,44 @@
+{
+  "dataset": "World Bank World Development Indicators (WDI)",
+  "publisher": "World Bank",
+  "country": "China (CHN)",
+  "period": "2000-2023",
+  "retrieved_at": "2026-11-08T17:12:55.662Z",
+  "api_base": "https://api.worldbank.org/v2",
+  "indicators": {
+    "internet": {
+      "code": "IT.NET.USER.ZS",
+      "name": "Individuals using the Internet (% of population)",
+      "url": "https://api.worldbank.org/v2/country/CHN/indicator/IT.NET.USER.ZS?format=json&per_page=100&date=2000:2023",
+      "last_updated": "2026-10-08"
+    },
+    "productivity": {
+      "code": "SL.GDP.PCAP.EM.KD",
+      "name": "GDP per person employed (constant 2021 PPP $)",
+      "url": "https://api.worldbank.org/v2/country/CHN/indicator/SL.GDP.PCAP.EM.KD?format=json&per_page=100&date=2000:2023",
+      "last_updated": "2026-10-08"
+    },
+    "investment": {
+      "code": "NE.GDI.TOTL.ZS",
+      "name": "Gross capital formation (% of GDP)",
+      "url": "https://api.worldbank.org/v2/country/CHN/indicator/NE.GDI.TOTL.ZS?format=json&per_page=100&date=2000:2023",
+      "last_updated": "2026-10-08"
+    }
+  },
+  "license": "CC BY 4.0",
+  "citation": "World Bank. World Development Indicators. Washington, D.C.: World Bank Group. https://datacatalog.worldbank.org/dataset/world-development-indicators",
+  "file": "static/real-data/world-bank-china-2000-2023.csv",
+  "rows": 24,
+  "columns": [
+    "year",
+    "internet_users_pct",
+    "gdp_per_person_employed_ppp",
+    "gross_capital_formation_pct"
+  ],
+  "sha256": "504602230ad052d9fd24a5db10b8f3524bce9011fa96f7c59eea0173b3b0542e",
+  "limits": [
+    "国家年度总量，不是城市或企业面板。",
+    "互联网使用率与人均产出只能作描述性关联，不能单独支撑因果结论。",
+    "2021 PPP 美元与百分比指标口径见 World Bank 元数据。"
+  ]
+}

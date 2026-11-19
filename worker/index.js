@@ -7,7 +7,7 @@ import { handleTutorial } from './tutorial.js';
 import { practiceCases } from './content.js';
 import { handlePractical } from './practical.js';
 import { handleLocalStata } from './local-stata.js';
-import {authEndpoint,identity,requestOwner,cookie} from './auth.js';
+import {authEndpoint,identity,requestOwner,cookie,originAllowed} from './auth.js';
 
 const headers = {
   'Cross-Origin-Opener-Policy': 'same-origin',
@@ -109,7 +109,7 @@ export default {
     if(path.startsWith('/api/local-stata/agent/'))return await handleLocalStata(request,env,null,path);
     if (path.startsWith('/api/sessions') || path.startsWith('/api/research') || path.startsWith('/api/tutorial') || path.startsWith('/api/local-stata/') || path==='/api/knowledge') {
       const isAgent=path.startsWith('/api/local-stata/agent/');
-      if (!isAgent && !['GET', 'HEAD'].includes(request.method) && request.headers.get('Origin') !== new URL(request.url).origin) {
+      if (!isAgent && !['GET', 'HEAD'].includes(request.method) && !originAllowed(request,env)) {
         return new Response('Forbidden', { status: 403, headers });
       }
       const user=isAgent?null:await identity(request,env);
@@ -165,7 +165,7 @@ export default {
       catch { return new Response('Retention cleanup failed', { status: 503, headers }); }
     }
     if (path === '/api/probe' && request.method === 'POST') {
-      if (request.headers.get('Origin') !== new URL(request.url).origin) return new Response('Forbidden', { status: 403, headers });
+      if (!originAllowed(request,env)) return new Response('Forbidden', { status: 403, headers });
       if (!env.DB || !env.FILES) return new Response('Storage unavailable', { status: 503, headers });
       const id = crypto.randomUUID();
       const fileKey = 'retention-probe/' + id + '.txt';

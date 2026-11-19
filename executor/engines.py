@@ -55,9 +55,14 @@ async def capabilities():
             r={'ready':ready,'status':'可执行' if ready else '环境待验收','reason':f'原生 R {R_VERSION_PIN} / fixest {FIXEST_VERSION_PIN}' if ready else f'必须安装 R {R_VERSION_PIN} 与 fixest {FIXEST_VERSION_PIN}','versions':versions}
         except Exception: r={'ready':False,'status':'环境待验收','reason':'原生 R 运行检查失败'}
     stata={'ready':False,'status':'仅教学','reason':'仅提供对应 Stata 代码，不在本站执行；计算请使用云端计算（Stata 命令语法）'}
+    from . import stata_mcp
+    if stata_mcp.configured():
+        try:ok,reason=await asyncio.to_thread(stata_mcp.probe)
+        except Exception as error:ok,reason=False,f'{type(error).__name__}: {error}'
+        stata={'ready':ok,'status':'可执行' if ok else '环境待验收','reason':reason,'versions':{}}
     return {'statspai_cloud':stats,'r_native':r,'stata_native':stata,'eviews_native':{'ready':False,'status':'未接入','reason':'尚无适用的网站集成方案'}}
 
-def stata_script(p):
+def stata_script(p, exit_after=True):
     rhs=' '.join((['policy_effect'] if p['method']=='did' else [])+p['predictors'])
     variables=list(dict.fromkeys(v for v in [p['outcome'],*p['predictors'],p.get('unit'),p.get('time'),p.get('treated'),p.get('cluster')] if v))
     numeric=list(dict.fromkeys([p['outcome'],*p['predictors']]+([p['time']] if p['method']!='ols' else [])+([p['treated']] if p['method']=='did' else [])))
@@ -79,7 +84,8 @@ def stata_script(p):
         for g in (0,1):
             for t in (0,1):lines += [f'count if {p["treated"]}=={g} & policy_post=={t}','assert r(N)>0']
     command=f'regress {p["outcome"]} {rhs}'+(f', {vce}' if vce else '') if p['method']=='ols' else f'xtreg {p["outcome"]} {rhs} i.{p["time"]}, fe {vce}'
-    lines += [command,'matrix ea_b = e(b)','matrix ea_v = e(V)','scalar ea_df = e(df_r)','scalar ea_n = e(N)','generate byte ea_sample = e(sample)','preserve','keep if ea_sample','keep ea_row','export delimited using sample.csv, replace','restore','file open meta using metadata.csv, write replace','file write meta "version,n_used,df" _n','file write meta (c(stata_version)) "," (scalar(ea_n)) "," (scalar(ea_df)) _n','file close meta','file open results using coefficients.csv, write replace','file write results "term,estimate,std_error,p_value,ci_low,ci_high" _n','local names : colnames ea_b','forvalues j=1/`=colsof(ea_b)\' {','local name : word `j\' of `names\'','scalar ea_est = ea_b[1,`j\']','scalar ea_se = sqrt(ea_v[`j\',`j\'])','scalar ea_p = 2*ttail(scalar(ea_df),abs(scalar(ea_est)/scalar(ea_se)))','scalar ea_crit = invttail(scalar(ea_df),.025)','file write results "`name\'," %24.17g (scalar(ea_est)) "," %24.17g (scalar(ea_se)) "," %24.17g (scalar(ea_p)) "," %24.17g (scalar(ea_est)-scalar(ea_crit)*scalar(ea_se)) "," %24.17g (scalar(ea_est)+scalar(ea_crit)*scalar(ea_se)) _n','}','file close results','log close _all','exit, clear']
+    lines += [command,'matrix ea_b = e(b)','matrix ea_v = e(V)','scalar ea_df = e(df_r)','scalar ea_n = e(N)','generate byte ea_sample = e(sample)','preserve','keep if ea_sample','keep ea_row','export delimited using sample.csv, replace','restore','file open meta using metadata.csv, write replace','file write meta "version,n_used,df" _n','file write meta (c(stata_version)) "," (scalar(ea_n)) "," (scalar(ea_df)) _n','file close meta','file open results using coefficients.csv, write replace','file write results "term,estimate,std_error,p_value,ci_low,ci_high" _n','local names : colnames ea_b','forvalues j=1/`=colsof(ea_b)\' {','local name : word `j\' of `names\'','scalar ea_est = ea_b[1,`j\']','scalar ea_se = sqrt(ea_v[`j\',`j\'])','scalar ea_p = 2*ttail(scalar(ea_df),abs(scalar(ea_est)/scalar(ea_se)))','scalar ea_crit = invttail(scalar(ea_df),.025)','file write results "`name\'," %24.17g (scalar(ea_est)) "," %24.17g (scalar(ea_se)) "," %24.17g (scalar(ea_p)) "," %24.17g (scalar(ea_est)-scalar(ea_crit)*scalar(ea_se)) "," %24.17g (scalar(ea_est)+scalar(ea_crit)*scalar(ea_se)) _n','}','file close results','log close _all']
+    if exit_after:lines.append('exit, clear')
     return '\n'.join(lines)+'\n',command
 
 async def execute(payload,directory,development=False):
@@ -111,14 +117,25 @@ async def execute(payload,directory,development=False):
         result['software_version']=result['r_version'];result['inference']={'vcov':p['vcov'],'cluster':p['cluster'],'confidence':.95,'correction':'fixest default ssc','df':result.get('df_t')}
         artifacts={'estimate.R':script,'parameters.json':json.dumps(p,ensure_ascii=False),'execution.log':log,'session-info.txt':(directory/'session-info.txt').read_text(encoding='utf-8')}
     elif engine=='stata_native':
+        from . import stata_mcp
         if not development and not (await capabilities())[engine]['ready']:raise ValueError('Stata web authorization and runtime acceptance required')
-        script,command=stata_script(p)
+        use_mcp=stata_mcp.configured()
+        script,command=stata_script(p,exit_after=not use_mcp)
         (directory/'estimate.do').write_text(script,encoding='utf-8')
-        exe=os.getenv('EA_STATA_EXECUTABLE','')
-        if not Path(exe).is_file():raise ValueError('Stata executable not configured')
-        args=[exe,'/e','do','estimate.do'] if os.name=='nt' else [exe,'-b','do','estimate.do']
-        try:code,out=await process(args,cwd=directory,timeout=JOB_TIMEOUT)
-        except asyncio.TimeoutError:raise TimeoutError(f'Stata exceeded {JOB_TIMEOUT:g} seconds; process tree terminated')
+        if use_mcp:
+            try:out=await asyncio.to_thread(stata_mcp.run_file,directory/'estimate.do',directory,JOB_TIMEOUT)
+            except TimeoutError:raise TimeoutError(f'Stata MCP exceeded {JOB_TIMEOUT:g} seconds')
+            except Exception as error:raise ValueError(f'Stata MCP request failed: {type(error).__name__}: {error}')
+            finally:
+                try:await asyncio.to_thread(stata_mcp.release)
+                except Exception:pass
+            code=0
+        else:
+            exe=os.getenv('EA_STATA_EXECUTABLE','')
+            if not Path(exe).is_file():raise ValueError('Stata executable not configured')
+            args=[exe,'/e','do','estimate.do'] if os.name=='nt' else [exe,'-b','do','estimate.do']
+            try:code,out=await process(args,cwd=directory,timeout=JOB_TIMEOUT)
+            except asyncio.TimeoutError:raise TimeoutError(f'Stata exceeded {JOB_TIMEOUT:g} seconds; process tree terminated')
         log=(directory/'execution.log').read_text(encoding='utf-8',errors='replace') if (directory/'execution.log').exists() else out
         if code or not (directory/'metadata.csv').exists() or not (directory/'coefficients.csv').exists():raise ValueError('Stata failed; inspect execution.log: '+log[-500:])
         meta=next(csv.DictReader((directory/'metadata.csv').open(encoding='utf-8')))

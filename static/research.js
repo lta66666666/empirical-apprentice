@@ -582,7 +582,7 @@ function setupResearch(){
   const lesson=el('section','research-method-lesson');lesson.id='researchLesson';pane.append(lesson);
   const grid=el('div','research-grid'),form=el('section','research-input'),output=el('section','research-output');
   form.append(el('span','section-kicker','01 准备数据'),el('h3','','数据与研究问题'));
-  const label=el('label','research-field','上传 CSV / TSV / DTA（最多2MB、20000行）'),file=el('input');file.type='file';file.accept='.csv,.tsv,.dta';file.id='researchFile';label.append(file);form.append(label);
+  const label=el('label','research-field','上传 CSV / TSV / DTA（最多2MB、20000行）'),file=el('input');file.type='file';file.accept='.csv,.tsv,.dta';file.id='researchFile';file.setAttribute('aria-label','上传 CSV、TSV 或 DTA 数据文件');label.append(file);form.append(label);
   let uploadRequest=null;
   file.onchange=async()=>{const f=file.files[0];if(!f)return;if(f.size>2000000){researchNotice('文件超过2MB。',true);return;}if(!sessionId||researchRunning){researchNotice('请等待当前操作完成。',true);return;}
     if(!confirm('文件将上传服务器用于检查、保存和计算，练习最后活动七天后到期。模型仅接收摘要。请确认有权上传。'))return;

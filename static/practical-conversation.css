@@ -3,3 +3,5 @@
 .entry-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.pc-secondary-entry{width:100%;margin-top:16px;background:#f7faf9}.entry-cards .entry-card{height:100%}@media(max-width:768px){.entry-cards{grid-template-columns:1fr}}
 
 html.motion-reduced .pc-workspace,html.motion-reduced .pc-task{animation:none}
+
+.pc-local-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0 16px;padding:0;list-style:none}.pc-local-steps li{padding:10px 12px;border:1px solid #dbe7e4;border-radius:10px;background:#f7fbfa;font-size:13px;line-height:1.55;color:#35564f}.pc-local-steps b{display:block;font-size:12px;letter-spacing:.06em;color:#087e75;margin-bottom:2px}@media(max-width:768px){.pc-local-steps{grid-template-columns:1fr}}
