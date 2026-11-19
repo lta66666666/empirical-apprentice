@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-11-08T17:13:08.086Z",
+  "label": "World Bank WDI 中国年度数据（真实来源）",
+  "provenance": "World Bank WDI API，中国 CHN，2000–2023；指标 IT.NET.USER.ZS / SL.GDP.PCAP.EM.KD / NE.GDI.TOTL.ZS；许可 CC BY 4.0；抓取日期 2026-11-09；元数据见 static/real-data/source.json",
+  "path": "static/real-data/world-bank-china-2000-2023.csv",
+  "filename": "world-bank-china-2000-2023.csv",
+  "sha256": "504602230ad052d9fd24a5db10b8f3524bce9011fa96f7c59eea0173b3b0542e",
+  "bytes": 921,
+  "rows": 24,
+  "columns_count": 4,
+  "columns": [
+    {
+      "name": "year",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 24,
+      "min": 2000,
+      "max": 2023
+    },
+    {
+      "name": "internet_users_pct",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 24,
+      "min": 1.775913,
+      "max": 90.6
+    },
+    {
+      "name": "gdp_per_person_employed_ppp",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 24,
+      "min": 7507.665314,
+      "max": 43341.754924
+    },
+    {
+      "name": "gross_capital_formation_pct",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 24,
+      "min": 33.632683,
+      "max": 46.270301
+    }
+  ],
+  "complete_rows": 24,
+  "duplicate_rows": 0,
+  "warnings": [
+    "本审计只核对文件结构、哈希与缺失，不证明来源真实性。",
+    "模拟数据不得作为真实世界来源证据。"
+  ]
+}

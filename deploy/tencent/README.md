@@ -9,7 +9,8 @@
 本地 Windows PowerShell 执行：
 
 ```powershell
-$k = 'C:\Users\LTA\.ssh\ea_deploy_key2'
+# 把路径换成你自己的部署私钥；私钥不要提交到仓库
+$k = "$HOME\.ssh\ea_deploy_key"
 $tag = (git rev-parse --short HEAD)
 
 scp -i $k Dockerfile ubuntu@106.52.65.254:/home/ubuntu/joycode/

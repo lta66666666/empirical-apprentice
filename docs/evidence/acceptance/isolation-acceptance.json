@@ -1,0 +1,16 @@
+{
+  "run_at": "2026-11-08T15:20:57.576Z",
+  "base": "https://106.52.65.254:8000",
+  "session_id": "717cd386cdb7",
+  "accounts": [
+    "isoa_mw7zc1jb",
+    "isob_mw7zc1jb"
+  ],
+  "checks": {
+    "anonymous_read": 401,
+    "other_account_read": 404,
+    "other_account_tutor": 404,
+    "owner_read": 200
+  },
+  "passed": true
+}

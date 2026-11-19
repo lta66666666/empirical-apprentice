@@ -1,0 +1,62 @@
+{
+  "generated_at": "2026-11-08T15:18:16.513Z",
+  "label": "随机面板 DID 模拟数据",
+  "provenance": "固定种子 20261108 生成；60 城 × 8 年；仅用于演示，不代表现实政策效果",
+  "path": "static/random-did-data.csv",
+  "filename": "random-did-data.csv",
+  "sha256": "6dcabd196078de0b6704baf81908b4ac0a7d70e0b4902143d35f470732d171af",
+  "bytes": 13073,
+  "rows": 480,
+  "columns_count": 5,
+  "columns": [
+    {
+      "name": "city",
+      "inferred_type": "text",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 60
+    },
+    {
+      "name": "year",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 8,
+      "min": 2014,
+      "max": 2021
+    },
+    {
+      "name": "treated",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 2,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "investment",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 476,
+      "min": -0.7812,
+      "max": 3.2152
+    },
+    {
+      "name": "emissions",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 477,
+      "min": 4.9429,
+      "max": 13.6692
+    }
+  ],
+  "complete_rows": 480,
+  "duplicate_rows": 0,
+  "warnings": [
+    "本审计只核对文件结构、哈希与缺失，不证明来源真实性。",
+    "模拟数据不得作为真实世界来源证据。"
+  ]
+}

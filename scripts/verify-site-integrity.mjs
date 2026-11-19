@@ -1,0 +1,102 @@
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+const root = resolve(import.meta.dirname, '..');
+const checks = [];
+const add = (check, pass, detail = '') => checks.push({ check, pass, detail });
+const readText = path => readFileSync(join(root, path), 'utf8');
+const sha256 = path => createHash('sha256').update(readFileSync(join(root, path))).digest('hex');
+
+const REAL_DATA = 'static/real-data/world-bank-china-2000-2023.csv';
+const REAL_HASH = '504602230ad052d9fd24a5db10b8f3524bce9011fa96f7c59eea0173b3b0542e';
+add('real data hash', sha256(REAL_DATA) === REAL_HASH, REAL_DATA);
+if (existsSync(join(root, 'docs/evidence/real-data/world-bank-china-2000-2023.csv'))) {
+  add('evidence copy hash', sha256('docs/evidence/real-data/world-bank-china-2000-2023.csv') === REAL_HASH);
+}
+if (existsSync(join(root, 'docs/evidence/data/SOURCE_CARD.md'))) {
+  add('source card records hash', readText('docs/evidence/data/SOURCE_CARD.md').includes(REAL_HASH));
+}
+add('real data page records hash', readText('static/real-data-demo.html').includes(REAL_HASH));
+
+const requiredPages = [
+  'static/auth.html',
+  'static/index.html',
+  'static/judge-guide.html',
+  'static/random-did-demo.html',
+  'static/local-assistant-guide.html',
+  'static/real-data-demo.html',
+  'static/beginner-demo.html',
+];
+for (const page of requiredPages) add(`page exists: ${page}`, existsSync(join(root, page)));
+
+const htmlFiles = [];
+function walk(folder) {
+  for (const name of readdirSync(join(root, folder))) {
+    const rel = `${folder}/${name}`;
+    if (statSync(join(root, rel)).isDirectory()) walk(rel);
+    else if (name.endsWith('.html')) htmlFiles.push(rel);
+  }
+}
+walk('static');
+add('static html found', htmlFiles.length > 0, `${htmlFiles.length} pages`);
+
+const forbidden = ['评委', '分值', '评分表'];
+for (const page of htmlFiles) {
+  const text = readText(page);
+  for (const phrase of forbidden) {
+    add(`no forbidden copy "${phrase}" in ${page}`, !text.includes(phrase));
+  }
+  const broken = [];
+  for (const match of text.matchAll(/(?:href|src)="(\/static\/[^"#?]+)/g)) {
+    const asset = match[1].slice(1);
+    if (!existsSync(join(root, asset))) broken.push(match[1]);
+  }
+  add(`static asset links resolve in ${page}`, broken.length === 0, broken.join(', '));
+}
+
+const auth = readText('static/auth.html');
+add('auth keeps original capability lead', auth.includes('云端 Stata 语法计算'));
+add('auth links to beginner demo', auth.includes('href="/static/beginner-demo.html"'));
+add('auth has guided learning path', auth.includes('auth-path') && auth.includes('提出问题') && auth.includes('形成成果'));
+add('auth has password visibility control', auth.includes('id="togglePassword"'));
+
+const judge = readText('static/judge-guide.html');
+add('guide keeps neutral title', judge.includes('5 分钟验收指南'));
+
+const index = readText('static/index.html');
+add('home states Stata is not executed here', index.includes('Stata</strong>：只生成对应代码，不在本站执行。'));
+add('materials link to real data evidence', index.includes('href="/static/real-data-demo.html"'));
+
+const home = readText('static/home.html');
+add('home links to real data evidence', home.includes('href="/static/real-data-demo.html"'));
+add('home links to beginner demo', home.includes('href="/static/beginner-demo.html"'));
+add('home explains engine choices', home.includes('三种计算方式怎么选') && home.includes('不需要本机 Stata'));
+
+const layout = readText('static/module-layout.js');
+add('directory recommends zero-basis stage 1', layout.includes('零基础推荐') && layout.includes('零基础开始阶段 1'));
+add('directory keeps local Stata optional', layout.includes('进阶 · 本机 Stata') && layout.includes('不是完成课程的必经步骤'));
+
+const stataGuide = readText('static/stata-guide.js');
+add('Stata guide stays in overflow menu', stataGuide.includes("document.querySelector('.coach-menu')") && !stataGuide.includes("||document.querySelector('.module-toolbar')"));
+
+const beginner = readText('static/beginner-demo.html');
+add('beginner demo labels static simulation', beginner.includes('静态教学演示') && beginner.includes('不是本次实时计算'));
+add('beginner demo explains Stata is optional', beginner.includes('本机 Stata 18 是可选进阶'));
+add('beginner demo links its script', beginner.includes('beginner-demo.js'));
+
+const randomDid = readText('static/random-did-demo.html');
+add('random DID has plain-language reading card', randomDid.includes('这个数字怎么读') && randomDid.includes('能证明因果吗'));
+
+const realDataPage = readText('static/real-data-demo.html');
+add('real data page has copy control', realDataPage.includes('id="copyHash"') && realDataPage.includes('real-data-actions.js'));
+
+const authCss = readText('static/auth.css');
+add('password hint is neutral until invalid', authCss.includes('.password-match.is-invalid'));
+
+const workspace = readText('static/conversation-workspace.js');
+add('gap actions append buttons instead of stringifying', workspace.includes("actions.append(button('我来补'") && !workspace.includes("el('div','coach-gap-actions',button"));
+
+const failed = checks.filter(check => !check.pass);
+console.log(JSON.stringify({ scope: 'source copy, evidence hash and static link integrity; not deployment acceptance', checks }, null, 2));
+if (failed.length) process.exitCode = 1;

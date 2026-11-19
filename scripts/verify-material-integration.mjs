@@ -28,6 +28,6 @@ try{
  const api=await call('/api/knowledge?catalog=textbooks');assert.equal(api.status,200);assert.deepEqual((await api.json()).catalog,catalog);
  const found=await call('/api/knowledge?source_id=wang_stata_1&q='+encodeURIComponent('数值标签'));assert.equal(found.status,200);assert.equal((await found.json()).materials[0].id,'textbook_labels');
  assert.equal((await call('/api/knowledge?source_id=arbitrary')).status,422);
- const home=await (await call('/home')).text();assert.equal((home.match(/<a /g)||[]).length,2);
- console.log('PASS 7 files / 6 source records / 17 cards; page identity, source filtering, current-topic retrieval, protected catalog API, safe public index, unchanged two-entry home. Not full-book or browser acceptance.');
+ const home=await (await call('/home')).text();assert.equal((home.match(/<a /g)||[]).length,7);assert.equal((home.match(/class="two-entries"/g)||[]).length,1);assert.ok(home.includes('href="/static/random-did-demo.html"'));assert.ok(home.includes('href="/static/real-data-demo.html"'));assert.ok(home.includes('href="/static/beginner-demo.html"'));
+ console.log('PASS 7 files / 6 source records / 17 cards; page identity, source filtering, current-topic retrieval, protected catalog API, safe public index, two-entry home with five evidence links. Not full-book or browser acceptance.');
 }finally{store.close();}

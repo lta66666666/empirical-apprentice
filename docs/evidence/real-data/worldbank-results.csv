@@ -1,0 +1,12 @@
+model,term,coef,se,t,p
+levels,internet_users_pct,-.00135338,.00221768,-.61026574,.54855816
+levels,gross_capital_formation_pct,.01788789,.00255592,6.9986006,8.623e-07
+levels,year,.07968816,.00798064,9.9851827,3.244e-09
+levels,_cons,-151.09733,15.985796,-9.4519739,8.092e-09
+levels,meta_N,24
+levels,meta_r2,.99571887
+diff,D.internet_users_pct,-.00098192,.0008321,-1.1800521,.25182539
+diff,D.gross_capital_formation_pct,.00438653,.00215251,2.0378707,.05500913
+diff,_cons,.078588,.00636336,12.350075,8.166e-11
+diff,meta_N,23
+diff,meta_r2,.12909422

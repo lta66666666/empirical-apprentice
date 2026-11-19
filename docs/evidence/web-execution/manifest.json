@@ -1,0 +1,91 @@
+{
+  "generated_at": "2026-11-09",
+  "environment": {
+    "base_url": "https://106.52.65.254:8000",
+    "image_tags": ["empirical-apprentice-joycode:20261109-ui", "empirical-apprentice-joycode:20261109-ui2"],
+    "engine": "statspai_cloud",
+    "software": "StatsPAI 1.39.5 / Python 3.11.2",
+    "account": "临时账号 ea_exec_20261109，采集后已删除",
+    "stata_note": "结果页同时生成 Stata 对应语法；真实 Stata 未在公网执行。"
+  },
+  "runs": [
+    {
+      "fixture": "ols",
+      "session_id": "763539f74996",
+      "job_id": "9d4f5b07-0759-4642-9398-964ba6084e13",
+      "status": "succeeded",
+      "n_used": 160,
+      "term": "education",
+      "estimate": 0.7739970340371237,
+      "std_error": 0.032282275689007406,
+      "ci": [0.7102334329367455, 0.837760635137502],
+      "ai_interpretation": "succeeded",
+      "evidence_file": "ols-job.json",
+      "sha256": "427D8B2C4F7549B9A2FC39D04B8B053EBB855EB916744F29EFD47A886DD7EB4D",
+      "screenshot": "ols-result.png",
+      "screenshot_sha256": "8424CA364677F7FBD5F173CAC4513DF2172C8D88386B1235FA9F2EA87D3F841C"
+    },
+    {
+      "fixture": "panel_fe",
+      "session_id": "f5179bffc101",
+      "job_id": "9c9bed6e-1044-4424-b6f9-c666f9caca84",
+      "status": "succeeded",
+      "n_used": 384,
+      "term": "digitalization",
+      "estimate": 1.276120232177803,
+      "std_error": 0.07524123839613522,
+      "ci": [1.124754384593098, 1.4274860797625077],
+      "ai_interpretation": "succeeded",
+      "evidence_file": "fe-job.json",
+      "sha256": "891610C5231699177F4AC1475E9656DA7D5085B9CF8D2C9ABC1ED759AD37817E",
+      "screenshot": "fe-result.png",
+      "screenshot_sha256": "8A764B9930AACE6081D39910CE3EAAAFE963D8F4B622E877BBD302D3093BFA1A"
+    },
+    {
+      "fixture": "did",
+      "session_id": "f6077f01a61c",
+      "job_id": "5044feb0-1df4-4d80-9254-758af03a4f36",
+      "status": "succeeded",
+      "n_used": 384,
+      "clusters": 48,
+      "term": "DID effect",
+      "estimate": -1.8352542916666672,
+      "std_error": 0.13174332137712913,
+      "ci": [-2.1002876686943583, -1.5702209146389758],
+      "ai_interpretation": "succeeded",
+      "evidence_file": "did-job.json",
+      "sha256": "E9D7622154729F3BCF2DE614245F4B776378C89969334710D174D51A9C047929",
+      "screenshot": "did-result.png",
+      "screenshot_sha256": "444E82FA24E702182F13CAC00E49DA98728F64C73E51ACDCFEE6E09AB57FF54B"
+    },
+    {
+      "fixture": "panel_fe",
+      "session_id": "f0e27f415dae",
+      "job_id": "92cf9529-4130-4a72-89d4-fb33e0a61016",
+      "status": "succeeded",
+      "n_used": 384,
+      "reflections": 2,
+      "record_version": 4,
+      "term": "digitalization",
+      "estimate": 1.276120232177803,
+      "ci": [1.124754384593098, 1.4274860797625077],
+      "evidence_file": "explain-fe-job.json",
+      "sha256": "4A8E98C674E62FA260DFCF111C99E1E46A63BB26C582CB11A98E06422133CA0C",
+      "screenshot": "explain-fe-result.png",
+      "screenshot_sha256": "507FD8AB3841725F5AF80BA396C528EDE117DD39D19925F88D6A278E6DD2D070"
+    }
+  ],
+  "applicability_block": {
+    "kind": "did_no_control_group",
+    "session_id": "f6077f01a61c",
+    "status": 422,
+    "detail": "DID 需要政策前后与处理、对照两组观测。",
+    "evidence_file": "did-interception.json"
+  },
+  "caveats": [
+    "全部数据为内置模拟数据，不代表真实城市、真实政策或真实个体。",
+    "云端计算为 StatsPAI Python；Stata 代码仅作对应阅读，公网未执行 Stata。",
+    "AI 解读与解释反馈由 deepseek-flash 生成，需人工核对，不构成来源认证或因果证明。",
+    "临时账号已删除；任务记录仍受站点保留策略约束，不能视为永久留存。"
+  ]
+}

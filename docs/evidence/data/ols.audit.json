@@ -1,0 +1,46 @@
+{
+  "generated_at": "2026-11-08T15:18:28.685Z",
+  "label": "OLS 教学模拟数据",
+  "provenance": "项目内置教学夹具 teaching-fixtures-v1；模拟观察，不是真实调查数据",
+  "path": "local_stata/sample-fixtures/ols.csv",
+  "filename": "ols.csv",
+  "sha256": "1a771585847400ca1ce294a2ed17db68d2208fbb33326f10445acc4c6abf8f5d",
+  "bytes": 2499,
+  "rows": 160,
+  "columns_count": 3,
+  "columns": [
+    {
+      "name": "income",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 160,
+      "min": 8.873494,
+      "max": 23.255268
+    },
+    {
+      "name": "education",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 12,
+      "min": 9,
+      "max": 20
+    },
+    {
+      "name": "experience",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 26,
+      "min": 0,
+      "max": 25
+    }
+  ],
+  "complete_rows": 160,
+  "duplicate_rows": 0,
+  "warnings": [
+    "本审计只核对文件结构、哈希与缺失，不证明来源真实性。",
+    "模拟数据不得作为真实世界来源证据。"
+  ]
+}

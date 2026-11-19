@@ -1,0 +1,152 @@
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\LTA\Desktop\agent1\_skj_verify\random_did\event\event.log
+  log type:  text
+ opened on:   8 Nov 2026, 13:55:26
+
+. import delimited using did.csv, varnames(1) stringcols(_all) clear
+(encoding automatically selected: UTF-8)
+(5 vars, 480 obs)
+
+. destring year emissions treated investment, replace
+year: all characters numeric; replaced as int
+emissions: all characters numeric; replaced as double
+treated: all characters numeric; replaced as byte
+investment: all characters numeric; replaced as double
+
+. egen long panel = group(city)
+
+. xtset panel year
+
+Panel variable: panel (strongly balanced)
+ Time variable: year, 2014 to 2021
+         Delta: 1 unit
+
+. generate int rel = year - 2018
+
+. generate byte e_m4 = treated == 1 & rel == -4
+
+. generate byte e_m3 = treated == 1 & rel == -3
+
+. generate byte e_m2 = treated == 1 & rel == -2
+
+. generate byte e_p0 = treated == 1 & rel == 0
+
+. generate byte e_p1 = treated == 1 & rel == 1
+
+. generate byte e_p2 = treated == 1 & rel == 2
+
+. generate byte e_p3 = treated == 1 & rel == 3
+
+. preserve
+
+. collapse (mean) emissions, by(treated year)
+
+. export delimited using trends.csv, replace
+(file trends.csv not found)
+file trends.csv saved
+
+. restore
+
+. xtreg emissions e_m4 e_m3 e_m2 e_p0 e_p1 e_p2 e_p3 i.year, fe vce(cluster pan
+> el)
+
+Fixed-effects (within) regression               Number of obs     =        480
+Group variable: panel                           Number of groups  =         60
+
+R-squared:                                      Obs per group:
+     Within  = 0.4574                                         min =          8
+     Between = 0.1101                                         avg =        8.0
+     Overall = 0.2146                                         max =          8
+
+                                                F(14, 59)         =      32.44
+corr(u_i, Xb) = 0.0405                          Prob > F          =     0.0000
+
+                                 (Std. err. adjusted for 60 clusters in panel)
+------------------------------------------------------------------------------
+             |               Robust
+   emissions | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+        e_m4 |   .0195467   .2730048     0.07   0.943    -.5267346    .5658279
+        e_m3 |     .15878   .2739245     0.58   0.564    -.3893417    .7069017
+        e_m2 |     .28136   .2793883     1.01   0.318    -.2776947    .8404147
+        e_p0 |  -1.177473   .2817225    -4.18   0.000    -1.741199    -.613748
+        e_p1 |  -1.631113   .2760983    -5.91   0.000    -2.183585   -1.078642
+        e_p2 |  -1.586967   .2340367    -6.78   0.000    -2.055273    -1.11866
+        e_p3 |  -1.412713   .2668548    -5.29   0.000    -1.946689    -.878738
+             |
+        year |
+       2015  |   .4111033   .1772548     2.32   0.024     .0564174    .7657893
+       2016  |     .53392   .1912364     2.79   0.007     .1512568    .9165832
+       2017  |   .9414233   .2160664     4.36   0.000     .5090756    1.373771
+       2018  |    1.19921   .2030795     5.91   0.000     .7928488    1.605571
+       2019  |   1.660013    .170849     9.72   0.000     1.318145    2.001881
+       2020  |   2.001597   .1745797    11.47   0.000     1.652263     2.35093
+       2021  |    2.30619   .2083331    11.07   0.000     1.889316    2.723064
+             |
+       _cons |   8.282835   .1812833    45.69   0.000     7.920088    8.645582
+-------------+----------------------------------------------------------------
+     sigma_u |  1.2611853
+     sigma_e |  .70958153
+         rho |  .75955908   (fraction of variance due to u_i)
+------------------------------------------------------------------------------
+
+. matrix ea_b = e(b)
+
+. matrix ea_v = e(V)
+
+. scalar ea_df = e(df_r)
+
+. scalar ea_n = e(N)
+
+. test e_m4 e_m3 e_m2
+
+ ( 1)  e_m4 = 0
+ ( 2)  e_m3 = 0
+ ( 3)  e_m2 = 0
+
+       F(  3,    59) =    0.43
+            Prob > F =    0.7291
+
+. scalar ea_pretrend_p = r(p)
+
+. file open results using event-coefficients.csv, write replace
+(file event-coefficients.csv not found)
+
+. file write results "term,estimate,std_error,p_value,ci_low,ci_high" _n
+
+. local names : colnames ea_b
+
+. forvalues j = 1/`=colsof(ea_b)' {
+  2. local name : word `j' of `names'
+  3. if "`name'" == "e_m4" | "`name'" == "e_m3" | "`name'" == "e_m2" | "`name'"
+>  == "e_p0" | "`name'" == "e_p1" | "`name'" == "e_p2" | "`name'" == "e_p3" {
+  4. scalar ea_est = ea_b[1,`j']
+  5. scalar ea_se = sqrt(ea_v[`j',`j'])
+  6. scalar ea_p = 2*ttail(scalar(ea_df),abs(scalar(ea_est)/scalar(ea_se)))
+  7. scalar ea_crit = invttail(scalar(ea_df),.025)
+  8. file write results "`name'," %24.17g (scalar(ea_est)) "," %24.17g (scalar(
+> ea_se)) "," %24.17g (scalar(ea_p)) "," %24.17g (scalar(ea_est)-scalar(ea_crit
+> )*scalar(ea_se)) "," %24.17g (scalar(ea_est)+scalar(ea_crit)*scalar(ea_se)) _
+> n
+  9. }
+ 10. }
+
+. file close results
+
+. file open meta using event-meta.csv, write replace
+(file event-meta.csv not found)
+
+. file write meta "n_used,df,pretrend_p" _n
+
+. file write meta (scalar(ea_n)) "," (scalar(ea_df)) "," (scalar(ea_pretrend_p)
+> ) _n
+
+. file close meta
+
+. log close _all
+      name:  <unnamed>
+       log:  C:\Users\LTA\Desktop\agent1\_skj_verify\random_did\event\event.log
+  log type:  text
+ closed on:   8 Nov 2026, 13:55:27
+-------------------------------------------------------------------------------

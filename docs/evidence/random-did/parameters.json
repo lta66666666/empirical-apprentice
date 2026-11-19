@@ -1,0 +1,1 @@
+{"method": "did", "outcome": "v4", "predictors": ["v3"], "unit": "v0", "time": "v1", "treated": "v2", "policy_year": 2018, "same_batch": true, "vcov": "cluster", "cluster": "v0", "missing": "block", "labels": {"emissions": "排放强度", "investment": "投资强度", "treated": "处理组"}}

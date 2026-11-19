@@ -1,0 +1,28 @@
+{
+  "kind": "did_applicability_block",
+  "environment": "https://106.52.65.254:8000",
+  "session_id": "f6077f01a61c",
+  "request": {
+    "filename": "synthetic-did-no-control.csv",
+    "mutation": "在真实 DID 教学夹具中把所有 treated 值改为 1，删除对照组",
+    "candidate": {
+      "method": "did",
+      "outcome": "emissions",
+      "predictors": [],
+      "unit": "city",
+      "time": "year",
+      "treated": "treated",
+      "policy_year": 2018,
+      "same_batch": true,
+      "vcov": "cluster",
+      "cluster": "city",
+      "engine_id": "statspai_cloud",
+      "missing": "block"
+    }
+  },
+  "response": {
+    "status": 422,
+    "detail": "DID 需要政策前后与处理、对照两组观测。"
+  },
+  "note": "真实 API 返回的适用性拦截；没有创建任务或结果。未修改线上演示数据。"
+}

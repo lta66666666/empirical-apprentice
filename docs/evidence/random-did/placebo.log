@@ -1,0 +1,112 @@
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\LTA\Desktop\agent1\_skj_verify\random_did\placebo\placebo
+> .log
+  log type:  text
+ opened on:   8 Nov 2026, 13:55:27
+
+. import delimited using did.csv, varnames(1) stringcols(_all) clear
+(encoding automatically selected: UTF-8)
+(5 vars, 480 obs)
+
+. destring year emissions treated investment, replace
+year: all characters numeric; replaced as int
+emissions: all characters numeric; replaced as double
+treated: all characters numeric; replaced as byte
+investment: all characters numeric; replaced as double
+
+. egen long panel = group(city)
+
+. xtset panel year
+
+Panel variable: panel (strongly balanced)
+ Time variable: year, 2014 to 2021
+         Delta: 1 unit
+
+. keep if year <= 2017
+(240 observations deleted)
+
+. generate byte placebo_post = year >= 2016
+
+. generate byte placebo_effect = treated * placebo_post
+
+. xtreg emissions placebo_effect investment i.year, fe vce(cluster panel)
+
+Fixed-effects (within) regression               Number of obs     =        240
+Group variable: panel                           Number of groups  =         60
+
+R-squared:                                      Obs per group:
+     Within  = 0.2655                                         min =          4
+     Between = 0.2213                                         avg =        4.0
+     Overall = 0.1743                                         max =          4
+
+                                                F(5, 59)          =      14.98
+corr(u_i, Xb) = 0.1559                          Prob > F          =     0.0000
+
+                                 (Std. err. adjusted for 60 clusters in panel)
+------------------------------------------------------------------------------
+             |               Robust
+   emissions | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+placebo_ef~t |   .0390155   .2121483     0.18   0.855    -.3854922    .4635232
+  investment |   .3723715   .1025458     3.63   0.001     .1671778    .5775652
+             |
+        year |
+       2015  |   .3992644   .1291662     3.09   0.003     .1408033    .6577254
+       2016  |   .5494891   .1718789     3.20   0.002     .2055602     .893418
+       2017  |   .7923938    .177873     4.45   0.000     .4364708    1.148317
+             |
+       _cons |   7.923964   .1218658    65.02   0.000     7.680111    8.167817
+-------------+----------------------------------------------------------------
+     sigma_u |  1.2103516
+     sigma_e |  .74287603
+         rho |  .72636827   (fraction of variance due to u_i)
+------------------------------------------------------------------------------
+
+. matrix ea_b = e(b)
+
+. matrix ea_v = e(V)
+
+. scalar ea_df = e(df_r)
+
+. scalar ea_n = e(N)
+
+. file open results using placebo-coefficients.csv, write replace
+(file placebo-coefficients.csv not found)
+
+. file write results "term,estimate,std_error,p_value,ci_low,ci_high" _n
+
+. local names : colnames ea_b
+
+. forvalues j = 1/`=colsof(ea_b)' {
+  2. local name : word `j' of `names'
+  3. if "`name'" == "placebo_effect" {
+  4. scalar ea_est = ea_b[1,`j']
+  5. scalar ea_se = sqrt(ea_v[`j',`j'])
+  6. scalar ea_p = 2*ttail(scalar(ea_df),abs(scalar(ea_est)/scalar(ea_se)))
+  7. scalar ea_crit = invttail(scalar(ea_df),.025)
+  8. file write results "`name'," %24.17g (scalar(ea_est)) "," %24.17g (scalar(
+> ea_se)) "," %24.17g (scalar(ea_p)) "," %24.17g (scalar(ea_est)-scalar(ea_crit
+> )*scalar(ea_se)) "," %24.17g (scalar(ea_est)+scalar(ea_crit)*scalar(ea_se)) _
+> n
+  9. }
+ 10. }
+
+. file close results
+
+. file open meta using placebo-meta.csv, write replace
+(file placebo-meta.csv not found)
+
+. file write meta "n_used,df" _n
+
+. file write meta (scalar(ea_n)) "," (scalar(ea_df)) _n
+
+. file close meta
+
+. log close _all
+      name:  <unnamed>
+       log:  C:\Users\LTA\Desktop\agent1\_skj_verify\random_did\placebo\placebo
+> .log
+  log type:  text
+ closed on:   8 Nov 2026, 13:55:28
+-------------------------------------------------------------------------------

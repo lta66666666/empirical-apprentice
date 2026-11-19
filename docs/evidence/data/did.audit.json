@@ -1,0 +1,80 @@
+{
+  "generated_at": "2026-11-08T15:18:28.859Z",
+  "label": "DID 教学模拟数据",
+  "provenance": "项目内置教学夹具 teaching-fixtures-v1；模拟政策评估数据，不是真实政策记录",
+  "path": "local_stata/sample-fixtures/did.csv",
+  "filename": "did.csv",
+  "sha256": "36666c9380bed25e79c8aa7a9a723ebe3e11eb65fe7d0e75498e44039c64abf6",
+  "bytes": 18721,
+  "rows": 384,
+  "columns_count": 7,
+  "columns": [
+    {
+      "name": "city",
+      "inferred_type": "text",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 48
+    },
+    {
+      "name": "year",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 8,
+      "min": 2014,
+      "max": 2021
+    },
+    {
+      "name": "productivity",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 384,
+      "min": 10.595587,
+      "max": 23.08336
+    },
+    {
+      "name": "digitalization",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 384,
+      "min": 2.040848,
+      "max": 5.302607
+    },
+    {
+      "name": "investment",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 384,
+      "min": 1.002342,
+      "max": 4.996549
+    },
+    {
+      "name": "emissions",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 384,
+      "min": 21.975487,
+      "max": 34.473961
+    },
+    {
+      "name": "treated",
+      "inferred_type": "numeric",
+      "missing": 0,
+      "missing_rate": 0,
+      "unique": 2,
+      "min": 0,
+      "max": 1
+    }
+  ],
+  "complete_rows": 384,
+  "duplicate_rows": 0,
+  "warnings": [
+    "本审计只核对文件结构、哈希与缺失，不证明来源真实性。",
+    "模拟数据不得作为真实世界来源证据。"
+  ]
+}

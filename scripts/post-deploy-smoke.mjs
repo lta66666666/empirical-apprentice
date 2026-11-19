@@ -2,9 +2,11 @@
 // 用法：node scripts/post-deploy-smoke.mjs https://ea-demo.duckdns.org:8000
 // 可选：EA_SMOKE_USERNAME / EA_SMOKE_PASSWORD 提供时，额外核对已登录的研究状态接口。
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 
 const base = (process.env.EA_SMOKE_URL || process.argv[2] || 'http://127.0.0.1:18000').replace(/\/$/, '');
 const origin = new URL(base).origin;
+const REAL_DATA_HASH = '504602230ad052d9fd24a5db10b8f3524bce9011fa96f7c59eea0173b3b0542e';
 const checks = [];
 let cookie = '';
 
@@ -44,6 +46,34 @@ await step('静态资源可访问', async () => {
   const response = await fetch(base + '/static/app.js');
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type') || '', /javascript/);
+});
+
+await step('比赛证据页面可访问', async () => {
+  for (const [path, marker] of [
+    ['/static/judge-guide.html', '验收指南'],
+    ['/static/random-did-demo.html', '随机 DID'],
+    ['/static/local-assistant-guide.html', '本机'],
+    ['/static/random-did-data.csv', 'city,year,treated,investment,emissions'],
+    ['/static/real-data-demo.html', 'World Bank'],
+    ['/static/real-data-actions.js', 'copyHash'],
+    ['/static/beginner-demo.html', '3 分钟零基础体验'],
+    ['/static/beginner-demo.js', 'revealResult'],
+    ['/static/real-data/world-bank-china-2000-2023.csv', 'year,internet_users_pct,gdp_per_person_employed_ppp,gross_capital_formation_pct'],
+  ]) {
+    const response = await fetch(base + path);
+    assert.equal(response.status, 200, path);
+    const text = await response.text();
+    assert.ok(text.includes(marker), path);
+    if (path.endsWith('.csv')) assert.equal(text.trim().split('\n').length, path.includes('world-bank') ? 25 : 481, path);
+  }
+});
+
+await step('真实数据哈希与证据页一致', async () => {
+  const csv = await (await fetch(base + '/static/real-data/world-bank-china-2000-2023.csv')).text();
+  assert.equal(createHash('sha256').update(csv, 'utf8').digest('hex'), REAL_DATA_HASH);
+  const page = await (await fetch(base + '/static/real-data-demo.html')).text();
+  assert.ok(page.includes(REAL_DATA_HASH));
+  assert.ok(page.includes('id="copyHash"'));
 });
 
 await step('畸形 JSON 返回 400 且带请求 ID', async () => {

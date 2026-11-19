@@ -1,0 +1,199 @@
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\LTA\Desktop\agent1\_skj_verify\real_worldbank\worldbank-a
+> nalysis.log
+  log type:  text
+ opened on:   9 Nov 2026, 01:14:16
+
+. 
+. import delimited "world-bank-china-2000-2023.csv", clear varnames(1) case(low
+> er)
+(encoding automatically selected: ISO-8859-1)
+(4 vars, 24 obs)
+
+. tsset year
+
+Time variable: year, 2000 to 2023
+        Delta: 1 unit
+
+. 
+. gen double ln_gdp = ln(gdp_per_person_employed_ppp)
+
+. label variable internet_users_pct "互联网使用率（%）"
+
+. label variable gdp_per_person_employed_ppp "人均产出（2021 PPP 美元）"
+
+. label variable gross_capital_formation_pct "资本形成（% GDP）"
+
+. 
+. summarize year internet_users_pct gdp_per_person_employed_ppp gross_capital_f
+> ormation_pct, detail
+
+                            year
+-------------------------------------------------------------
+      Percentiles      Smallest
+ 1%         2000           2000
+ 5%         2001           2001
+10%         2002           2002       Obs                  24
+25%       2005.5           2003       Sum of wgt.          24
+
+50%       2011.5                      Mean             2011.5
+                        Largest       Std. dev.      7.071068
+75%       2017.5           2020
+90%         2021           2021       Variance             50
+95%         2022           2022       Skewness              0
+99%         2023           2023       Kurtosis       1.795826
+
+                  互联网使用率（%）
+-------------------------------------------------------------
+      Percentiles      Smallest
+ 1%     1.775913       1.775913
+ 5%      2.63965        2.63965
+10%     4.595704       4.595704       Obs                  24
+25%     9.523205            6.2       Sum of wgt.          24
+
+50%     40.30005                      Mean           38.09226
+                        Largest       Std. dev.      26.99843
+75%     59.19044       70.05276
+90%     73.05324       73.05324       Variance       728.9153
+95%     75.61131       75.61131       Skewness       .1533991
+99%         90.6           90.6       Kurtosis       1.830957
+
+              人均产出（2021 PPP 美元）
+-------------------------------------------------------------
+      Percentiles      Smallest
+ 1%     7507.666       7507.666
+ 5%     8074.438       8074.438
+10%     8738.577       8738.577       Obs                  24
+25%        12052       9528.694       Sum of wgt.          24
+
+50%     21453.98                      Mean           22785.54
+                        Largest       Std. dev.      11577.86
+75%      32518.1       37511.25
+90%      39480.6        39480.6       Variance       1.34e+08
+95%      41490.1        41490.1       Skewness       .2906825
+99%     43341.75       43341.75       Kurtosis       1.784079
+
+                   资本形成（% GDP）
+-------------------------------------------------------------
+      Percentiles      Smallest
+ 1%     33.63268       33.63268
+ 5%     35.52386       35.52386
+10%     36.06878       36.06878       Obs                  24
+25%     40.20009       39.42801       Sum of wgt.          24
+
+50%     42.45259                      Mean           41.86819
+                        Largest       Std. dev.      3.326806
+75%     44.12105       45.81692
+90%     45.92241       45.92241       Variance       11.06764
+95%     46.10234       46.10234       Skewness      -.8191702
+99%      46.2703        46.2703       Kurtosis       3.285226
+
+. corr internet_users_pct gdp_per_person_employed_ppp gross_capital_formation_p
+> ct
+(obs=24)
+
+             | intern~t gdp_pe~p gross_~t
+-------------+---------------------------
+internet_u~t |   1.0000
+gdp_per_pe~p |   0.9914   1.0000
+gross_capi~t |   0.5340   0.4700   1.0000
+
+
+. 
+. quietly regress ln_gdp internet_users_pct gross_capital_formation_pct year
+
+. local r2_levels = e(r2)
+
+. newey ln_gdp internet_users_pct gross_capital_formation_pct year, lag(2)
+
+Regression with Newey–West standard errors      Number of obs     =         24
+Maximum lag = 2                                 F(  3,        20) =    1000.37
+                                                Prob > F          =     0.0000
+
+------------------------------------------------------------------------------
+             |             Newey–West
+      ln_gdp | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+internet_u~t |  -.0013534   .0022177    -0.61   0.549    -.0059794    .0032726
+gross_capi~t |   .0178879   .0025559     7.00   0.000     .0125563    .0232195
+        year |   .0796882   .0079806     9.99   0.000     .0630408    .0963355
+       _cons |  -151.0973    15.9858    -9.45   0.000    -184.4431   -117.7515
+------------------------------------------------------------------------------
+
+. local n_levels = e(N)
+
+. local df_levels = e(df_r)
+
+. 
+. tempname fh
+
+. file open `fh' using "worldbank-results.csv", write replace
+
+. file write `fh' "model,term,coef,se,t,p" _n
+
+. foreach v in internet_users_pct gross_capital_formation_pct year _cons {
+  2.   local t = _b[`v']/_se[`v']
+  3.   local p = 2*ttail(`df_levels',abs(`t'))
+  4.   file write `fh' "levels,`v'," (_b[`v']) "," (_se[`v']) "," (`t') "," (`p
+> ') _n
+  5. }
+
+. file write `fh' "levels,meta_N," (`n_levels') _n
+
+. file write `fh' "levels,meta_r2," (`r2_levels') _n
+
+. file close `fh'
+
+. 
+. quietly regress D.ln_gdp D.internet_users_pct D.gross_capital_formation_pct
+
+. local r2_diff = e(r2)
+
+. newey D.ln_gdp D.internet_users_pct D.gross_capital_formation_pct, lag(1)
+
+Regression with Newey–West standard errors      Number of obs     =         23
+Maximum lag = 1                                 F(  2,        20) =       3.47
+                                                Prob > F          =     0.0508
+
+------------------------------------------------------------------------------
+             |             Newey–West
+    D.ln_gdp | Coefficient  std. err.      t    P>|t|     [95% conf. interval]
+-------------+----------------------------------------------------------------
+internet_u~t |
+         D1. |  -.0009819   .0008321    -1.18   0.252    -.0027176    .0007538
+             |
+gross_capi~t |
+         D1. |   .0043865   .0021525     2.04   0.055    -.0001035    .0088766
+             |
+       _cons |    .078588   .0063634    12.35   0.000     .0653143    .0918617
+------------------------------------------------------------------------------
+
+. local n_diff = e(N)
+
+. local df_diff = e(df_r)
+
+. 
+. file open `fh' using "worldbank-results.csv", write append
+
+. foreach v in D.internet_users_pct D.gross_capital_formation_pct _cons {
+  2.   local t = _b[`v']/_se[`v']
+  3.   local p = 2*ttail(`df_diff',abs(`t'))
+  4.   file write `fh' "diff,`v'," (_b[`v']) "," (_se[`v']) "," (`t') "," (`p')
+>  _n
+  5. }
+
+. file write `fh' "diff,meta_N," (`n_diff') _n
+
+. file write `fh' "diff,meta_r2," (`r2_diff') _n
+
+. file close `fh'
+
+. 
+. log close
+      name:  <unnamed>
+       log:  C:\Users\LTA\Desktop\agent1\_skj_verify\real_worldbank\worldbank-a
+> nalysis.log
+  log type:  text
+ closed on:   9 Nov 2026, 01:14:17
+-------------------------------------------------------------------------------

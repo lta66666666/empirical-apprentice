@@ -13,8 +13,9 @@ services:
       EA_DEPLOYMENT_APPROVED: "true"
       EA_DATA_DIR: /data/web
       EA_NODE_DATA: /data/executor
-      # 对外只有 HTTPS 域名；内网容器只绑定回环，由 nginx 反向代理。
+      # 对外只有 HTTPS 域名；同时允许按 IP 直连的评审入口发起 POST。
       PUBLIC_ORIGIN: https://ea-demo.duckdns.org:8000
+      EA_ALLOWED_ORIGINS: https://106.52.65.254:8000
       EA_ALLOW_INSECURE_HTTP: "false"
       EA_TRUSTED_PROXY_ADDRESSES: "127.0.0.1"
       EA_CLIENT_IP_HEADER: x-real-ip
