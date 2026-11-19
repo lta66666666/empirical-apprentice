@@ -55,4 +55,23 @@
 .motion-reduced *,.motion-reduced *:before,.motion-reduced *:after { animation:none!important; transition:none!important; scroll-behavior:auto!important; }
 @media(max-width:800px) { .tutorial-nav { grid-template-columns:repeat(3,minmax(0,1fr)); }.layout.tutorial-focus { padding:8px; }.tutorial-focus .workspace-body { padding:14px; }.lesson-stage { padding:19px; }.tutorial-hero { padding:23px; } }
 @media(max-width:480px) { .tutorial-focus .workspace-heading { padding:14px; }.tutorial-focus .workspace-tabs { padding:0 10px; }.tutorial-nav button { min-height:72px; font-size:11px; }.tutorial-progress-line { flex-wrap:wrap; }.tutorial-timeline,.tutorial-grid { gap:8px; }.tutorial-timeline div,.tutorial-grid div { padding:12px; font-size:12px; }.explorer-row { grid-template-columns:85px minmax(0,1fr) 30px; gap:6px; }.did-explorer { padding:14px; }.tutorial-hero h3 { font-size:22px; }.panel-toolbar { flex-wrap:wrap; } }
+.skip-link { position:fixed; top:-60px; left:12px; z-index:9999; padding:10px 16px; border-radius:8px; background:#087e75; color:#fff; font:600 14px/1.4 system-ui,sans-serif; text-decoration:none; transition:top .15s; }
+.skip-link:focus { top:12px; outline:3px solid #fff; outline-offset:2px; }
+.course-map { display:grid; gap:10px; max-height:min(62vh,620px); overflow:auto; padding-right:4px; }
+.course-map-summary { margin:0 0 2px; color:#62756e; font-size:13px; }
+.course-map-card { display:flex; flex-direction:column; gap:7px; width:100%; padding:13px 14px; text-align:left; border:1px solid #dfe8e3; border-radius:12px; background:#fff; color:#17352d; transition:background .16s,border-color .16s,box-shadow .16s; }
+.course-map-card:hover { background:#f5f8f6; border-color:#bdd3ca; box-shadow:0 4px 14px #143d2510; }
+.course-map-card.current { border-color:#087e75; background:#edf6f5; box-shadow:0 0 0 3px #087e7512; }
+.course-map-card.done { border-color:#cfe2db; background:#f8fcfa; }
+.course-map-head { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.course-map-index { display:grid; place-items:center; width:26px; height:26px; flex-shrink:0; border-radius:50%; background:#eef3ef; color:#506971; font:600 11px/1 ui-monospace,Consolas,monospace; }
+.course-map-card.current .course-map-index { background:#087e75; color:#fff; }
+.course-map-card.done .course-map-index { background:#dcefe7; color:#087e75; }
+.course-map-title { flex:1; min-width:0; font-size:14px; font-weight:600; line-height:1.45; }
+.course-map-status { flex-shrink:0; padding:2px 8px; border-radius:20px; background:#eef3ef; color:#62756e; font-size:11px; line-height:1.6; }
+.course-map-status.current { background:#087e75; color:#fff; }
+.course-map-status.done { background:#dcefe7; color:#087e75; }
+.course-map-meta { display:flex; flex-wrap:wrap; gap:4px 14px; color:#62756e; font-size:12px; line-height:1.6; }
+.course-map-goal { flex-basis:100%; color:#506971; }
+@media(max-width:600px) { .course-map { max-height:66vh; } .course-map-card { padding:12px; } .course-map-title { font-size:13px; } .course-map-meta { gap:3px 10px; } }
 @media(prefers-reduced-motion:reduce) { .lesson-stage,.tutorial-nav .step-orb,.completion-seal { animation:none!important; } }

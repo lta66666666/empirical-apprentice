@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5 分钟验收指南 · 实证学徒</title>
+<style>
+  :root{--ink:#17352d;--muted:#5b7067;--line:#d9e5df;--teal:#087e75;--soft:#edf5f0;--bg:#f6f8f4}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.85 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+  .guide{max-width:940px;margin:auto;padding:34px 26px 60px}
+  header{padding:32px 0 24px;border-bottom:2px solid var(--teal)}
+  .badge{display:inline-block;padding:3px 10px;border:1px solid var(--teal);border-radius:999px;color:var(--teal);font-size:13px}
+  h1{font-size:32px;line-height:1.4;margin:14px 0 10px}
+  header p{color:var(--muted);margin:8px 0}
+  .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+  .btn{display:inline-block;padding:10px 16px;border-radius:8px;text-decoration:none;font-size:15px;border:1px solid var(--teal)}
+  .btn.primary{background:var(--teal);color:#fff}
+  .btn.plain{color:var(--teal);background:#fff}
+  section{background:#fff;border:1px solid var(--line);border-radius:12px;padding:24px 26px;margin:20px 0}
+  h2{font-size:22px;margin:0 0 14px;color:var(--teal)}
+  h3{font-size:17px;margin:20px 0 8px}
+  p{margin:8px 0}
+  .muted{color:var(--muted);font-size:14px}
+  ul,ol{padding-left:24px;margin:8px 0}
+  li{margin:7px 0}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}
+  th{background:var(--soft)}
+  code{background:var(--soft);padding:1px 5px;border-radius:4px;font-size:14px}
+  .callout{border-left:4px solid var(--teal);background:var(--soft);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .warn{border-left-color:#c98a00;background:#fff8e8}
+  .route{display:grid;gap:10px}
+  .route div{display:grid;grid-template-columns:38px 1fr;gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fbfdfc}
+  .route b{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--teal);color:#fff;font-size:14px}
+  .route span{display:block;color:var(--muted);font-size:14px}
+  .status{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);background:#fff}
+  .ok{color:#087e75;border-color:#9fd2c9;background:#eef9f6}
+  .pending{color:#8a5a00;border-color:#e4c47a;background:#fff8e8}
+  footer{border-top:1px solid var(--line);margin-top:26px;padding-top:18px;color:var(--muted);font-size:14px}
+  footer a{color:var(--teal)}
+  @media(max-width:640px){.guide{padding:20px 14px}h1{font-size:26px}section{padding:18px}table{font-size:13px}}
+  @media print{body{background:#fff}.guide{max-width:none;padding:0}.actions{display:none}section{border:0;padding:0;margin:0 0 18px;break-inside:avoid}h2{break-after:avoid}a{color:inherit}footer{display:none}}
+</style>
+</head>
+<body>
+<main class="guide">
+
+<header>
+  <span class="badge">5 分钟验收指南</span>
+  <h1>从一个问题到可复现的分析</h1>
+  <p>这份指南帮助第一次访问的人快速找到可核查入口。所有能力状态以页面实时提示为准；尚未验收的项不会写成已经通过。</p>
+  <div class="actions">
+    <a class="btn primary" href="/home" target="_blank" rel="noopener">进入首页</a>
+    <a class="btn plain" href="/analysis" target="_blank" rel="noopener">直接进入分析</a>
+    <a class="btn plain" href="/static/random-did-demo.html" target="_blank" rel="noopener">随机 DID 演示</a>
+    <a class="btn plain" href="/static/real-data-demo.html" target="_blank" rel="noopener">真实数据来源</a>
+    <a class="btn plain" href="/static/beginner-demo.html" target="_blank" rel="noopener">零基础体验</a>
+    <a class="btn plain" href="/static/local-assistant-guide.html" target="_blank" rel="noopener">本机 Stata 手册</a>
+    <a class="btn plain" href="/" target="_blank" rel="noopener">返回站点</a>
+  </div>
+</header>
+
+<section>
+  <h2>建议的 5 分钟路线</h2>
+  <div class="route">
+    <div><b>1</b><p>进入「边分析边学」，注册或登录后打开一个示范练习。<span>入口：首页 → 边分析边学；已有账号可直接登录。</span></p></div>
+    <div><b>2</b><p>使用内置同批 DID 模拟数据，观察对话助手如何补问对象、变量、观察时期与来源。<span>模拟数据会明确标注；它不是真实来源证据。</span></p></div>
+    <div><b>3</b><p>核对候选方案与执行环境，只有勾选确认后才提交计算。<span>可先使用浏览器 R；真实 Stata 需本机助手与有效 Stata 18 许可，条件见本机手册。</span></p></div>
+    <div><b>4</b><p>在结果页查看样本量、系数、标准误和区间，提交解释与修订，再导出学习报告、分析报告与复现包。<span>解释与计算分开记录；显著不等于因果。</span></p></div>
+    <div><b>5</b><p>在记录页查看 Agent 交互证据：提示词、输入摘要、输出与失败原因，按需下载 MD / JSON。<span>真实模型调用是否发生，以记录中的实际响应为准。</span></p></div>
+  </div>
+</section>
+
+<section>
+  <h2>可检查入口与当前状态</h2>
+  <table>
+    <tr><th>模块</th><th>可检查入口</th><th>当前状态与边界</th></tr>
+    <tr>
+      <td><strong>数据与处理</strong></td>
+      <td>研究准备卡、变量字典、样本与缺失处理、执行快照、复现 ZIP 中的输入与样本记录；真实数据来源页提供 World Bank WDI 来源、许可与 SHA256</td>
+      <td><span class="status ok">已实现</span><br><span class="muted">真实来源需标注获取日期与许可；模拟数据不冒充真实资料</span></td>
+    </tr>
+    <tr>
+      <td><strong>分析流程</strong></td>
+      <td>候选方案、适用性拦截、确认版本、真实计算、独立重跑与复算记录</td>
+      <td><span class="status ok">流程与本机/浏览器计算已实测</span><br><span class="muted">云端 R 与公网 Stata 按部署状态显示，未配置时不可选</span></td>
+    </tr>
+    <tr>
+      <td><strong>解释与修订</strong></td>
+      <td>首次解释、反馈、学生修订、最新报告与版本保护</td>
+      <td><span class="status ok">流程已实现</span><br><span class="muted">真实模型输出质量需以实际调用记录核验，不用固定模板冒充</span></td>
+    </tr>
+    <tr>
+      <td><strong>证据链</strong></td>
+      <td>本机真实 Stata 执行、教学命令对照、可复现证据链、原始数据留在本机</td>
+      <td><span class="status ok">本机三方法已实测</span><br><span class="muted">公网多用户、Stata 网站授权与 Linux 部署仍未验收</span></td>
+    </tr>
+    <tr>
+      <td><strong>Agent 记录</strong></td>
+      <td>对话补问、受限候选方案、完整的提示词/输入摘要/输出/失败原因记录与导出</td>
+      <td><span class="status ok">记录与导出已实现</span><br><span class="muted">真实模型调用须按记录逐条核验；未配置模型时不宣称已调用</span></td>
+    </tr>
+  </table>
+  <p class="muted">这里只说明入口与边界，不替代实际验收证据。</p>
+</section>
+
+<section>
+  <h2>现场验证真实 Stata（约 2 分钟）</h2>
+  <ol>
+    <li>现场演示使用准备好的 Windows 电脑，确认已安装并授权 Stata 18，本机助手已启动。</li>
+    <li>在网页「提交材料 → 使用本机 Stata（试验）」输入助手生成的六位配对码。</li>
+    <li>选择示范 CSV，网页核对方法、变量、面板设定与推断方式后提交。</li>
+    <li>本机助手显示完整 <code>estimate.do</code>，现场人员批准执行；完成后另批准上传结果摘要。</li>
+    <li>结果页应显示 <code>Stata 18</code>、命令、样本量与系数；复现 ZIP 内含代码与日志。</li>
+  </ol>
+  <div class="callout">只看网页、没有本机助手或 Stata 许可时，真实 Stata 不可用。此时应演示浏览器 R 或 StatsPAI，并明确标注软件，不能把其他软件结果说成 Stata。</div>
+</section>
+
+<section>
+  <h2>可以核验与不能宣称</h2>
+  <table>
+    <tr><th>可以现场核验</th><th>未验收前不得宣称</th></tr>
+    <tr>
+      <td>页面引擎状态的实时提示、任务记录、确认版本、执行时间、复现 ZIP、本机日志与结果哈希</td>
+      <td>未配置的云端执行节点、未获授权的公网 Stata、未实际发生的模型调用、未通过的多用户隔离与长期清理时限</td>
+    </tr>
+  </table>
+  <div class="callout warn">提交材料与截图不得包含模型密钥、Stata 许可证、序列号、匿名访问 Cookie 或服务签名凭据。</div>
+</section>
+
+<footer>
+  <p>实证学徒 · 5 分钟验收指南。当前为试验版本；产品能力以页面实时状态与本机助手日志为准。</p>
+  <p><a href="/static/local-assistant-guide.html">本机助手安装与配对手册</a> · <a href="/static/random-did-demo.html">随机 DID 完整演示</a> · <a href="/static/real-data-demo.html">真实数据来源</a> · <a href="/home">返回首页</a></p>
+</footer>
+
+</main>
+</body>
+</html>

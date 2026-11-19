@@ -1,1 +1,76 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>实证学徒 · 登录</title><script defer src="/static/auth-view.js?v=2"></script><link rel="stylesheet" href="/static/ui/components.css"><link rel="stylesheet" href="/static/ui/theme.css"><link rel="stylesheet" href="/static/auth.css?v=6"></head><body class="ea-ui auth"><main class="auth-shell"><aside class="auth-visual"><p class="auth-brand-light">实证学徒 · EMPIRICAL APPRENTICE</p><h2>从一个问题，<br>走向有依据的分析。</h2><p class="auth-lead">八阶段课程 · 云端 Stata 语法计算 · 可复现证据链</p><ul class="auth-points"><li><span>01</span>看图学 · 做练习 · 写成果</li><li><span>02</span>真实结果、Stata 对应代码与复现包</li><li><span>03</span>不编造结果，不代写论文</li></ul></aside><section class="auth-card"><h1 id="title">登录实证学徒</h1><p id="intro">使用你的个人账号继续学习。</p><form id="authForm"><label>用户名<input class="form-control" id="username" name="username" autocomplete="username" pattern="[A-Za-z0-9_]{3,32}" minlength="3" maxlength="32" required></label><label>密码<input class="form-control" id="password" name="password" type="password" autocomplete="current-password" minlength="12" required></label><label id="confirmationLabel" hidden>确认密码<input class="form-control" id="passwordConfirmation" name="password_confirmation" type="password" autocomplete="new-password" aria-describedby="passwordMatch" disabled></label><p id="passwordMatch" class="password-match" aria-live="polite" hidden></p><p id="error" role="alert"></p><button class="btn btn-primary" type="submit" id="submit">登录</button></form><a id="switch" href="/register">没有账号？自行注册</a><p class="auth-footnote">教学练习环境 · 不代写论文</p></section></main></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>实证学徒 · 登录</title>
+<script defer src="/static/auth-view.js?v=3"></script>
+<link rel="stylesheet" href="/static/ui/components.css">
+<link rel="stylesheet" href="/static/ui/theme.css">
+<link rel="stylesheet" href="/static/auth.css?v=8">
+</head>
+<body class="ea-ui auth">
+<main class="auth-shell">
+  <aside class="auth-visual">
+    <div class="auth-visual-head">
+      <span class="auth-mark" aria-hidden="true">EA</span>
+      <p class="auth-brand-light">实证学徒 · EMPIRICAL APPRENTICE</p>
+    </div>
+    <div class="auth-visual-body">
+      <p class="auth-kicker">学习工作台</p>
+      <h2>从一个问题，<br><span>走向有依据的分析。</span></h2>
+      <p class="auth-lead">八阶段课程 · 云端 Stata 语法计算 · 可复现证据链</p>
+      <ol class="auth-path" aria-label="学习路径">
+        <li><span>01</span><b>提出问题</b><em>先看懂要研究什么</em></li>
+        <li><span>02</span><b>认识数据</b><em>知道每一列是什么</em></li>
+        <li><span>03</span><b>执行分析</b><em>看懂结果与局限</em></li>
+        <li><span>04</span><b>形成成果</b><em>留下可复现记录</em></li>
+      </ol>
+    </div>
+    <div class="auth-visual-foot">
+      <div class="auth-chips"><span>看图学</span><span>做练习</span><span>写成果</span></div>
+      <p class="auth-note">真实结果、Stata 对应代码与复现包 · 不编造结果，不代写论文</p>
+    </div>
+  </aside>
+  <section class="auth-card">
+    <div class="auth-card-head">
+      <span class="auth-card-mark" aria-hidden="true">EA</span>
+      <div>
+        <p class="auth-card-kicker">实证学徒 · 学习工作台</p>
+        <h1 id="title">欢迎回来</h1>
+      </div>
+    </div>
+    <p id="intro" class="auth-intro">使用你的个人账号继续学习。</p>
+    <a class="auth-beginner" href="/static/beginner-demo.html"><strong>第一次来？先做 3 分钟零基础体验</strong><span>不用注册 · 从一个收入问题开始</span></a>
+    <form id="authForm" class="auth-form">
+      <label>用户名
+        <span class="input-wrap">
+          <svg class="input-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.5 3.1-5.5 7-5.5s7 2 7 5.5"/></svg>
+          <input class="form-control" id="username" name="username" autocomplete="username" pattern="[A-Za-z0-9_]{3,32}" minlength="3" maxlength="32" required>
+        </span>
+      </label>
+      <label>密码
+        <span class="input-wrap has-action">
+          <svg class="input-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" minlength="12" required>
+          <button class="input-action" type="button" id="togglePassword" aria-label="显示密码" aria-pressed="false">显示</button>
+        </span>
+      </label>
+      <label id="confirmationLabel" hidden>确认密码
+        <span class="input-wrap">
+          <svg class="input-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          <input class="form-control" id="passwordConfirmation" name="password_confirmation" type="password" autocomplete="new-password" aria-describedby="passwordMatch" disabled>
+        </span>
+      </label>
+      <p id="passwordMatch" class="password-match" aria-live="polite" hidden></p>
+      <p id="error" role="alert"></p>
+      <button class="btn btn-primary auth-submit" type="submit" id="submit">登录</button>
+    </form>
+    <a id="switch" class="auth-switch" href="/register">还没有账号？创建一个</a>
+    <div class="auth-divider" aria-hidden="true"><span>验收与证据</span></div>
+    <p class="auth-guide"><a href="/static/judge-guide.html">5 分钟验收指南</a><a href="/static/random-did-demo.html">随机 DID 演示</a><a href="/static/local-assistant-guide.html">本机 Stata 手册</a></p>
+    <p class="auth-footnote">教学练习环境 · 不代写论文</p>
+  </section>
+</main>
+</body>
+</html>

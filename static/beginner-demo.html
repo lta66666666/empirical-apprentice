@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3 分钟零基础体验 · 实证学徒</title>
+<style>
+:root{--ink:#17352d;--muted:#62756e;--teal:#087e75;--deep:#0b3d3a;--line:#d9e5df;--soft:#eef7f4;--clay:#c2683d}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(900px 480px at 8% -8%,#dff2ec 0%,transparent 55%),linear-gradient(180deg,#f8fbfa 0%,#eef5f2 100%);color:var(--ink);font:16px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+main{max-width:880px;margin:0 auto;padding:36px 24px 48px}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.badge{display:inline-block;padding:3px 10px;border:1px solid var(--teal);border-radius:999px;color:var(--teal);background:#fff;font-size:13px}
+.badge.soft{border-color:#cfe2db;color:#506971;background:#f7fbf9}
+h1{font-size:clamp(28px,4vw,38px);line-height:1.3;margin:0 0 10px;letter-spacing:-.02em}
+.lead{color:var(--muted);margin:0 0 24px;max-width:48em}
+section{background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px 26px;margin:18px 0}
+h2{font-size:19px;margin:0 0 8px;color:var(--teal)}
+p{margin:8px 0}
+.hint{color:var(--muted);font-size:14px}
+table{width:100%;border-collapse:collapse;margin:14px 0 8px;font-size:14px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+th{color:var(--muted);font-weight:500;background:#fbfdfc}
+.note{color:var(--muted);font-size:13px;margin:8px 0 0}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;border:1px solid var(--teal);border-radius:8px;background:#fff;color:var(--teal);font:inherit;font-size:14px;text-decoration:none;cursor:pointer}
+.btn.primary{background:var(--teal);color:#fff}
+.btn:hover{filter:brightness(.97)}
+.btn:focus-visible,a:focus-visible{outline:3px solid #087e75;outline-offset:3px}
+.btn[aria-pressed=true]{background:var(--soft);border-color:var(--teal);font-weight:600}
+.result-card{margin-top:16px;border:1px solid #cfe2db;border-radius:12px;background:#f7fbf9;padding:18px}
+.metric{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.metric span{color:var(--muted);font-size:13px}
+.metric strong{font-size:38px;line-height:1;color:var(--teal)}
+.read p{margin:8px 0}
+.read b{color:var(--ink)}
+.quiz{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0 4px}
+.quiz-feedback{min-height:2.6em;margin:10px 0 0;font-size:14px}
+.quiz-feedback.ok{color:#0a6b57}
+.quiz-feedback.bad{color:#a53232}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 0}
+.next{background:linear-gradient(135deg,#eef8f3,#fff9ed);border-color:#d8e7df}
+footer{margin-top:26px;color:var(--muted);font-size:13px;text-align:center}
+[hidden]{display:none!important}
+@media(max-width:600px){main{padding:24px 16px 36px}section{padding:18px}.metric strong{font-size:32px}.actions .btn{width:100%}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <div class="badges"><span class="badge">3 分钟体验</span><span class="badge soft">无需注册</span><span class="badge soft">模拟教学数据</span></div>
+  <h1>教育程度和收入，<br>到底有什么关系？</h1>
+  <p class="lead">先看 6 行数据，再点一次“看结果”，最后用自己的话判断。整个过程不需要先学编程，也不会替你写论文。</p>
+
+  <section aria-labelledby="dataTitle">
+    <h2 id="dataTitle">01 先认识数据</h2>
+    <p>每一行是一个人。<code>income</code> 是月收入（千元），<code>education</code> 是受教育年限，<code>experience</code> 是工作经验（年）。</p>
+    <table>
+      <thead><tr><th scope="col">月收入</th><th scope="col">受教育年限</th><th scope="col">工作经验</th></tr></thead>
+      <tbody>
+        <tr><td>10.99</td><td>11</td><td>1</td></tr>
+        <tr><td>15.00</td><td>17</td><td>6</td></tr>
+        <tr><td>20.49</td><td>20</td><td>22</td></tr>
+        <tr><td>15.35</td><td>15</td><td>19</td></tr>
+        <tr><td>14.35</td><td>14</td><td>6</td></tr>
+        <tr><td>13.11</td><td>11</td><td>8</td></tr>
+      </tbody>
+    </table>
+    <p class="note">这是项目内置的模拟教学数据，不是真实调查样本，也不能代表任何地区或人群。</p>
+  </section>
+
+  <section aria-labelledby="resultTitle">
+    <h2 id="resultTitle">02 点一下，看结果</h2>
+    <p>我们问：控制工作经验后，教育年限和收入有什么关系？</p>
+    <button class="btn primary" type="button" id="revealResult">看这次分析的结果</button>
+    <div class="result-card" id="resultCard" hidden>
+      <div class="metric"><span>教育年限系数</span><strong>0.774</strong><span>95% 区间 0.710 ~ 0.838</span></div>
+      <div class="read">
+        <p><b>怎么读：</b>在其他条件不变时，教育年限每多 1 年，模拟月收入平均高约 0.77 千元。</p>
+        <p><b>符号：</b>这里是正号，表示教育年限与收入同方向变化；正号不等于因果。</p>
+        <p><b>不能直接证明：</b>还可能遗漏能力、家庭背景、地区差异等因素，数据本身也是模拟的。区间和模型设定仍需核对。</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="quizTitle">
+    <h2 id="quizTitle">03 你来判断</h2>
+    <p>这个结果能直接证明“多读书一定导致收入更高”吗？</p>
+    <div class="quiz" role="group" aria-label="选择你的判断">
+      <button class="btn" type="button" data-answer="yes" aria-pressed="false">能，系数为正</button>
+      <button class="btn" type="button" data-answer="no" aria-pressed="false">不能，只能说明关联</button>
+    </div>
+    <p class="quiz-feedback" id="quizFeedback" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="next" aria-labelledby="nextTitle">
+    <h2 id="nextTitle">接下来</h2>
+    <p>完整版会带你走完：提出问题 → 认识数据 → 选择方法 → 执行分析 → 理解结果 → 导出成果。</p>
+    <div class="actions">
+      <a class="btn primary" href="/register">注册后做完整练习</a>
+      <a class="btn" href="/login">返回登录</a>
+      <a class="btn" href="/static/random-did-demo.html">看完整 DID 演示</a>
+    </div>
+    <p class="note">本页是静态教学演示；数值来自项目内置 OLS 教学夹具，不是本次实时计算。完整练习才会记录你的数据、方案和执行结果。</p>
+    <p class="note">需要安装 Stata 吗？不用先安装。完整练习可使用浏览器 R 或云端 StatsPAI；本机 Stata 18 是可选进阶，需要你自己的许可证。</p>
+  </section>
+
+  <footer>实证学徒 · 零基础体验 · 2026-11-09</footer>
+</main>
+<script defer src="/static/beginner-demo.js"></script>
+</body>
+</html>

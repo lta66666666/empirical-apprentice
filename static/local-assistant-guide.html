@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本机助手安装与配对手册 · 实证学徒</title>
+<style>
+  :root{--ink:#17352d;--muted:#5b7067;--line:#d9e5df;--teal:#087e75;--soft:#edf5f0;--warn:#8a5a00;--bg:#f6f8f4}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.85 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+  .guide{max-width:900px;margin:auto;padding:34px 26px 60px}
+  header{padding:32px 0 24px;border-bottom:2px solid var(--teal)}
+  .badge{display:inline-block;padding:3px 10px;border:1px solid var(--teal);border-radius:999px;color:var(--teal);font-size:13px}
+  h1{font-size:32px;line-height:1.4;margin:14px 0 10px}
+  header p{color:var(--muted);margin:8px 0}
+  .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+  .btn{display:inline-block;padding:10px 16px;border-radius:8px;text-decoration:none;font-size:15px;border:1px solid var(--teal)}
+  .btn.primary{background:var(--teal);color:#fff}
+  .btn.plain{color:var(--teal);background:#fff}
+  nav{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin:24px 0;padding:16px 18px;background:#fff;border:1px solid var(--line);border-radius:10px}
+  nav a{color:var(--teal);font-size:14px;text-decoration:none}
+  section{background:#fff;border:1px solid var(--line);border-radius:12px;padding:24px 26px;margin:20px 0}
+  h2{font-size:22px;margin:0 0 14px;color:var(--teal)}
+  h3{font-size:17px;margin:20px 0 8px}
+  p{margin:8px 0}
+  .muted{color:var(--muted);font-size:14px}
+  ul,ol{padding-left:24px;margin:8px 0}
+  li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}
+  th{background:var(--soft)}
+  code,pre{font-family:Consolas,"Courier New",monospace}
+  code{background:var(--soft);padding:1px 5px;border-radius:4px;font-size:14px}
+  pre{background:#10241f;color:#e9f4ef;padding:14px 16px;border-radius:8px;overflow:auto;font-size:14px;line-height:1.7}
+  .callout{border-left:4px solid var(--teal);background:var(--soft);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .warn{border-left-color:#c98a00;background:#fff8e8}
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0}
+  .flow div{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:14px;text-align:center}
+  .flow span{display:block;color:var(--muted);font-size:12px}
+  footer{border-top:1px solid var(--line);margin-top:26px;padding-top:18px;color:var(--muted);font-size:14px}
+  footer a{color:var(--teal)}
+  @media(max-width:640px){.guide{padding:20px 14px}.flow{grid-template-columns:1fr 1fr}nav{grid-template-columns:1fr}h1{font-size:26px}section{padding:18px}}
+  @media print{body{background:#fff}.guide{max-width:none;padding:0}.actions,nav{display:none}section{border:0;padding:0;margin:0 0 18px;break-inside:avoid}h2{break-after:avoid}a{color:inherit}footer{display:none}}
+</style>
+</head>
+<body>
+<main class="guide">
+
+<header>
+  <span class="badge">试验版 · Windows 10/11 · Stata 18</span>
+  <h1>本机助手安装与配对手册</h1>
+  <p>这份手册只讲一件事：如何在<strong>你自己的 Windows 电脑</strong>安装本机助手，并让它与实证学徒网页配对，用你本机已授权的 Stata 执行 OLS、固定效应和同批 DID。</p>
+  <p class="muted">网页本身不能访问你电脑的 localhost；真实 Stata 必须通过本机助手执行。原始数据留在本机，网页只接收字段摘要、哈希和你单独批准上传的结果。</p>
+  <div class="actions">
+    <a class="btn primary" href="/static/local-stata-assistant.zip" download="local-stata-assistant.zip">下载 Windows 本机助手</a>
+    <a class="btn plain" href="/" target="_blank" rel="noopener">返回实证学徒网站</a>
+    <span class="btn plain">打印：浏览器 Ctrl+P</span>
+  </div>
+</header>
+
+<nav aria-label="手册目录">
+  <a href="#scope">一、先确认你属于哪种情况</a>
+  <a href="#requirements">二、安装前检查</a>
+  <a href="#install">三、下载与安装</a>
+  <a href="#pair">四、连接网页并配对</a>
+  <a href="#run">五、执行并上传结果</a>
+  <a href="#bridge">六、两种 Stata 桥接器</a>
+  <a href="#trouble">七、常见问题</a>
+  <a href="#safety">八、安全边界</a>
+</nav>
+
+<section id="scope">
+  <h2>一、先确认你属于哪种情况</h2>
+  <table>
+    <tr><th>测试方式</th><th>能否使用真实 Stata</th><th>怎么做</th></tr>
+    <tr><td>在自己电脑打开网页，并安装本机助手</td><td>可以</td><td>按本手册安装、配对；电脑上必须有有效许可的 Stata 18</td></tr>
+    <tr><td>只打开网页，没有本机助手</td><td>不可以</td><td>只能使用浏览器 R 或云端 StatsPAI（Python）</td></tr>
+    <tr><td>远程访问网页，Stata 在另一台电脑</td><td>不可以</td><td>网页无法连接那台电脑的 localhost；请使用现场准备好的机器</td></tr>
+  </table>
+  <div class="callout">如果你没有 Stata 安装和许可证，请不要下载助手后声称“能跑 Stata”。助手包不包含 Stata、许可证或 Python 运行时。</div>
+</section>
+
+<section id="requirements">
+  <h2>二、安装前检查</h2>
+  <ul>
+    <li><strong>Windows 10 或 11，64 位。</strong>当前助手只提供 PowerShell 启动脚本，不支持 macOS / Linux。</li>
+    <li><strong>Python 3.11，64 位。</strong><code>setup.ps1</code> 会强制检查版本与位数；其他版本会直接拒绝。</li>
+    <li><strong>Stata 18，64 位，且许可证有效。</strong>模板使用 <code>version 18.0</code>；Stata 17 或 Stata 19 会被拒绝。安装目录下应存在 <code>utilities/pystata/config.py</code>。</li>
+    <li><strong>可访问互联网。</strong>首次安装依赖和网页配对都需要网络；依赖固定在本包 <code>requirements.lock</code> 中。</li>
+    <li><strong>端口 4000 / 8767 保持本机使用。</strong>不要在路由器或云服务器上开放这两个端口。</li>
+  </ul>
+</section>
+
+<section id="install">
+  <h2>三、下载与安装</h2>
+  <h3>1. 下载并解压</h3>
+  <p>点击页面左侧或本页顶部的「下载 Windows 本机助手」，得到 <code>local-stata-assistant.zip</code>。解压后目录中应包含 <code>local_stata/</code>。</p>
+  <h3>2. 安装固定依赖</h3>
+  <p>在解压后的目录打开 PowerShell，执行：</p>
+<pre>cd local_stata
+.\setup.ps1 -Python "C:\完整路径\python.exe"</pre>
+  <p class="muted"><code>-Python</code> 必须指向 Python 3.11 64 位的 <code>python.exe</code>。安装会在本目录创建 <code>.venv</code>，并核对 statsPAI / stata-code 的固定版本。</p>
+  <h3>3. 启动助手</h3>
+<pre>.\start.ps1 -StataHome "C:\Program Files\Stata18"</pre>
+  <p>看到 <code>Local assistant: http://127.0.0.1:8767</code> 后，用浏览器打开 <a href="http://127.0.0.1:8767/" target="_blank" rel="noopener">http://127.0.0.1:8767/</a>。</p>
+  <div class="callout warn">如果提示「此路径未找到 Stata 自带的 PyStata」，说明 <code>-StataHome</code> 指错了目录。请指向包含 <code>utilities/pystata/config.py</code> 的 Stata 安装根目录。</div>
+</section>
+
+<section id="pair">
+  <h2>四、连接网页并配对</h2>
+  <div class="flow">
+    <div>在助手填写网站地址<span>必须是 HTTPS 站点根地址</span></div>
+    <div>生成六位配对码<span>由本机助手生成</span></div>
+    <div>在网页输入配对码<span>提交材料 → 使用本机 Stata</span></div>
+    <div>双方显示已连接<span>再选择数据与方案</span></div>
+  </div>
+  <ol>
+    <li>在助手页面填写网站根地址，例如 <code>https://你的站点域名</code>；不要带路径、查询参数或末尾多余字符。</li>
+    <li>点击生成配对码，助手会显示<strong>六位数字</strong>。</li>
+    <li>登录网页，进入当前练习：<strong>提交材料 → 使用本机 Stata（试验）</strong>。</li>
+    <li>在「连接与助手设置」中输入六位配对码，点击<strong>配对当前练习</strong>。</li>
+    <li>回到助手确认状态变为已连接；网页刷新后应能看到当前设备。</li>
+    <li>在助手选择 CSV 或 TSV，点击读取字段摘要。若使用内置示范案例，可在网页点「在助手准备模拟数据」，无需手动找文件。</li>
+  </ol>
+  <div class="callout">配对码属于一次性连接凭据，不要截图发到公开群聊；<code>connection.json</code> 也不要分享。</div>
+</section>
+
+<section id="run">
+  <h2>五、执行并上传结果</h2>
+  <ol>
+    <li>在网页选择方法（OLS / 固定效应 / 同批 DID）、结果变量、解释变量、面板个体与年份等。</li>
+    <li>软件选择<strong>真实 Stata（默认）</strong>，并选择桥接器（见下一节）；核对方案后提交。</li>
+    <li>助手收到冻结任务后，会显示完整 <code>estimate.do</code>、参数、输入哈希和工作目录。</li>
+    <li>在本机核对无误后点击<strong>批准执行</strong>。单任务最长运行 120 秒；执行期间不要重复提交。</li>
+    <li>执行完成后，本机先保存结果；网页需要你<strong>另行批准上传结果摘要</strong>后才会显示实际 Stata 结果。</li>
+    <li>结果页可查看样本量、系数、标准误和区间；复现 ZIP 内含 <code>estimate.do</code>、<code>execution.log</code> 和结果 CSV。</li>
+  </ol>
+  <div class="callout">批准执行和批准上传是两次独立动作。只批准你理解并核对过的代码；不要批量确认陌生任务。</div>
+</section>
+
+<section id="bridge">
+  <h2>六、两种 Stata 桥接器</h2>
+  <table>
+    <tr><th>桥接器</th><th>适用情况</th><th>需要保持运行</th></tr>
+    <tr>
+      <td><strong>现有 Stata MCP</strong>（默认）</td>
+      <td>电脑已安装 Trae / VS Code 的 Stata MCP 扩展，并已连接到本机 Stata</td>
+      <td>编辑器与扩展运行，<code>http://127.0.0.1:4000</code> 可访问；可在命令面板执行 <code>Stata: Test MCP Server Connection</code></td>
+    </tr>
+    <tr>
+      <td><strong>stata-code / PyStata</strong>（试验）</td>
+      <td>没有编辑器扩展，但 Stata 18 自带 PyStata 可用</td>
+      <td>Stata 安装目录与 <code>STATA_HOME</code> 正确；仍需要有效许可证</td>
+    </tr>
+  </table>
+  <p class="muted">两种桥接器都只执行真实 Stata。StatsPAI 是 Python 计算，不会操控 Stata.exe，结果页会明确标注软件，不能冒充 Stata。</p>
+</section>
+
+<section id="trouble">
+  <h2>七、常见问题</h2>
+  <table>
+    <tr><th>现象</th><th>处理</th></tr>
+    <tr><td><code>Requires Python 3.11 64-bit</code></td><td>安装 Python 3.11 x64，并用 <code>-Python</code> 指向其完整路径；不要用 3.12/3.13 或 32 位版本。</td></tr>
+    <tr><td><code>此路径未找到 Stata 自带的 PyStata</code></td><td>核对 <code>-StataHome</code> 是否指向 Stata 18 根目录，并确认 <code>utilities/pystata/config.py</code> 存在。</td></tr>
+    <tr><td>网页显示助手未连接</td><td>确认 8767 页面能打开、网站地址是根地址、配对码未过期；必要时重新生成配对码后再配对。</td></tr>
+    <tr><td><code>No valid session ID provided</code> 或 4000 不通</td><td>重启编辑器 / Stata MCP 扩展，刷新客户端连接；不要重复添加同名 MCP 配置。</td></tr>
+    <tr><td>Stata 版本报错</td><td>当前模板只接受 Stata 18；Stata 17/19 需另行适配，不能强行改版本号。</td></tr>
+    <tr><td>执行超时或取消后担心残留</td><td>本机助手会按任务取消并尝试停止进程；MCP 路径的强制终止能力有限，超时后请检查 Stata 进程并在助手刷新状态。</td></tr>
+    <tr><td>网页刷新后看不到结果</td><td>结果可能仍在本地「待同步」；恢复网络后刷新，不要自动重跑；上传仍需单独批准。</td></tr>
+  </table>
+</section>
+
+<section id="safety">
+  <h2>八、安全边界</h2>
+  <ul>
+    <li>助手以你的 Windows 账号权限执行代码，工作目录<strong>不是</strong>权限沙箱；只批准你理解的内容。</li>
+    <li>原始数据、日志、原生结果和复现包保存在本机 <code>%LOCALAPPDATA%\EmpiricalApprentice\tasks</code>；网站下载不包含原始数据。</li>
+    <li>4000 与 8767 只监听回环地址，不要端口转发到公网。</li>
+    <li>Stata 许可证必须由使用者本人合法持有；本助手包不分发 Stata、许可证或序列号。</li>
+    <li>AI 生成的代码只是待批准草稿，不构成执行授权；数值显著也不自动证明因果。</li>
+  </ul>
+</section>
+
+<section id="judge">
+  <h2>现场演示建议</h2>
+  <p>最稳妥的方式是准备一台已经安装 Stata 18、Python 3.11 和本机助手的 Windows 机器，现场人员只在这台机器上完成配对与批准；自己的电脑仅用于打开网页。这样既避免现场安装失败，也避免跨机器使用 Stata 许可证的合规问题。</p>
+  <p class="muted">若只能远程访问网页，请明确说明真实 Stata 不可用，演示浏览器 R 或云端 StatsPAI，不要用其他软件结果冒充 Stata。</p>
+</section>
+
+<footer>
+  <p>实证学徒 · 本机助手安装与配对手册（试验版）。软件版本、许可与验收状态以站内实际提示为准；本手册不构成 Stata 许可或网站部署授权。</p>
+  <p><a href="/static/local-stata-assistant.zip" download="local-stata-assistant.zip">下载本机助手</a> · <a href="/">返回网站</a></p>
+</footer>
+
+</main>
+</body>
+</html>

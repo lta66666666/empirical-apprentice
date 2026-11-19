@@ -165,7 +165,7 @@ function renderOutline(data) {
     if (done) completed++;
     const current = data.lesson_ui?.lesson_id === item.id;
     const b = button("", `course-step${current ? " current" : ""}${done ? " done" : ""}`, () => showLessonReview(item));
-    b.title = `查看${item.title}的内容与记录`;
+    b.title = `${item.title}${item.duration ? ` · 建议 ${item.duration}` : ""}${item.output ? ` · 产出：${item.output}` : ""}`;
     if (current) b.setAttribute("aria-current", "step");
     const number = el("span", "step-number", done ? "" : String(item.id).padStart(2,"0"));
     if (done) number.append(icon("check"));
@@ -616,8 +616,23 @@ $("jumpBottomBtn").onclick=()=>{ followBottom=true; autoScrolling=true; $("learn
 bindScrollFollow();
 $("courseMapBtn").onclick=()=>{
   if(!latestState)return;
-  const body=el("div","course-map");
-  for(const item of latestState.outline||[])body.append(button(`${String(item.id).padStart(2,"0")} · ${item.title}`,"course-step",()=>showLessonReview(item)));
+  const body=el("div","course-map"),outline=latestState.outline||[],current=latestState.lesson_ui?.lesson_id;
+  const doneCount=outline.filter(item=>{const r=latestState.lesson_records.find(x=>x.stage===item.id);return (r?.steps.filter(s=>s.outcome).length||0)===item.total_steps;}).length;
+  body.append(el("p","course-map-summary",`已完成 ${doneCount} / ${outline.length} 阶段${current?` · 当前第 ${current} 阶段`:""}`));
+  for(const item of outline){
+    const record=latestState.lesson_records.find(r=>r.stage===item.id),answered=record?.steps.filter(s=>s.outcome).length||0;
+    const done=answered===item.total_steps,isCurrent=current===item.id,status=done?"已完成":isCurrent?"进行中":answered?"已作答，未完成":"未开始";
+    const card=button("",`course-map-card${isCurrent?" current":""}${done?" done":""}`,()=>showLessonReview(item));
+    card.setAttribute("aria-label",`${item.title}，${status}`);
+    if(isCurrent)card.setAttribute("aria-current","step");
+    const head=el("span","course-map-head");
+    head.append(el("span","course-map-index",String(item.id).padStart(2,"0")),el("span","course-map-title",item.title),el("span",`course-map-status${done?" done":isCurrent?" current":""}`,status));
+    const meta=el("span","course-map-meta");
+    if(item.duration)meta.append(el("span","",`建议 ${item.duration}`));
+    if(item.output)meta.append(el("span","",`产出：${item.output}`));
+    if(item.goal)meta.append(el("span","course-map-goal",`目标：${item.goal}`));
+    card.append(head,meta);body.append(card);
+  }
   dialog("8 阶段学习地图",body,[button("返回当前任务","btn-primary",()=>$("appDialog").close())]);
 };
 $("learnViewBtn").onclick=()=>setView(false); $("workViewBtn").onclick=()=>setView(true);

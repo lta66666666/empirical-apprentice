@@ -19,7 +19,7 @@
  }
  window.eaOpenStataGuide=(lesson,step)=>{const saved=eaDraftEntry('stata-guide').value||{};return open(lesson||saved.lesson_id,step||(lesson?undefined:saved.step_id));};
  chapters.addEventListener('change',()=>open(chapters.value));dialog.addEventListener('close',()=>epoch++);
- (document.querySelector('.coach-menu')||document.querySelector('.module-toolbar'))?.append(button('Stata 入门指南','text-btn',()=>eaOpenStataGuide()));
+ (document.querySelector('.coach-menu'))?.append(button('Stata 入门指南','text-btn',()=>eaOpenStataGuide()));
  const requested=new URLSearchParams(location.search).get('stata_guide');if(requested)eaOpenStataGuide(requested);
  if(window.EA_MODULE==='learn'){
   const render=window.eaRenderCourse;window.eaRenderCourse=function(state){render?.(state);document.getElementById('stage-six-stata-guide')?.remove();const c=state?.learning_context;if((c?.view_lesson_id||c?.lesson_id)!==6)return;const box=el('section','resource-section');box.id='stage-six-stata-guide';box.append(el('h3','','软件操作阅读'),el('p','','原实验包为独立复算材料；Stata 指南是独立的只读操作说明，不替换原实验或自动运行。'),button('阅读 Stata 操作指南','btn-secondary',()=>eaOpenStataGuide('do-files')));const preview=document.getElementById('eaCoursePreview');(preview&&!preview.hidden?preview:document.getElementById('teachingDetails'))?.append(box);};window.eaRenderCourse(window.latestState||typeof latestState!=='undefined'&&latestState);

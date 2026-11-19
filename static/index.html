@@ -18,7 +18,8 @@
   <script defer src="/static/report-view.js?v=1"></script>
 <link rel="stylesheet" href="/static/ui/components.css"><link rel="stylesheet" href="/static/ui/theme.css"></head>
 <body class="ea-ui">
-  <div role="status" style="padding:7px 18px;background:linear-gradient(90deg,#0b3d3a,#0f5f57);color:#dff3ee;font:13px/1.5 system-ui,sans-serif;letter-spacing:.02em">演示环境 · 云端计算已上线，执行前请核对方案。</div>
+  <a class="skip-link" href="#mainContent">跳到主要内容</a>
+  <div role="status" style="padding:7px 18px;background:linear-gradient(90deg,#0b3d3a,#0f5f57);color:#dff3ee;font:13px/1.5 system-ui,sans-serif;letter-spacing:.02em">演示环境 · 执行前请核对引擎状态、样本与方案；未就绪入口会明确标注。</div>
   <header class="app-header">
     <a class="brand" href="/" aria-label="实证学徒首页"><span class="brand-icon"><i data-lucide="sprout"></i></span><span>实证学徒<small>EMPIRICAL APPRENTICE</small></span></a>
     <span class="header-divider"></span><span class="header-label">学习工作台</span>
@@ -31,7 +32,7 @@
   </header>
   <div id="errorBar" class="error-bar" role="alert" hidden><span id="errorText"></span><button id="recoverBtn" class="text-btn">重新连接</button><button id="dismissError" class="icon-btn" title="关闭提示" aria-label="关闭提示"><i data-lucide="x"></i></button></div>
   <nav class="mobile-nav" aria-label="工作区切换"><button id="learnViewBtn" class="active" aria-pressed="true">学习</button><button id="workViewBtn" aria-pressed="false">研究工作区</button></nav>
-  <main class="layout">
+  <main class="layout" id="mainContent" tabindex="-1">
     <nav class="learning-rail" aria-label="学习路线">
       <div class="rail-heading"><i data-lucide="route"></i><h2>学习路线</h2><span id="railRange">01—08</span></div>
       <div class="rail-progress"><span id="railCount">尚未开始</span><progress id="railProgress" max="8" value="0" aria-label="课程完成进度"></progress></div>
@@ -89,6 +90,7 @@
         <section id="pane-preparation" role="region" aria-label="研究准备清单" hidden><div id="preparationContent"></div></section>
         <section id="pane-materials" role="tabpanel" aria-labelledby="tab-materials" hidden>
           <section class="resource-section"><span class="eyebrow">可下载 · 可复算</span><h3>4 城市 DID 小实验</h3><p>模拟原始数据、数据字典、注释脚本和核对值。无需 API 密钥。</p><a class="resource-download" href="/static/teaching/empirical_lab.zip" download>下载完整实验包 ↓</a><a class="source-link" href="/static/teaching/handbook.html" target="_blank" rel="noopener">打开图文学习手册（可打印）</a></section>
+          <section class="resource-section"><span class="eyebrow">真实公开数据 · 可复核</span><h3>World Bank WDI 中国 2000–2023</h3><p>24 个年度观测、3 个 WDI 指标，CC BY 4.0。来源、许可、SHA256 与 Stata 18 描述性复核记录可逐项查看。</p><a class="source-link" href="/static/real-data-demo.html" target="_blank" rel="noopener">查看来源与复核 <i data-lucide="external-link"></i></a><a class="resource-download" href="/static/real-data/world-bank-china-2000-2023.csv" download>下载真实数据 CSV ↓</a></section>
           <section class="resource-section"><h3>进阶案例解读</h3><p>沿用 V9 的五张现有教学案例；先写自己的解释，再对照原有参考要点，可保存修订。</p><button id="startPracticeCase" type="button" class="btn-secondary">开始一张进阶案例</button></section>
           <details class="resource-section" open><summary>常见误解 · 6 条</summary><div class="resource-misconceptions">
             <div class="resource-misconception"><strong>显著 ≠ 因果</strong><p>p 值小只说明在当前模型假设下不容易偶然出现；遗漏变量、反向因果和选择偏差仍需单独排除。</p></div>
