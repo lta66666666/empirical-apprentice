@@ -24,6 +24,7 @@ COPY standalone ./standalone
 COPY executor ./executor
 COPY .openai/hosting.json ./.openai/hosting.json
 COPY package.json ./package.json
+COPY README.md ./README.md
 COPY Dockerfile ./Dockerfile
 COPY deploy/joycode ./deploy/joycode
 RUN mkdir -p docs outputs && node scripts/build-prototype.mjs && node scripts/ci-check.mjs && cp deploy/joycode/start.sh /bin/start.sh \
