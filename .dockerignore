@@ -21,6 +21,7 @@
 !.openai/
 !.openai/hosting.json
 !package.json
+!README.md
 **/__pycache__
 **/.env*
 **/*.sqlite*
