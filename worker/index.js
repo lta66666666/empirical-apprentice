@@ -77,6 +77,14 @@ document.querySelectorAll('.run').forEach(btn=>btn.onclick=async()=>{
 });
 </script></body></html>`;
 
+function notFound(request){
+  const html=staticResponse('/static/404.html');
+  if(html&&(request.headers.get('accept')||'').includes('text/html')){
+    return new Response(html.body,{status:404,headers:{...html.headers,'Cache-Control':'no-store'}});
+  }
+  return new Response('Not found',{status:404,headers});
+}
+
 export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
@@ -95,6 +103,7 @@ export default {
       }catch{}
       return new Response(null,{status:204,headers});
     }
+    if(path==='/favicon.ico'||path==='/favicon.svg')return staticResponse('/static/favicon.svg');
     if(path.startsWith('/api/auth/'))return authEndpoint(request,env,path);
     if(['/','/app','/home','/login','/register','/learn','/analysis','/static/index.html','/static/home.html','/trial'].includes(path)){
       const user=env.DB?await identity(request,env):null;
@@ -133,7 +142,7 @@ export default {
     if (path === '/trial') return new Response(page, { headers: { ...headers, 'Content-Type': 'text/html; charset=utf-8' } });
     if (path === '/' || path === '/app' || path.startsWith('/static/')) {
       const response = staticResponse(path);
-      return response || new Response('Not found', { status: 404, headers });
+      return response || notFound(request);
     }
     if (path.startsWith('/api/fixtures/')) {
       const name = path.split('/').pop();
@@ -233,6 +242,6 @@ export default {
       const object = await env.FILES.head('retention-probe/' + id + '.txt');
       return Response.json({ exists: !!object }, { headers });
     }
-    return new Response('Not found', { status: 404, headers });
+    return notFound(request);
   },
 };

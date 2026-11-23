@@ -97,6 +97,23 @@ add('password hint is neutral until invalid', authCss.includes('.password-match.
 const workspace = readText('static/conversation-workspace.js');
 add('gap actions append buttons instead of stringifying', workspace.includes("actions.append(button('我来补'") && !workspace.includes("el('div','coach-gap-actions',button"));
 
+// 省赛前入口打磨：favicon、OG、品牌 404、R.wasm 预压缩与 README 时效性。
+const favicon = 'static/favicon.svg';
+add('favicon asset exists', existsSync(join(root, favicon)));
+for (const p of requiredPages.concat(['static/home.html'])) {
+  add(`favicon linked in ${p}`, readText(p).includes('href="/static/favicon.svg"'));
+}
+add('public pages carry og tags', readText('static/auth.html').includes('property="og:title"'));
+add('branded 404 page exists', existsSync(join(root, 'static/404.html')) && readText('static/404.html').includes('零基础体验'));
+add('worker serves branded 404', readText('worker/index.js').includes('notFound(request)') && readText('worker/index.js').includes("path==='/favicon.ico'"));
+add('wasm precompressed payload exists', existsSync(join(root, 'static/webr/R.wasm.gz')));
+add('webr init shows download hint', readText('static/ui-refinement.js').includes('首次使用需下载运行环境'));
+add('README no longer claims self-signed cert', !readText('README.md').includes('自签名证书'));
+add('README points to tencent deployment', readText('README.md').includes('deploy/tencent/README.md'));
+add('README unfinished items reflect current status', !readText('README.md').includes('JoyCode登录') && readText('README.md').includes('独立新手试用'));
+add('guide reflects Linux deployment verified', !readText('static/judge-guide.html').includes('Linux 部署仍未验收'));
+add('guide names cloud StatsPAI', readText('static/judge-guide.html').includes('云端 StatsPAI'));
+
 const failed = checks.filter(check => !check.pass);
 console.log(JSON.stringify({ scope: 'source copy, evidence hash and static link integrity; not deployment acceptance', checks }, null, 2));
 if (failed.length) process.exitCode = 1;

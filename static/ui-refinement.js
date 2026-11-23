@@ -6,7 +6,7 @@ function eaRefreshEnvironment(collapse=false){
   if(collapse&&selected==='browser_webr'&&eaWebR)root.open=false;
 }
 const eaInitBeforeRefinement=eaInitWebR;
-eaInitWebR=async function(){try{const runtime=await eaInitBeforeRefinement();eaRefreshEnvironment(true);return runtime;}catch(e){$('researchRuntime').open=true;throw e;}};
+eaInitWebR=async function(){const hint=$('researchRuntime')?.querySelector(':scope>summary');if(hint&&!eaWebR)hint.textContent='正在初始化浏览器 R：首次使用需下载运行环境（约 12 MB），视网速可能需数十秒，请稍候…';try{const runtime=await eaInitBeforeRefinement();eaRefreshEnvironment(true);return runtime;}catch(e){$('researchRuntime').open=true;throw e;}};
 $('researchEngine').addEventListener('change',()=>{eaRefreshEnvironment();if(!eaWebR&&$('researchEngine').value==='browser_webr')$('researchRuntime').open=true;});
 $('researchRuntime').addEventListener('click',e=>{const selected=e.target.closest('button')?.textContent==='使用浏览器 R / fixest';queueMicrotask(()=>eaRefreshEnvironment(selected));});
 for(const id of ['researchMakePlan','researchRun'])$(id).hidden=true;

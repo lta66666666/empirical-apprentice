@@ -1,6 +1,6 @@
 # 参赛证据台账
 
-更新：2026-11-09。依据用户提供的《评审标准.pdf》，不再采用早期 50／40／10 范例。
+更新：2026-11-23。依据用户提供的《评审标准.pdf》，不再采用早期 50／40／10 范例。
 
 |评分项|分值|可检查入口|当前缺口|
 |---|---:|---|---|
@@ -44,6 +44,17 @@
 |登录后计算方式说明|登录后首页增加常驻提示“不用先安装 Stata：默认云端 StatsPAI，浏览器 R 可备用；本机 Stata 18 是可选进阶”，折叠展示三种方式对比表；不改变原有能力表述|`static/home.html`、`static/auth.css`|
 |学习目录首卡引导|未开始时按钮改为“零基础开始阶段 1”，阶段 1 卡片标为“零基础推荐 · 从这里开始”，目录说明明确“不用先学回归或 DID”；本机 Stata 教程移入目录底部“进阶 · 本机 Stata 与真实软件”折叠卡，并从学习页工具栏移除|`static/module-layout.js`、`static/module-layout.css`、`static/stata-guide.js`|
 |登录页视觉改版|新增深绿品牌面板与四步学习路径卡、EA 标记、输入图标、密码显示／隐藏按钮、“验收与证据”分隔线；加入 CSS 入场动效与品牌光晕，`prefers-reduced-motion` 下关闭；保留原有能力表述、零基础入口与验收链接；390px 无横向溢出|`static/auth.html`、`static/auth.css`、`static/auth-view.js`|
+
+## 省赛前补档（2026-11-23）
+
+|证据|实际记录|文件位置|
+|---|---|---|
+|正式 HTTPS 证书|ZeroSSL ECC DV，`CN=ea-demo.duckdns.org`，2027-02-04 到期；`curl` 严格校验 `ssl_verify_result=0`，浏览器不再提示自签名；acme.sh DNS-01 签发，每日同步+reload|`deploy/tencent/renew-cert.sh`、`deploy/tencent/nginx-8000.conf`|
+|浏览器 R 体积|`R.wasm` 18.1MB，预压缩 `R.wasm.gz` 12.3MB；`standalone/server.mjs` 按 `Accept-Encoding` 返回压缩件；线上实测 12,317,434B|`static/webr/R.wasm.gz`、`standalone/server.mjs`|
+|浏览器 R 进度提示|初始化时显示“首次使用需下载运行环境（约 12 MB）…”|`static/ui-refinement.js`|
+|GitHub 公开|仓库 lta66666666/empirical-apprentice 公开；README 首屏含公网地址、零基础体验与验收指南|`README.md`|
+|评委入口打磨|新增站点 favicon、全站 description／OG 标签、品牌化 404 页；README 与验收指南的部署／证书表述同步更新|`static/favicon.svg`、`static/404.html`、`README.md`、`static/judge-guide.html`|
+|省赛复查|CI 守卫扩至 130+ 项；线上冒烟 0 失败；登录页 390px 视觉复查通过|`scripts/verify-site-integrity.mjs`、`scripts/post-deploy-smoke.mjs` 运行记录|
 
 复验命令（任何一台可访问该地址的电脑）：
 
