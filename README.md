@@ -1,6 +1,6 @@
-# 实证学徒 · 结果优先与公网准备候选（2026-11-02）
+# 实证学徒 · 结果优先（2026-11-23）
 
-当前为 `joycode-cloud-candidate` 独立候选；**尚未部署JoyCode，没有新版正式公网网址**。旧Sites保持原状。当前修改、证据与待验项见 [本轮验收](docs/PUBLIC_20261102_ACCEPTANCE.md)。
+公网入口：https://ea-demo.duckdns.org:8000 （备用 https://106.52.65.254:8000 ，当前为自签名证书）。未登录可先做 [3 分钟零基础体验](static/beginner-demo.html)；5 分钟验收路线与可检查入口见 [验收指南](static/judge-guide.html)；部署镜像、公网真实执行与数据来源记录见 [参赛证据台账](docs/COMPETITION_EVIDENCE.md)。
 
 教材更新：七份文件登记为五部教材与一份勘误，17张自编卡已接入检索；原书全文未发布。详见[教材接入验收](docs/MATERIALS_20261103_ACCEPTANCE.md)。
 
