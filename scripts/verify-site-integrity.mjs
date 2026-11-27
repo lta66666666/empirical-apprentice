@@ -114,6 +114,17 @@ add('README unfinished items reflect current status', !readText('README.md').inc
 add('guide reflects Linux deployment verified', !readText('static/judge-guide.html').includes('Linux 部署仍未验收'));
 add('guide names cloud StatsPAI', readText('static/judge-guide.html').includes('云端 StatsPAI'));
 
+// 美化层：GSAP vendor 完整性、polish/motion 接线与无外部 CDN 运行时。
+add('gsap vendored with license', existsSync(join(root, 'static/vendor/gsap/gsap.min.js')) && existsSync(join(root, 'static/vendor/gsap/LICENSE')));
+const gsapSize = existsSync(join(root, 'static/vendor/gsap/gsap.min.js')) ? statSync(join(root, 'static/vendor/gsap/gsap.min.js')).size : 0;
+add('gsap vendor size sanity', gsapSize > 60000 && gsapSize < 100000, `size=${gsapSize}`);
+add('polish layer assets exist', existsSync(join(root, 'static/ui/polish.css')) && existsSync(join(root, 'static/ui/motion.js')));
+for (const p of ['static/home.html', 'static/index.html', 'static/auth.html', 'static/beginner-demo.html']) {
+  add(`polish wired in ${p}`, readText(p).includes('/static/ui/polish.css') && readText(p).includes('/static/ui/motion.js'));
+}
+add('motion respects reduced motion', readText('static/ui/motion.js').includes('prefers-reduced-motion'));
+add('no external runtime CDN scripts', !requiredPages.concat(['static/home.html', 'static/404.html']).map(p => readText(p)).join('\n').match(/<script[^>]+src="https?:\/\//));
+
 const failed = checks.filter(check => !check.pass);
 console.log(JSON.stringify({ scope: 'source copy, evidence hash and static link integrity; not deployment acceptance', checks }, null, 2));
 if (failed.length) process.exitCode = 1;

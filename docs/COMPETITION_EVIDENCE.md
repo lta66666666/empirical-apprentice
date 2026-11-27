@@ -55,6 +55,7 @@
 |GitHub 公开|仓库 lta66666666/empirical-apprentice 公开；README 首屏含公网地址、零基础体验与验收指南|`README.md`|
 |评委入口打磨|新增站点 favicon、全站 description／OG 标签、品牌化 404 页；README 与验收指南的部署／证书表述同步更新|`static/favicon.svg`、`static/404.html`、`README.md`、`static/judge-guide.html`|
 |省赛复查|CI 守卫扩至 130+ 项；线上冒烟 0 失败；登录页 390px 视觉复查通过|`scripts/verify-site-integrity.mjs`、`scripts/post-deploy-smoke.mjs` 运行记录|
+|全站美化|GSAP 3.13 本地 vendor（含 LICENSE）；polish 覆盖层统一表格/卡片/徽章/按钮；motion.js 入场编排尊重 reduced-motion；CI 新增 10 项守卫（vendor 完整性、接线、禁外部 CDN）；桌面+390px 双端审计通过|`docs/ui-polish-report.md`、`static/ui/polish.css`、`static/ui/motion.js`、`static/vendor/gsap/`|
 
 复验命令（任何一台可访问该地址的电脑）：
 

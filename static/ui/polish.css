@@ -1,0 +1,107 @@
+/* 实证学徒 · 全局美化覆盖层（polish layer）
+   设计原则：
+   1. 只做视觉统一与质感提升，不改变任何页面结构、文案与功能逻辑；
+   2. 全部颜色走 --ea-* 设计 token，语义色与主色 #087e75 同族；
+   3. 动效仅作用于 transform/opacity，性能中性，尊重 prefers-reduced-motion；
+   4. 本文件在所有页面最后加载，覆盖旧体系（style.css/teaching.css 等）的样式漂移。
+*/
+
+/* ---------- 1. 设计 token 扩展 ---------- */
+:root{
+  --ea-surface:#ffffff;
+  --ea-ink-strong:#0e2f31;
+  --ea-ink-soft:#45625e;
+  --ea-radius-sm:10px;
+  --ea-radius-md:14px;
+  --ea-radius-lg:22px;
+  --ea-shadow-sm:0 1px 3px rgba(23,58,60,.07);
+  --ea-shadow-md:0 8px 28px rgba(23,58,60,.05);
+  --ea-shadow-lg:0 18px 48px rgba(23,58,60,.14);
+  /* 语义色（与青绿主色同族调和） */
+  --ea-success:#1d7a4f; --ea-success-soft:#e6f4ec; --ea-success-line:#b9dfc9;
+  --ea-warning:#b7791f; --ea-warning-soft:#fbf3e2; --ea-warning-line:#ecd9ac;
+  --ea-danger:#c0392b;  --ea-danger-soft:#fbeae7;  --ea-danger-line:#ecc3bb;
+  --ea-info:#2b6f9e;    --ea-info-soft:#e8f1f8;    --ea-info-line:#bfd7e8;
+}
+
+/* ---------- 2. 基础质感 ---------- */
+.ea-ui ::selection{background:#cfe9e2;color:var(--ea-ink)}
+.ea-ui{background:var(--ea-bg);color:var(--ea-ink)}
+
+/* 细滚动条（WebKit + Firefox） */
+.ea-ui ::-webkit-scrollbar{width:10px;height:10px}
+.ea-ui ::-webkit-scrollbar-thumb{background:#b9d2ca;border-radius:8px;border:2px solid var(--ea-bg)}
+.ea-ui ::-webkit-scrollbar-thumb:hover{background:var(--ea-accent)}
+.ea-ui ::-webkit-scrollbar-track{background:transparent}
+.ea-ui{scrollbar-color:#b9d2ca transparent;scrollbar-width:thin}
+
+/* 标题节奏统一 */
+.ea-ui h1,.ea-ui h2,.ea-ui h3{letter-spacing:-.02em;text-wrap:balance}
+
+/* 表格：斑马纹 + 行悬浮 + 数字等宽对齐 */
+.ea-ui tbody tr:nth-child(even){background:#f2f9f6}
+.ea-ui tbody tr:hover{background:var(--ea-soft)}
+.ea-ui td,.ea-ui th{transition:background-color 160ms ease}
+.ea-ui td{font-variant-numeric:tabular-nums}
+.ea-ui th{background:linear-gradient(180deg,#e8f3ee,#e2efe9);color:#34594f;letter-spacing:.02em}
+.ea-ui table{border-radius:var(--ea-radius-md);overflow:hidden}
+
+/* 通用卡片：统一边框与圆角（不覆盖背景色，保留各页面的语义色块） */
+.ea-ui .card{border:1px solid var(--ea-line);border-radius:var(--ea-radius-md)}
+
+/* 徽章体系：统一胶囊 + 语义色 */
+.ea-ui .badge,
+.ea-ui [class*="badge"]{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.6;border:1px solid transparent;white-space:nowrap}
+.ea-ui .badge{background:var(--ea-soft);color:var(--ea-accent);border-color:var(--ea-line)}
+.ea-ui .badge.bg-success,.ea-ui .badge-success{background:var(--ea-success-soft);color:var(--ea-success);border-color:var(--ea-success-line)}
+.ea-ui .badge.bg-warning,.ea-ui .badge-warning{background:var(--ea-warning-soft);color:var(--ea-warning);border-color:var(--ea-warning-line)}
+.ea-ui .badge.bg-danger,.ea-ui .badge-danger{background:var(--ea-danger-soft);color:var(--ea-danger);border-color:var(--ea-danger-line)}
+.ea-ui .badge.bg-info,.ea-ui .badge-info{background:var(--ea-info-soft);color:var(--ea-info);border-color:var(--ea-info-line)}
+
+/* ---------- 3. 卡片质感与悬浮 ---------- */
+.ea-ui .concept-card,
+.ea-ui .teaching-figure,
+.ea-ui .research-result,
+.ea-ui .lesson-goal,
+.ea-ui .coach-knowledge-example,
+.ea-ui .ea-ai-interpretation,
+.ea-ui .practice-note,
+.ea-ui .feedback{border:1px solid var(--ea-line);border-radius:var(--ea-radius-md);box-shadow:var(--ea-shadow-sm);background:var(--ea-surface)}
+
+/* 可交互卡片：统一悬浮抬升（仅 transform/box-shadow） */
+.ea-ui .two-entries>a,
+.ea-ui .concept-card,
+.ea-ui .choice-btn,
+.ea-ui .research-history-item{cursor:pointer;transition:transform 180ms ease,box-shadow 180ms ease,border-color 180ms ease}
+.ea-ui .two-entries>a:hover,
+.ea-ui .concept-card:hover,
+.ea-ui .choice-btn:hover,
+.ea-ui .research-history-item:hover{transform:translateY(-3px);box-shadow:var(--ea-shadow-lg);border-color:#b8d6ca}
+
+/* 主按钮质感：渐变 + 悬浮光 */
+.ea-ui .btn-primary{background:linear-gradient(180deg,#0a8a80,var(--ea-accent));box-shadow:0 2px 8px rgba(8,126,117,.28)}
+.ea-ui .btn-primary:hover{background:linear-gradient(180deg,#09756c,#066b64);box-shadow:0 4px 14px rgba(8,126,117,.34)}
+.ea-ui .btn-primary:active{box-shadow:0 1px 4px rgba(8,126,117,.24)}
+
+/* 细节：details 展开指示与 dialog 渐入 */
+.ea-ui summary::marker{color:var(--ea-accent)}
+.ea-ui dialog[open]{animation:ea-dialog-in 220ms ease}
+@keyframes ea-dialog-in{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+
+/* 分隔线与区块呼吸感 */
+.ea-ui hr{border:0;border-top:1px solid var(--ea-line);margin:24px 0}
+.ea-ui .coach-fact,.ea-ui .research-history-item{border-color:var(--ea-line)}
+
+/* ---------- 4. 入口动画钩子（仅 JS 就绪后生效，无 JS 时内容永远可见） ---------- */
+html.ea-anim-ready [data-ea-rise]{opacity:0;transform:translateY(14px)}
+html.ea-anim-ready .ea-ui [data-ea-rise]{transition:opacity .5s ease,transform .5s ease}
+
+/* ---------- 5. 动效降级 ---------- */
+@media(prefers-reduced-motion:reduce){
+  .ea-ui ::-webkit-scrollbar-thumb:hover{background:#b9d2ca}
+  .ea-ui .two-entries>a:hover,
+  .ea-ui .concept-card:hover,
+  .ea-ui .choice-btn:hover,
+  .ea-ui .research-history-item:hover{transform:none}
+  .ea-ui dialog[open]{animation:none}
+}

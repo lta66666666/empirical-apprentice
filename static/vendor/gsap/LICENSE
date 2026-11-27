@@ -1,0 +1,13 @@
+GSAP 3.13.0 (gsap.min.js)
+Vendored from the official npm package `gsap@3.13.0` (https://www.npmjs.com/package/gsap).
+
+License: Standard "no charge" GreenSock license
+https://gsap.com/standard-license
+
+Summary of the standard license (not a substitute for the license text):
+- Free to use in ALL projects, including commercial products, at no charge.
+- May not be resold, redistributed, or repackaged as part of an animation-focused
+  product or "GSAP-like" toolkit; no warranty provided.
+- Source: package.json "license" field of gsap@3.13.0.
+
+Original source: https://github.com/greensock/GSAP
