@@ -115,9 +115,32 @@ html.ea-anim-ready .ea-ui [data-ea-rise]{transition:opacity .5s ease,transform .
 .ea-ui .two-entries>a::after{background:radial-gradient(circle,#0b645e18,transparent 72%)}
 .ea-ui .auth-card{background:radial-gradient(560px 240px at 100% 0%,#eaf6f1 0%,transparent 64%),linear-gradient(180deg,#fff 0%,#fbfdfc 100%)}
 
-/* ---------- 7. 动效降级 ---------- */
-@media(prefers-reduced-motion:reduce){
-  .ea-ui ::-webkit-scrollbar-thumb:hover{background:#b9d2ca}
+/* ---------- 7. 第三轮定向精修：/learn 工作台、登录页与首页细节 ---------- */
+/* /learn：头部质感与按钮层级 */
+.ea-ui .app-header{-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.ea-ui .app-header .btn-secondary{padding:9px 14px;font-size:14px}
+.ea-ui #newSessionBtn{background:linear-gradient(180deg,#0a8a80,var(--ea-accent));border-color:var(--ea-accent);color:#fff;box-shadow:0 2px 8px rgba(8,126,117,.22)}
+.ea-ui #newSessionBtn:hover{background:linear-gradient(180deg,#09756c,#066b64);border-color:#066b64}
+.ea-ui .panel-toolbar .eyebrow{letter-spacing:.08em;color:var(--ea-accent)}
+/* /learn：阶段 tab 等宽 + 选中态强化（inset 描边避免布局位移） */
+.ea-ui .lesson-tabs{display:flex;gap:6px}
+.ea-ui .lesson-tabs button{flex:1;font-size:14px;min-height:44px;justify-content:center}
+.ea-ui .lesson-tabs button[aria-pressed="true"]{box-shadow:inset 0 0 0 1.5px var(--ea-accent),var(--ea-shadow-sm);background:#fff}
+/* /learn：错误横幅对齐语义 token */
+.ea-ui .error-bar{background:var(--ea-danger-soft);border:1px solid var(--ea-danger-line);color:var(--ea-danger);border-radius:12px;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ea-ui .error-bar #errorText{flex:1;min-width:200px}
+.ea-ui .error-bar .text-btn{color:var(--ea-danger)}
+/* /learn：主导航选中态强调（inset 描边，选中类名缺失时无副作用） */
+.ea-ui .ea-main-nav button.active,
+.ea-ui .ea-main-nav button[aria-current="true"]{box-shadow:inset 0 0 0 1.5px var(--ea-accent)}
+/* 登录页：密码显隐切换的可见交互态 */
+.ea-ui .auth-card #togglePassword{background:#fff;border:1px solid #c9dad5;border-radius:8px;padding:4px 10px;font-size:13px;color:var(--ea-muted)}
+.ea-ui .auth-card #togglePassword[aria-pressed="true"]{border-color:var(--ea-accent);color:var(--ea-accent);background:var(--ea-soft)}
+/* 首页：双入口卡对等（消除非有意的右卡主推暗示） */
+.ea-ui .two-entries>a:last-child{background:#fff;border-color:#d1e1db}
+
+/* ---------- 8. 动效降级 ---------- */
+@media(prefers-reduced-motion:reduce){  .ea-ui ::-webkit-scrollbar-thumb:hover{background:#b9d2ca}
   .ea-ui .two-entries>a:hover,
   .ea-ui .concept-card:hover,
   .ea-ui .choice-btn:hover,

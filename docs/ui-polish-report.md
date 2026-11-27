@@ -78,7 +78,14 @@
 - **图案精修**：首页网格纹理透明度 4%→8%（可见但不干扰）、密度统一 44px、遮罩渐变收窄；入口卡光晕与登录卡片薄荷晕染柔化
 - 原则不变：全部经 polish 覆盖层实现，旧 CSS 未动，结构与文案零改动
 
-## 6. 资源使用说明
+## 6. 第三轮定向精修（2026-11-27 · polish 层）
+
+- **/learn 工作台**：#newSessionBtn（新练习）升级为主按钮层级；阶段 tab 等宽 + 选中态 inset 描边；主导航选中态强调；错误横幅对齐 danger 语义 token；头部半透明 blur 质感
+- **登录页**：密码显隐切换加可见边框交互态（aria-pressed 变色）
+- **首页**：双入口卡背景对等（消除非有意的右卡主推暗示）
+- 全部经 polish 层 CSS 定向，无 HTML/JS 改动，CI 120 项全绿
+
+## 7. 资源使用说明
 
 - **升级 GSAP**：`npm pack gsap@<版本>` → 替换 `static/vendor/gsap/gsap.min.js` → 更新 `static/vendor/gsap/LICENSE` → 跑 `npm run ci`（体积 sanity 60–100KB 会自动校验）
 - **新增动效**：给目标元素加 `data-ea-rise`（可同值分组交错）；数值滚动加 `data-ea-count="0.774"`
