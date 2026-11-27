@@ -87,7 +87,16 @@
 - 已知遗留（如实记录）：/learn 主导航（学习/研究准备/R 实操/记录与报告）选中态需 JS 状态支撑，本轮未改任务脚本，仅提供 hover 反馈与 `.active`/`[aria-current]` 描边钩子
 - CI 120 项全绿；服务器磁盘曾达 100%（历史镜像堆积），已清理 22GB 并恢复服务
 
-## 7. 资源使用说明
+## 7. 第四轮：竞品对标优化（2026-11-27）
+
+调研对象：DataCamp、Kaggle Learn、Seeing Theory、狗熊会、The Effect/Mixtape、QuantEcon、Stata NetCourse、经管之家。结论：本产品在「零基础跑通 + 真实工具」维度领先（调研平台均用沙盒/托管 Notebook/视频，无一让新手用真 Stata 语法跑真数据）；「反馈颗粒度」与「进度激励表达」落后于 DataCamp/Kaggle。
+
+本轮落地两项：
+- **学习地图状态分层**：目录卡按 review/continue/preview 三种状态着色（完成绿 + ✓ 徽标、当前青描边强调），进度条加高并统一青绿渐变；数据层原有（进度条/继续按钮/状态文案早已存在），本轮补齐视觉表达
+- **术语速查**：新增 `static/ui/glossary.js`，自动识别 10 个核心术语（双重差分/平行趋势/反事实/固定效应/聚类标准误/安慰剂检验/回归系数/OLS/显著性/标准误），hover（桌面）/点击（触屏）弹出速查卡；文案与课程手册口径一致；带防抖扫描，无 JS 时降级为普通文本
+- 未做（如实记录）：练习「提示→讲解」分层（内容工作量大，待阶段 1 试点）、轻量激励（待定，不做排行/不伪造连续打卡）
+
+## 8. 资源使用说明
 
 - **升级 GSAP**：`npm pack gsap@<版本>` → 替换 `static/vendor/gsap/gsap.min.js` → 更新 `static/vendor/gsap/LICENSE` → 跑 `npm run ci`（体积 sanity 60–100KB 会自动校验）
 - **新增动效**：给目标元素加 `data-ea-rise`（可同值分组交错）；数值滚动加 `data-ea-count="0.774"`

@@ -141,6 +141,23 @@ html.ea-anim-ready .ea-ui [data-ea-rise]{transition:opacity .5s ease,transform .
 /* 首页：双入口卡对等（消除非有意的右卡主推暗示） */
 .ea-ui .two-entries>a:last-child{background:#fff;border-color:#d1e1db}
 
+/* ---------- 学习地图：八阶段目录状态分层 ---------- */
+.ea-ui .course-card.ea-review{border-color:var(--ea-success-line);background:linear-gradient(180deg,#fdfefd,#f2f9f6)}
+.ea-ui .course-card.ea-review .course-state{background:var(--ea-success-soft);color:var(--ea-success);border-color:var(--ea-success-line)}
+.ea-ui .course-card.ea-review::before{content:"✓";position:absolute;top:12px;right:12px;width:26px;height:26px;display:grid;place-items:center;border-radius:999px;background:var(--ea-success-soft);color:var(--ea-success);border:1px solid var(--ea-success-line);font-size:14px;font-weight:700}
+.ea-ui .course-card.ea-continue{border-color:#9cc9bd;box-shadow:0 6px 20px rgba(8,126,117,.10)}
+.ea-ui .course-card.ea-continue .course-state{background:var(--ea-soft);color:var(--ea-accent);border-color:#9cc9bd}
+.ea-ui .course-progress-meter{height:8px}
+.ea-ui .course-progress-fill{background:linear-gradient(90deg,#0a8a80,var(--ea-accent));transition:width .4s ease}
+
+/* ---------- 术语速查：文本标记与悬浮卡 ---------- */
+.ea-ui .ea-term{border-bottom:1px dashed #9cc9bd;cursor:help;color:inherit}
+.ea-ui .ea-term:hover,.ea-ui .ea-term:focus-visible{background:var(--ea-soft);border-bottom-style:solid;outline:2px solid var(--ea-accent);outline-offset:1px}
+#ea-glossary-tip{position:fixed;z-index:99;background:#fff;border:1px solid var(--ea-line);border-radius:12px;box-shadow:var(--ea-shadow-lg);padding:10px 14px;font-size:13.5px;line-height:1.65;color:var(--ea-ink)}
+#ea-glossary-tip strong{display:block;color:var(--ea-accent);font-size:13px;margin-bottom:2px}
+#ea-glossary-tip span{display:block;color:#3c5752}
+@media(prefers-reduced-motion:reduce){.ea-ui .course-progress-fill{transition:none}}
+
 /* ---------- 8. 动效降级 ---------- */
 @media(prefers-reduced-motion:reduce){  .ea-ui ::-webkit-scrollbar-thumb:hover{background:#b9d2ca}
   .ea-ui .two-entries>a:hover,

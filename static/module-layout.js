@@ -52,7 +52,7 @@
       directory.append(progress);
       const grid=el('div','course-grid');
       for(const item of course.lessons){
-        const card=el('article','course-card'),kind=item.status==='completed'?'review':item.status==='current'?'continue':'preview';
+        const card=el('article','course-card'),kind=item.status==='completed'?'review':item.status==='current'?'continue':'preview';card.classList.add('ea-'+kind);
         const record=data.lesson_records?.find(r=>r.stage===item.id),mastery=item.completed?lessonMastery(record):null;
         const stateText=item.status==='completed'?(mastery&&mastery.key!=='done'?`${mastery.label} · 可回顾`:'已完成 · 可回顾'):item.status==='current'?(context.status==='not_started'?(item.id===1?'零基础推荐 · 从这里开始':'下一步 · 可开始'):'当前阶段 · 可继续'):'后续阶段 · 可预览';
         const pos=ui&&ui.lesson_id===item.id?(ui.step_type==='checkpoint'?'成果整理':`第 ${ui.step_idx+1}/${ui.total_steps} 题`):'';

@@ -125,6 +125,13 @@ for (const p of ['static/home.html', 'static/index.html', 'static/auth.html', 's
 add('motion respects reduced motion', readText('static/ui/motion.js').includes('prefers-reduced-motion'));
 add('no external runtime CDN scripts', !requiredPages.concat(['static/home.html', 'static/404.html']).map(p => readText(p)).join('\n').match(/<script[^>]+src="https?:\/\//));
 
+// 学习地图与术语速查：资产存在、接线完整、术语口径与课程一致。
+add('glossary asset exists', existsSync(join(root, 'static/ui/glossary.js')));
+add('glossary wired in index', readText('static/index.html').includes('/static/ui/glossary.js'));
+add('glossary has core terms', ['双重差分', '平行趋势', '固定效应', '聚类标准误', '安慰剂检验', '普通最小二乘'].every(t => readText('static/ui/glossary.js').includes(t)));
+add('course card status hook present', readText('static/module-layout.js').includes("card.classList.add('ea-'+kind)"));
+add('course card status styles present', readText('static/ui/polish.css').includes('.course-card.ea-review') && readText('static/ui/polish.css').includes('.course-card.ea-continue'));
+
 const failed = checks.filter(check => !check.pass);
 console.log(JSON.stringify({ scope: 'source copy, evidence hash and static link integrity; not deployment acceptance', checks }, null, 2));
 if (failed.length) process.exitCode = 1;
