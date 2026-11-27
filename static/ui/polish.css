@@ -133,6 +133,8 @@ html.ea-anim-ready .ea-ui [data-ea-rise]{transition:opacity .5s ease,transform .
 /* /learn：主导航选中态强调（inset 描边，选中类名缺失时无副作用） */
 .ea-ui .ea-main-nav button.active,
 .ea-ui .ea-main-nav button[aria-current="true"]{box-shadow:inset 0 0 0 1.5px var(--ea-accent)}
+.ea-ui .ea-main-nav button{transition:border-color 180ms ease,color 180ms ease,box-shadow 180ms ease}
+.ea-ui .ea-main-nav button:hover{border-color:var(--ea-accent);color:var(--ea-accent)}
 /* 登录页：密码显隐切换的可见交互态 */
 .ea-ui .auth-card #togglePassword{background:#fff;border:1px solid #c9dad5;border-radius:8px;padding:4px 10px;font-size:13px;color:var(--ea-muted)}
 .ea-ui .auth-card #togglePassword[aria-pressed="true"]{border-color:var(--ea-accent);color:var(--ea-accent);background:var(--ea-soft)}

@@ -80,10 +80,12 @@
 
 ## 6. 第三轮定向精修（2026-11-27 · polish 层）
 
-- **/learn 工作台**：#newSessionBtn（新练习）升级为主按钮层级；阶段 tab 等宽 + 选中态 inset 描边；主导航选中态强调；错误横幅对齐 danger 语义 token；头部半透明 blur 质感
+- **/learn 工作台**：#newSessionBtn（新练习）升级为主按钮层级；阶段 tab 等宽 + 选中态 inset 描边；主导航选中态强调与 hover 反馈；错误横幅对齐 danger 语义 token；头部半透明 blur 质感
 - **登录页**：密码显隐切换加可见边框交互态（aria-pressed 变色）
 - **首页**：双入口卡背景对等（消除非有意的右卡主推暗示）
-- 全部经 polish 层 CSS 定向，无 HTML/JS 改动，CI 120 项全绿
+- **无障碍**：module-layout.js 隐藏文件上传输入补 aria-label（线上审计 0 未标注）
+- 已知遗留（如实记录）：/learn 主导航（学习/研究准备/R 实操/记录与报告）选中态需 JS 状态支撑，本轮未改任务脚本，仅提供 hover 反馈与 `.active`/`[aria-current]` 描边钩子
+- CI 120 项全绿；服务器磁盘曾达 100%（历史镜像堆积），已清理 22GB 并恢复服务
 
 ## 7. 资源使用说明
 
