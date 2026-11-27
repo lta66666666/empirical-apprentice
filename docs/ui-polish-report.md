@@ -72,7 +72,13 @@
 - **浏览器兼容**：全部样式为现代浏览器标准特性（CSS 变量/`@media(prefers-reduced-motion)`/`::selection`/`dialog[open]` 动画），Chrome/Edge/Firefox/Safari 均支持；实测环境为 Edge Chromium，Safari/Firefox 未在真机验证，如实说明
 - **线上冒烟**：post-deploy-smoke 0 失败
 
-## 5. 资源使用说明
+## 5. 第二轮精修（2026-11-27 · polish 层）
+
+- **对比度补足（WCAG AA）**：`--ea-muted` #587071→#4e6667；首页 wordmark/辅助行/入口卡次要行逐项加深至 ≥4.5:1；焦点环 #278b80→#1b6e65（非文本对比 ≥3:1）；登录页深绿面板步骤卡描述 #cfe4dd（实测约 7.9:1）、底部说明 #b9d4cb
+- **图案精修**：首页网格纹理透明度 4%→8%（可见但不干扰）、密度统一 44px、遮罩渐变收窄；入口卡光晕与登录卡片薄荷晕染柔化
+- 原则不变：全部经 polish 覆盖层实现，旧 CSS 未动，结构与文案零改动
+
+## 6. 资源使用说明
 
 - **升级 GSAP**：`npm pack gsap@<版本>` → 替换 `static/vendor/gsap/gsap.min.js` → 更新 `static/vendor/gsap/LICENSE` → 跑 `npm run ci`（体积 sanity 60–100KB 会自动校验）
 - **新增动效**：给目标元素加 `data-ea-rise`（可同值分组交错）；数值滚动加 `data-ea-count="0.774"`

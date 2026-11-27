@@ -96,7 +96,26 @@
 html.ea-anim-ready [data-ea-rise]{opacity:0;transform:translateY(14px)}
 html.ea-anim-ready .ea-ui [data-ea-rise]{transition:opacity .5s ease,transform .5s ease}
 
-/* ---------- 5. 动效降级 ---------- */
+/* ---------- 6. 第二轮精修：对比度补足（WCAG AA）与图案质感 ---------- */
+/* 小字号辅助文本对比度补足至 ≥4.5:1（原值 3.5–4.2:1） */
+:root{--ea-muted:#4e6667}
+.ea-ui .home-wordmark{color:#3e6b60}
+.ea-ui .home-note{color:#5d746d}
+.ea-ui .home-trust,.ea-ui .home-engine-note,.ea-ui .entry-route{color:#546a63}
+.ea-ui .coach-message>small{color:#587068}
+.ea-ui .coach-fact-status{color:#587068}
+/* 登录页深绿面板：步骤卡描述与底部说明对比度补足（原值约 3.2:1） */
+.ea-ui .auth-path em{color:#cfe4dd}
+.ea-ui .auth-note{color:#b9d4cb}
+/* 焦点环：非文本对比 ≥3:1（原 #278b80 仅约 2.5:1） */
+.ea-ui :is(button,a,input,textarea,select,summary):focus-visible{outline-color:#1b6e65}
+
+/* 图案精修：网格纹理密度与透明度统一，光晕层次柔化 */
+.ea-ui.home::before{background-image:linear-gradient(#0b3d3a14 1px,transparent 1px),linear-gradient(90deg,#0b3d3a14 1px,transparent 1px);background-size:44px 44px;mask-image:radial-gradient(circle at 30% 18%,#000 0%,transparent 62%)}
+.ea-ui .two-entries>a::after{background:radial-gradient(circle,#0b645e18,transparent 72%)}
+.ea-ui .auth-card{background:radial-gradient(560px 240px at 100% 0%,#eaf6f1 0%,transparent 64%),linear-gradient(180deg,#fff 0%,#fbfdfc 100%)}
+
+/* ---------- 7. 动效降级 ---------- */
 @media(prefers-reduced-motion:reduce){
   .ea-ui ::-webkit-scrollbar-thumb:hover{background:#b9d2ca}
   .ea-ui .two-entries>a:hover,
